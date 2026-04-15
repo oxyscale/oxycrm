@@ -120,7 +120,8 @@ router.post('/voice', (req, res, next) => {
     const twiml = new VoiceResponse();
 
     const rawTo = req.body.To as string | undefined;
-    const callerNumber = process.env.TWILIO_PHONE_NUMBER;
+    // Use TWILIO_CALLER_ID (Jordan's verified mobile) if set, otherwise fall back to Twilio number
+    const callerNumber = process.env.TWILIO_CALLER_ID || process.env.TWILIO_PHONE_NUMBER;
 
     if (!rawTo) {
       twiml.say('No phone number provided.');
@@ -130,7 +131,7 @@ router.post('/voice', (req, res, next) => {
     }
 
     if (!callerNumber) {
-      logger.error('TWILIO_PHONE_NUMBER not set — cannot make outbound call');
+      logger.error('TWILIO_CALLER_ID and TWILIO_PHONE_NUMBER not set — cannot make outbound call');
       twiml.say('Caller ID not configured. Please set up your Twilio phone number.');
       res.type('text/xml');
       res.send(twiml.toString());
@@ -141,7 +142,7 @@ router.post('/voice', (req, res, next) => {
     // Twilio requires international format to place calls
     const to = formatAusNumberToE164(rawTo);
 
-    // Dial the target number with our Twilio number as the caller ID
+    // Dial the target number with Jordan's mobile as the caller ID
     // record: 'record-from-answer-dual' records both sides of the call for transcription
     const dial = twiml.dial({
       callerId: callerNumber,
@@ -157,6 +158,27 @@ router.post('/voice', (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+/**
+ * POST /api/twilio/incoming
+ * Handles incoming calls to the Twilio number — forwards them to Jordan's mobile.
+ * This means when a lead calls back the Twilio number, it rings Jordan's phone.
+ */
+router.post('/incoming', (req, res) => {
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+  const twiml = new VoiceResponse();
+
+  const forwardTo = process.env.TWILIO_CALLER_ID || '+61478197600';
+  const from = req.body.From || 'Unknown';
+
+  logger.info({ from, forwardTo }, 'Incoming call — forwarding to Jordan');
+
+  const dial = twiml.dial({ callerId: req.body.To });
+  dial.number(forwardTo);
+
+  res.type('text/xml');
+  res.send(twiml.toString());
 });
 
 /**
