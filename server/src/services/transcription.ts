@@ -3,7 +3,7 @@
 // Converts call audio recordings to text transcripts
 // ============================================================
 
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
 import pino from 'pino';
 
 const logger = pino({ name: 'transcription-service' });
@@ -26,14 +26,14 @@ function getOpenAI(): OpenAI {
  * Accepts any audio format supported by Whisper (mp3, mp4, mpeg, mpga, m4a, wav, webm).
  *
  * @param audioBuffer - The raw audio data as a Buffer
- * @param filename - Optional filename with extension (defaults to 'recording.webm')
+ * @param filename - Optional filename with extension (defaults to 'recording.mp3')
  * @returns The transcript text
  */
 export async function transcribeAudio(
   audioBuffer: Buffer,
   filename?: string
 ): Promise<string> {
-  const resolvedFilename = filename || 'recording.webm';
+  const resolvedFilename = filename || 'recording.mp3';
   const startTime = Date.now();
 
   logger.info(
@@ -42,13 +42,12 @@ export async function transcribeAudio(
   );
 
   try {
-    // Convert Buffer to a File object for the OpenAI SDK
-    // Use toJSON() to get a plain array that satisfies BlobPart
-    const file = new File(
-      [new Blob([new Uint8Array(audioBuffer)])],
-      resolvedFilename,
-      { type: getMimeType(resolvedFilename) }
-    );
+    // Use OpenAI's toFile helper to create an uploadable file from a Buffer.
+    // This works in all Node.js versions (unlike the Web API `File` constructor
+    // which is only available in Node.js 20+).
+    const file = await toFile(audioBuffer, resolvedFilename, {
+      type: getMimeType(resolvedFilename),
+    });
 
     const response = await getOpenAI().audio.transcriptions.create({
       model: 'whisper-1',
@@ -95,5 +94,5 @@ function getMimeType(filename: string): string {
     webm: 'audio/webm',
     ogg: 'audio/ogg',
   };
-  return mimeTypes[ext || ''] || 'audio/webm';
+  return mimeTypes[ext || ''] || 'audio/mpeg';
 }
