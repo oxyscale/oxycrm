@@ -182,6 +182,16 @@ export default function ComposeEmailPage() {
         body: buildEmailText(body, greetingName || 'there'),
         pipelineStage: 'follow_up',
       });
+
+      // Auto-update lead's email if user entered a different one
+      if (toEmail && toEmail !== lead.email) {
+        try {
+          await api.updateLead(lead.id, { email: toEmail });
+        } catch {
+          // Non-critical
+        }
+      }
+
       setSent(true);
       setTimeout(() => navigate(`/leads/${lead.id}`), 2000);
     } catch (err) {

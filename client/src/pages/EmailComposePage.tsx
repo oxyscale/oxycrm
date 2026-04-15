@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useDialler } from '../hooks/useDiallerSession';
 import { getContactFirstName } from '../utils/names';
-import { sendEmail, updateLeadStage } from '../services/api';
+import { sendEmail, updateLeadStage, updateLead } from '../services/api';
 import { buildEmailText } from '../utils/emailTemplate';
 
 const FOLLOW_UP_SUBJECT = 'Great speaking with you today';
@@ -105,6 +105,15 @@ export default function EmailComposePage() {
         body: fullBody,
         pipelineStage,
       });
+
+      // Update the lead's email if the user typed one that differs from what's on file
+      if (toEmail && toEmail !== currentLead.email) {
+        try {
+          await updateLead(currentLead.id, { email: toEmail });
+        } catch {
+          // Non-critical — email was sent, lead update is secondary
+        }
+      }
 
       // Update the lead's pipeline stage
       try {
