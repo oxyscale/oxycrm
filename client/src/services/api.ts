@@ -189,6 +189,15 @@ export async function getTwilioCallSid(phone: string): Promise<string | null> {
   return result.callSid;
 }
 
+// Trigger server-side recording polling + Whisper transcription
+// Called after disposition to actively fetch the recording from Twilio
+export async function processRecording(callSid: string): Promise<void> {
+  await request('/twilio/process-recording', {
+    method: 'POST',
+    body: JSON.stringify({ callSid }),
+  });
+}
+
 // ── Email ──────────────────────────────────────────────────────
 
 export async function sendEmail(

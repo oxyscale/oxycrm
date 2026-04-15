@@ -166,6 +166,15 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
           callbackNotes,
         });
 
+        // Trigger recording download + Whisper transcription in the background.
+        // This polls Twilio's API directly for the recording (more reliable than webhooks).
+        // The server will download the MP3, send to Whisper, and update the call log.
+        if (twilioCallSid) {
+          api.processRecording(twilioCallSid).catch((err) => {
+            console.warn('Recording processing request failed (non-blocking):', err);
+          });
+        }
+
         // Update stats based on disposition
         setStats((prev) => ({
           ...prev,

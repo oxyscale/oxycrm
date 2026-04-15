@@ -365,6 +365,162 @@ router.post('/recording-status', async (req, res) => {
 });
 
 /**
+ * POST /api/twilio/process-recording
+ * Actively polls Twilio for a recording, downloads it, transcribes via Whisper,
+ * and updates the matching call log. Called by the client after call disposition.
+ *
+ * This is the PRIMARY transcription mechanism — more reliable than webhooks
+ * because we don't depend on Twilio delivering callbacks.
+ *
+ * Body: { callSid: string }
+ */
+router.post('/process-recording', async (req, res) => {
+  const { callSid } = req.body;
+
+  if (!callSid) {
+    res.status(400).json({ error: 'callSid is required' });
+    return;
+  }
+
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+  if (!accountSid || !authToken) {
+    res.status(503).json({ error: 'Twilio credentials not configured' });
+    return;
+  }
+
+  // Return immediately — processing happens in the background
+  res.json({ status: 'processing', callSid });
+
+  // Poll Twilio for the recording (it may take 10-60 seconds to be ready)
+  const maxAttempts = 12; // Check every 10 seconds for up to 2 minutes
+  const pollInterval = 10000; // 10 seconds
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      // Wait before checking (except on first attempt — give Twilio a head start)
+      if (attempt > 1) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      } else {
+        // First attempt: wait 15 seconds to give Twilio time to process
+        await new Promise(resolve => setTimeout(resolve, 15000));
+      }
+
+      logger.info({ callSid, attempt, maxAttempts }, 'Polling Twilio for recording');
+
+      // Check Twilio API for recordings on this call
+      const recordingsRes = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls/${callSid}/Recordings.json`,
+        {
+          headers: {
+            'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
+          },
+        }
+      );
+
+      if (!recordingsRes.ok) {
+        logger.warn({ callSid, attempt, status: recordingsRes.status }, 'Twilio recordings API error');
+        continue;
+      }
+
+      const recordingsData = await recordingsRes.json() as {
+        recordings: Array<{
+          sid: string;
+          status: string;
+          duration: string;
+          uri: string;
+        }>;
+      };
+
+      const recordings = recordingsData.recordings || [];
+      const completedRecording = recordings.find(r => r.status === 'completed');
+
+      if (!completedRecording) {
+        logger.info({ callSid, attempt, totalRecordings: recordings.length }, 'No completed recording yet');
+        continue;
+      }
+
+      // Found a completed recording — download and transcribe
+      const recordingSid = completedRecording.sid;
+      const recordingMp3Url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Recordings/${recordingSid}.mp3`;
+
+      logger.info({ callSid, recordingSid, url: recordingMp3Url }, 'Found completed recording, downloading');
+
+      const audioRes = await fetch(recordingMp3Url, {
+        headers: {
+          'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
+        },
+      });
+
+      if (!audioRes.ok) {
+        logger.error({ callSid, recordingSid, status: audioRes.status }, 'Failed to download recording audio');
+        continue;
+      }
+
+      const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+      logger.info({ callSid, sizeBytes: audioBuffer.length }, 'Recording downloaded, sending to Whisper');
+
+      // Transcribe via Whisper
+      const transcript = await transcribeAudio(audioBuffer, `${recordingSid}.mp3`);
+      logger.info({ callSid, transcriptLength: transcript.length }, 'Whisper transcription complete');
+
+      // Update the call log
+      const db = getDb();
+      let updated = false;
+
+      // Strategy 1: Direct match by CallSid
+      const callLog = db.prepare('SELECT id FROM call_logs WHERE twilio_call_sid = ?').get(callSid) as { id: number } | undefined;
+      if (callLog) {
+        db.prepare('UPDATE call_logs SET transcript = ? WHERE id = ?').run(transcript, callLog.id);
+        logger.info({ callLogId: callLog.id, callSid }, 'Call log updated with Whisper transcript (via polling)');
+        updated = true;
+      }
+
+      // Strategy 2: Find by phone number from call_sessions
+      if (!updated) {
+        const session = db.prepare('SELECT phone_to FROM call_sessions WHERE call_sid = ?').get(callSid) as { phone_to: string } | undefined;
+        if (session) {
+          const phone = session.phone_to;
+          const localPhone = phone.startsWith('+61') ? '0' + phone.substring(3) : phone;
+
+          const lead = db.prepare('SELECT id FROM leads WHERE phone = ? OR phone = ? OR phone = ?')
+            .get(phone, localPhone, phone.replace(/\+/, '')) as { id: number } | undefined;
+
+          if (lead) {
+            const recentLog = db.prepare(`
+              SELECT id FROM call_logs WHERE lead_id = ?
+              ORDER BY created_at DESC LIMIT 1
+            `).get(lead.id) as { id: number } | undefined;
+
+            if (recentLog) {
+              db.prepare('UPDATE call_logs SET transcript = ?, twilio_call_sid = ? WHERE id = ?')
+                .run(transcript, callSid, recentLog.id);
+              logger.info({ callLogId: recentLog.id, callSid }, 'Call log updated with Whisper transcript (via phone match)');
+              updated = true;
+            }
+          }
+        }
+      }
+
+      if (!updated) {
+        // Save for later
+        db.prepare('INSERT OR REPLACE INTO pending_transcripts (call_sid, transcript, created_at) VALUES (?, ?, datetime(\'now\'))').run(callSid, transcript);
+        logger.warn({ callSid }, 'Transcript saved to pending_transcripts (no call log match)');
+      }
+
+      // Success — stop polling
+      return;
+
+    } catch (err) {
+      logger.error({ callSid, attempt, error: err instanceof Error ? err.message : String(err) }, 'Error during recording poll');
+    }
+  }
+
+  logger.warn({ callSid }, 'Recording polling exhausted — no completed recording found after all attempts');
+});
+
+/**
  * GET /api/twilio/debug
  * Diagnostic endpoint — shows the state of the recording/transcription pipeline.
  * Helps identify exactly where things are breaking.
