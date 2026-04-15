@@ -369,7 +369,7 @@ router.post('/recording-status', async (req, res) => {
  * Diagnostic endpoint — shows the state of the recording/transcription pipeline.
  * Helps identify exactly where things are breaking.
  */
-router.get('/debug', (_req, res) => {
+router.get('/debug', async (_req, res) => {
   try {
     const db = getDb();
 
@@ -409,9 +409,53 @@ router.get('/debug', (_req, res) => {
         : `http://localhost:${process.env.PORT || 3001}/api/twilio/recording-status`,
     };
 
+    // Check Twilio API for actual recordings
+    let twilioRecordings: unknown[] = [];
+    let twilioRecordingError: string | null = null;
+    try {
+      const acSid = process.env.TWILIO_ACCOUNT_SID;
+      const acAuth = process.env.TWILIO_AUTH_TOKEN;
+      if (acSid && acAuth) {
+        const twilioRes = await fetch(
+          `https://api.twilio.com/2010-04-01/Accounts/${acSid}/Recordings.json?PageSize=5`,
+          { headers: { 'Authorization': 'Basic ' + Buffer.from(`${acSid}:${acAuth}`).toString('base64') } }
+        );
+        if (twilioRes.ok) {
+          const data = await twilioRes.json() as { recordings: unknown[] };
+          twilioRecordings = data.recordings || [];
+        } else {
+          twilioRecordingError = `Twilio API returned ${twilioRes.status}: ${await twilioRes.text()}`;
+        }
+      }
+    } catch (e) {
+      twilioRecordingError = e instanceof Error ? e.message : String(e);
+    }
+
+    // Also check calls for the most recent CallSid to see its recording status
+    let twilioCallDetails: unknown = null;
+    if (callSessions.length > 0) {
+      try {
+        const acSid = process.env.TWILIO_ACCOUNT_SID;
+        const acAuth = process.env.TWILIO_AUTH_TOKEN;
+        const latestCallSid = (callSessions[0] as { call_sid: string }).call_sid;
+        if (acSid && acAuth) {
+          const callRes = await fetch(
+            `https://api.twilio.com/2010-04-01/Accounts/${acSid}/Calls/${latestCallSid}/Recordings.json`,
+            { headers: { 'Authorization': 'Basic ' + Buffer.from(`${acSid}:${acAuth}`).toString('base64') } }
+          );
+          if (callRes.ok) {
+            twilioCallDetails = await callRes.json();
+          }
+        }
+      } catch (_e) { /* non-critical */ }
+    }
+
     res.json({
       message: 'Twilio recording/transcription pipeline debug info',
       envCheck,
+      twilioRecordings,
+      twilioRecordingError,
+      twilioCallRecordings: twilioCallDetails,
       callSessions,
       pendingTranscripts,
       recentCallLogs,
