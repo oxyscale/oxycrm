@@ -4,7 +4,14 @@
 // ============================================================
 
 import OpenAI, { toFile } from 'openai';
+import { File as NodeFile } from 'node:buffer';
 import pino from 'pino';
+
+// Polyfill globalThis.File for Node.js 18 — required by the OpenAI SDK for file uploads
+if (typeof globalThis.File === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).File = NodeFile;
+}
 
 const logger = pino({ name: 'transcription-service' });
 
