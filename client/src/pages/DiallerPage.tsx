@@ -276,11 +276,6 @@ export default function DiallerPage() {
           logLevel: 1, // errors only in production
         });
 
-        device.on('registered', () => {
-          console.log('[Twilio] Device registered and ready');
-          setTwilioReady(true);
-        });
-
         device.on('error', (err) => {
           console.error('[Twilio] Device error:', err);
           setTwilioError(err.message || 'Twilio device error');
@@ -297,8 +292,11 @@ export default function DiallerPage() {
           }
         });
 
-        await device.register();
+        // Device is ready for outgoing calls as soon as it's created with a valid token
+        // No need to call register() — that's only for incoming calls
         deviceRef.current = device;
+        setTwilioReady(true);
+        console.log('[Twilio] Device initialised and ready for outgoing calls');
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Failed to initialise Twilio';
         console.error('[Twilio] Init failed:', msg);
