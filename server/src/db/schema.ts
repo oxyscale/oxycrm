@@ -23,7 +23,7 @@ export function initializeDatabase(db: Database.Database): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       company TEXT,
-      phone TEXT NOT NULL,
+      phone TEXT,
       email TEXT,
       website TEXT,
       lead_type TEXT NOT NULL DEFAULT 'new',

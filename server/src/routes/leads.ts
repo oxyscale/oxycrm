@@ -483,15 +483,15 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         const name = row.name?.trim();
         const phone = row.phone?.trim();
 
-        // Name and phone are required
-        if (!name || !phone) {
+        // Name is required — phone can be empty (user may have email/website to find it later)
+        if (!name) {
           result.skipped++;
-          result.errors.push(`Row ${i + 2}: Missing required field (name or phone)`);
+          result.errors.push(`Row ${i + 2}: Missing required field (name)`);
           continue;
         }
 
-        // Check for duplicate phone number
-        const existing = findDuplicateStmt.get({ phone }) as (LeadRow & { call_count: number }) | undefined;
+        // Check for duplicate phone number (only if phone is provided)
+        const existing = phone ? findDuplicateStmt.get({ phone }) as (LeadRow & { call_count: number }) | undefined : undefined;
         if (existing) {
           result.duplicates++;
           duplicateLeads.push({
@@ -511,7 +511,7 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         insertStmt.run({
           name,
           company: row.company?.trim() || null,
-          phone,
+          phone: phone || null,
           email: row.email?.trim() || null,
           website: row.website?.trim() || null,
           leadType,
