@@ -182,6 +182,13 @@ export async function getTwilioToken(): Promise<{ token: string }> {
   return request<{ token: string }>('/twilio/token');
 }
 
+// Fetch the real CallSid for a phone number from the server
+// (server captures it reliably in the voice webhook)
+export async function getTwilioCallSid(phone: string): Promise<string | null> {
+  const result = await request<{ callSid: string | null }>(`/twilio/call-sid?phone=${encodeURIComponent(phone)}`);
+  return result.callSid;
+}
+
 // ── Email ──────────────────────────────────────────────────────
 
 export async function sendEmail(

@@ -563,20 +563,45 @@ router.post('/:id/disposition', (req, res, next) => {
       }
 
       // Always create a call log record (with Twilio CallSid for transcript matching)
+      // If client didn't capture CallSid, look it up from call_sessions by phone number
+      let callSid = payload.twilioCallSid || null;
+      if (!callSid && leadRow.phone) {
+        // Try to find CallSid from call_sessions using the lead's phone number
+        const phone = leadRow.phone;
+        const e164Phone = phone.startsWith('+61') ? phone
+          : phone.startsWith('0') ? '+61' + phone.substring(1)
+          : phone.startsWith('61') ? '+' + phone
+          : '+61' + phone;
+
+        const session = db.prepare(`
+          SELECT call_sid FROM call_sessions
+          WHERE phone_to = ?
+          AND created_at >= datetime('now', '-10 minutes')
+          ORDER BY created_at DESC
+          LIMIT 1
+        `).get(e164Phone) as { call_sid: string } | undefined;
+
+        if (session) {
+          callSid = session.call_sid;
+          logger.info({ leadId: id, callSid, phone: e164Phone }, 'Resolved CallSid from call_sessions');
+        }
+      }
+
       // Check if there's a pending transcript from Twilio recording
       let transcript = payload.transcript;
-      if (payload.twilioCallSid) {
-        const pending = db.prepare('SELECT transcript FROM pending_transcripts WHERE call_sid = ?').get(payload.twilioCallSid) as { transcript: string } | undefined;
+      if (callSid) {
+        const pending = db.prepare('SELECT transcript FROM pending_transcripts WHERE call_sid = ?').get(callSid) as { transcript: string } | undefined;
         if (pending && pending.transcript) {
           transcript = pending.transcript;
-          db.prepare('DELETE FROM pending_transcripts WHERE call_sid = ?').run(payload.twilioCallSid);
+          db.prepare('DELETE FROM pending_transcripts WHERE call_sid = ?').run(callSid);
+          logger.info({ leadId: id, callSid }, 'Used pending transcript from Twilio recording');
         }
       }
 
       db.prepare(`
         INSERT INTO call_logs (lead_id, duration, transcript, disposition, twilio_call_sid, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, payload.callDuration, transcript, payload.disposition, payload.twilioCallSid || null, now);
+      `).run(id, payload.callDuration, transcript, payload.disposition, callSid, now);
 
       // Update last_called_at timestamp
       db.prepare('UPDATE leads SET last_called_at = ?, updated_at = ? WHERE id = ?')

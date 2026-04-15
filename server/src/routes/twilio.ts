@@ -113,8 +113,9 @@ router.get('/token', (req, res, next) => {
  * from the browser SDK. Returns TwiML XML that tells Twilio to dial
  * the target phone number with our Twilio number as caller ID.
  *
- * The `To` parameter is passed by the Twilio Device.connect() call
- * from the frontend.
+ * IMPORTANT: This is where we reliably capture the CallSid.
+ * Twilio sends it as req.body.CallSid. We save it to call_sessions
+ * so it can be matched later when the recording arrives.
  */
 router.post('/voice', (req, res, next) => {
   try {
@@ -122,8 +123,8 @@ router.post('/voice', (req, res, next) => {
     const twiml = new VoiceResponse();
 
     const rawTo = req.body.To as string | undefined;
+    const callSid = req.body.CallSid as string | undefined;
     // Use the Twilio number as caller ID for outbound calls
-    // TWILIO_CALLER_ID (Jordan's mobile) is used for incoming call forwarding only
     const callerNumber = process.env.TWILIO_PHONE_NUMBER;
 
     if (!rawTo) {
@@ -134,7 +135,7 @@ router.post('/voice', (req, res, next) => {
     }
 
     if (!callerNumber) {
-      logger.error('TWILIO_CALLER_ID and TWILIO_PHONE_NUMBER not set — cannot make outbound call');
+      logger.error('TWILIO_PHONE_NUMBER not set — cannot make outbound call');
       twiml.say('Caller ID not configured. Please set up your Twilio phone number.');
       res.type('text/xml');
       res.send(twiml.toString());
@@ -144,6 +145,21 @@ router.post('/voice', (req, res, next) => {
     // Convert Australian local numbers to E.164 format (+61...)
     // Twilio requires international format to place calls
     const to = formatAusNumberToE164(rawTo);
+
+    // Save the CallSid → phone mapping for reliable transcript matching later.
+    // This is the ONLY place we can reliably capture the CallSid for outgoing calls.
+    if (callSid) {
+      try {
+        const db = getDb();
+        db.prepare(`
+          INSERT OR REPLACE INTO call_sessions (call_sid, phone_to, created_at)
+          VALUES (?, ?, datetime('now'))
+        `).run(callSid, to);
+        logger.info({ callSid, to }, 'Saved call session for transcript matching');
+      } catch (dbErr) {
+        logger.error({ error: dbErr instanceof Error ? dbErr.message : String(dbErr) }, 'Failed to save call session (non-blocking)');
+      }
+    }
 
     // Build the absolute callback URL for recording status
     const baseUrl = process.env.NODE_ENV === 'production'
@@ -159,11 +175,45 @@ router.post('/voice', (req, res, next) => {
     });
     dial.number(to);
 
-    logger.info({ rawTo, to, callerId: callerNumber }, 'TwiML voice webhook — dialling');
+    logger.info({ rawTo, to, callerId: callerNumber, callSid }, 'TwiML voice webhook — dialling');
     res.type('text/xml');
     res.send(twiml.toString());
   } catch (err) {
     next(err);
+  }
+});
+
+/**
+ * GET /api/twilio/call-sid
+ * Returns the most recent CallSid for a given phone number.
+ * The client calls this after connecting to get the real CallSid
+ * (since the browser SDK doesn't reliably expose it for outgoing calls).
+ */
+router.get('/call-sid', (req, res) => {
+  const phone = req.query.phone as string | undefined;
+  if (!phone) {
+    res.status(400).json({ error: 'phone query parameter required' });
+    return;
+  }
+
+  const e164Phone = formatAusNumberToE164(phone);
+  const db = getDb();
+
+  // Find the most recent call session for this phone number (within last 5 minutes)
+  const session = db.prepare(`
+    SELECT call_sid FROM call_sessions
+    WHERE phone_to = ?
+    AND created_at >= datetime('now', '-5 minutes')
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(e164Phone) as { call_sid: string } | undefined;
+
+  if (session) {
+    logger.info({ phone: e164Phone, callSid: session.call_sid }, 'Returned CallSid for phone');
+    res.json({ callSid: session.call_sid });
+  } else {
+    logger.warn({ phone: e164Phone }, 'No recent call session found for phone');
+    res.json({ callSid: null });
   }
 });
 
@@ -193,6 +243,11 @@ router.post('/incoming', (req, res) => {
  * Twilio sends recording status updates here when a recording completes.
  * Downloads the recording, sends it to Whisper for transcription,
  * and updates the matching call log with the transcript.
+ *
+ * Matching strategy (in order):
+ * 1. Direct match: call_logs.twilio_call_sid = CallSid
+ * 2. Phone match: look up phone from call_sessions, find lead, find recent call_log
+ * 3. Pending: save to pending_transcripts for later matching on disposition
  */
 router.post('/recording-status', async (req, res) => {
   const { RecordingSid, RecordingUrl, RecordingStatus, RecordingDuration, CallSid } = req.body;
@@ -232,7 +287,7 @@ router.post('/recording-status', async (req, res) => {
     });
 
     if (!response.ok) {
-      logger.error({ status: response.status }, 'Failed to download recording');
+      logger.error({ status: response.status, statusText: response.statusText }, 'Failed to download recording');
       return;
     }
 
@@ -243,22 +298,67 @@ router.post('/recording-status', async (req, res) => {
     const transcript = await transcribeAudio(audioBuffer, `${RecordingSid}.mp3`);
     logger.info({ callSid: CallSid, transcriptLength: transcript.length }, 'Transcription complete');
 
-    // Find the call log that matches this CallSid and update it
+    // Try to find and update the matching call log
     const db = getDb();
-    const callLog = db.prepare('SELECT id FROM call_logs WHERE twilio_call_sid = ?').get(CallSid) as { id: number } | undefined;
+    let updated = false;
 
-    if (callLog) {
-      db.prepare('UPDATE call_logs SET transcript = ? WHERE id = ?').run(transcript, callLog.id);
-      logger.info({ callLogId: callLog.id }, 'Call log updated with transcript');
-    } else {
-      // CallSid might not be saved yet — store it for later matching
-      logger.warn({ callSid: CallSid }, 'No call log found for CallSid — transcript will be saved when call is dispositioned');
-      // Store in a temporary table or log for retrieval
+    // Strategy 1: Direct match by CallSid
+    if (CallSid) {
+      const callLog = db.prepare('SELECT id FROM call_logs WHERE twilio_call_sid = ?').get(CallSid) as { id: number } | undefined;
+      if (callLog) {
+        db.prepare('UPDATE call_logs SET transcript = ? WHERE id = ?').run(transcript, callLog.id);
+        logger.info({ callLogId: callLog.id, strategy: 'direct-callsid' }, 'Call log updated with transcript');
+        updated = true;
+      }
+    }
+
+    // Strategy 2: Look up phone from call_sessions → find lead → find recent call_log
+    if (!updated && CallSid) {
+      const session = db.prepare('SELECT phone_to FROM call_sessions WHERE call_sid = ?').get(CallSid) as { phone_to: string } | undefined;
+      if (session) {
+        // Find lead by phone (E.164 format or local format)
+        const phone = session.phone_to;
+        const localPhone = phone.startsWith('+61') ? '0' + phone.substring(3) : phone;
+
+        const lead = db.prepare(`
+          SELECT id FROM leads WHERE phone = ? OR phone = ? OR phone = ?
+        `).get(phone, localPhone, phone.replace(/\+/, '')) as { id: number } | undefined;
+
+        if (lead) {
+          // Find the most recent call_log for this lead (within last 10 minutes)
+          // that has a placeholder transcript (contains "[Call" status messages)
+          const recentCallLog = db.prepare(`
+            SELECT id FROM call_logs
+            WHERE lead_id = ?
+            AND created_at >= datetime('now', '-10 minutes')
+            ORDER BY created_at DESC
+            LIMIT 1
+          `).get(lead.id) as { id: number } | undefined;
+
+          if (recentCallLog) {
+            db.prepare('UPDATE call_logs SET transcript = ?, twilio_call_sid = ? WHERE id = ?')
+              .run(transcript, CallSid, recentCallLog.id);
+            logger.info({ callLogId: recentCallLog.id, leadId: lead.id, strategy: 'phone-match' }, 'Call log updated with transcript via phone match');
+            updated = true;
+          }
+        }
+      }
+    }
+
+    // Strategy 3: Save to pending_transcripts for later matching
+    if (!updated) {
+      logger.warn({ callSid: CallSid }, 'No call log found — saving to pending_transcripts');
       db.prepare(`
         INSERT OR REPLACE INTO pending_transcripts (call_sid, transcript, created_at)
         VALUES (?, ?, datetime('now'))
       `).run(CallSid, transcript);
     }
+
+    // Clean up old call sessions (older than 1 hour)
+    db.prepare("DELETE FROM call_sessions WHERE created_at < datetime('now', '-1 hour')").run();
+    // Clean up old pending transcripts (older than 24 hours)
+    db.prepare("DELETE FROM pending_transcripts WHERE created_at < datetime('now', '-24 hours')").run();
+
   } catch (err) {
     logger.error({ error: err instanceof Error ? err.message : String(err), callSid: CallSid }, 'Failed to process recording');
   }

@@ -145,6 +145,17 @@ export function initializeDatabase(db: Database.Database): void {
     )
   `);
 
+  // Call sessions — maps Twilio CallSid to phone numbers
+  // Populated by the voice webhook (server-side, guaranteed accurate)
+  // Used to match recordings to call logs even when client-side CallSid capture fails
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS call_sessions (
+      call_sid TEXT PRIMARY KEY,
+      phone_to TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   // Note: monday_item_id column is retained for backward compatibility but no longer used.
   // SQLite does not support DROP COLUMN easily, so we leave it in place.
 

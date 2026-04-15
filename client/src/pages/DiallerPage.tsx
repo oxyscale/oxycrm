@@ -437,12 +437,27 @@ export default function DiallerPage() {
         console.log('[Twilio] Call accepted/connected');
         updateCallState('connected');
         setCallStartTime(Date.now());
-        // Capture the Twilio CallSid for recording/transcript matching
-        const callSid = call.parameters?.CallSid || null;
-        if (callSid) {
-          setTwilioCallSid(callSid);
-          console.log('[Twilio] CallSid:', callSid);
+
+        // Try client-side CallSid first (works sometimes)
+        const clientCallSid = call.parameters?.CallSid || null;
+        if (clientCallSid) {
+          setTwilioCallSid(clientCallSid);
+          console.log('[Twilio] CallSid from client:', clientCallSid);
         }
+
+        // Always fetch the real CallSid from the server (reliable)
+        // The server captures it in the voice webhook before the call connects
+        if (currentLead?.phone) {
+          api.getTwilioCallSid(currentLead.phone).then((serverCallSid) => {
+            if (serverCallSid) {
+              setTwilioCallSid(serverCallSid);
+              console.log('[Twilio] CallSid from server:', serverCallSid);
+            }
+          }).catch((err) => {
+            console.warn('[Twilio] Failed to fetch CallSid from server:', err);
+          });
+        }
+
         appendTranscript('[Call connected]');
       });
 
