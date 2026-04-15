@@ -364,4 +364,73 @@ router.post('/recording-status', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/twilio/debug
+ * Diagnostic endpoint — shows the state of the recording/transcription pipeline.
+ * Helps identify exactly where things are breaking.
+ */
+router.get('/debug', (_req, res) => {
+  try {
+    const db = getDb();
+
+    // Recent call sessions (voice webhook → CallSid capture)
+    const callSessions = db.prepare(`
+      SELECT * FROM call_sessions ORDER BY created_at DESC LIMIT 10
+    `).all();
+
+    // Pending transcripts (Whisper completed but no matching call_log)
+    const pendingTranscripts = db.prepare(`
+      SELECT call_sid, LENGTH(transcript) as transcript_length, created_at
+      FROM pending_transcripts ORDER BY created_at DESC LIMIT 10
+    `).all();
+
+    // Recent call logs with their CallSid and transcript preview
+    const recentCallLogs = db.prepare(`
+      SELECT cl.id, cl.lead_id, cl.twilio_call_sid, cl.disposition,
+             SUBSTR(cl.transcript, 1, 100) as transcript_preview,
+             LENGTH(cl.transcript) as transcript_length,
+             cl.created_at,
+             l.name as lead_name, l.phone as lead_phone
+      FROM call_logs cl
+      LEFT JOIN leads l ON l.id = cl.lead_id
+      ORDER BY cl.created_at DESC LIMIT 10
+    `).all();
+
+    // Environment check
+    const envCheck = {
+      TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID ? 'SET (' + process.env.TWILIO_ACCOUNT_SID?.substring(0, 6) + '...)' : 'MISSING',
+      TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN ? 'SET' : 'MISSING',
+      TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER || 'MISSING',
+      TWILIO_TWIML_APP_SID: process.env.TWILIO_TWIML_APP_SID || 'MISSING',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'SET (' + process.env.OPENAI_API_KEY?.substring(0, 6) + '...)' : 'MISSING',
+      NODE_ENV: process.env.NODE_ENV || 'not set',
+      recordingCallbackUrl: process.env.NODE_ENV === 'production'
+        ? 'https://oxycrm-production.up.railway.app/api/twilio/recording-status'
+        : `http://localhost:${process.env.PORT || 3001}/api/twilio/recording-status`,
+    };
+
+    res.json({
+      message: 'Twilio recording/transcription pipeline debug info',
+      envCheck,
+      callSessions,
+      pendingTranscripts,
+      recentCallLogs,
+      diagnosis: {
+        voiceWebhookCapturingCallSids: callSessions.length > 0,
+        whisperProcessedAny: pendingTranscripts.length > 0 || recentCallLogs.some((cl: Record<string, unknown>) => {
+          const preview = cl.transcript_preview as string | null;
+          return preview && !preview.includes('[Call connected]');
+        }),
+        callLogsHaveCallSids: recentCallLogs.filter((cl: Record<string, unknown>) => cl.twilio_call_sid).length,
+        callLogsWithRealTranscripts: recentCallLogs.filter((cl: Record<string, unknown>) => {
+          const preview = cl.transcript_preview as string | null;
+          return preview && !preview.includes('[Call connected]') && !preview.includes('[Call ended]');
+        }).length,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
 export default router;
