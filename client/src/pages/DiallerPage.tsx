@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Device, Call } from '@twilio/voice-sdk';
 import {
   Phone,
   PhoneOff,
@@ -17,6 +18,8 @@ import {
   Globe,
   User,
   Mail,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { useDialler } from '../hooks/useDiallerSession';
 import * as api from '../services/api';
@@ -199,6 +202,12 @@ export default function DiallerPage() {
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Inline editing state
+  // Twilio Device SDK state
+  const deviceRef = useRef<Device | null>(null);
+  const activeCallRef = useRef<Call | null>(null);
+  const [twilioReady, setTwilioReady] = useState(false);
+  const [twilioError, setTwilioError] = useState<string | null>(null);
+
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
@@ -251,6 +260,62 @@ export default function DiallerPage() {
       });
     return () => { cancelled = true; };
   }, [currentLead?.id]);
+
+  // ── Initialise Twilio Device on mount ───────────────────────
+
+  useEffect(() => {
+    let device: Device | null = null;
+
+    async function initTwilio() {
+      try {
+        setTwilioError(null);
+        const { token } = await api.getTwilioToken();
+
+        device = new Device(token, {
+          codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
+          logLevel: 1, // errors only in production
+        });
+
+        device.on('registered', () => {
+          console.log('[Twilio] Device registered and ready');
+          setTwilioReady(true);
+        });
+
+        device.on('error', (err) => {
+          console.error('[Twilio] Device error:', err);
+          setTwilioError(err.message || 'Twilio device error');
+        });
+
+        device.on('tokenWillExpire', async () => {
+          // Refresh the token before it expires
+          try {
+            const { token: newToken } = await api.getTwilioToken();
+            device?.updateToken(newToken);
+            console.log('[Twilio] Token refreshed');
+          } catch (err) {
+            console.error('[Twilio] Failed to refresh token:', err);
+          }
+        });
+
+        await device.register();
+        deviceRef.current = device;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to initialise Twilio';
+        console.error('[Twilio] Init failed:', msg);
+        setTwilioError(msg);
+      }
+    }
+
+    initTwilio();
+
+    return () => {
+      if (device) {
+        device.destroy();
+        deviceRef.current = null;
+        setTwilioReady(false);
+      }
+    };
+  }, []);
 
   // ── Load categories + leads on mount ────────────────────────
 
@@ -318,21 +383,71 @@ export default function DiallerPage() {
 
   // ── Call actions ─────────────────────────────────────────────
 
-  const handleCall = useCallback(() => {
-    updateCallState('ringing');
-    setCallStartTime(Date.now());
-    setCallDuration(0);
+  const handleCall = useCallback(async () => {
+    if (!currentLead?.phone || !deviceRef.current) {
+      console.error('[Twilio] No phone number or device not ready');
+      return;
+    }
 
-    // Simulate ringing -> connected (replace with real Twilio in Phase 1b)
-    setTimeout(() => {
-      updateCallState('connected');
-      setTimeout(() => {
+    try {
+      updateCallState('ringing');
+      setCallDuration(0);
+
+      // Make the call via Twilio Device SDK
+      const call = await deviceRef.current.connect({
+        params: {
+          To: currentLead.phone,
+        },
+      });
+
+      activeCallRef.current = call;
+
+      // Listen for call events
+      call.on('ringing', () => {
+        console.log('[Twilio] Call ringing');
+        updateCallState('ringing');
+      });
+
+      call.on('accept', () => {
+        console.log('[Twilio] Call accepted/connected');
+        updateCallState('connected');
+        setCallStartTime(Date.now());
         appendTranscript('[Call connected]');
-      }, 500);
-    }, 2000);
-  }, [updateCallState, setCallStartTime, setCallDuration, appendTranscript]);
+      });
+
+      call.on('disconnect', () => {
+        console.log('[Twilio] Call disconnected');
+        updateCallState('ended');
+        appendTranscript('[Call ended]');
+        activeCallRef.current = null;
+      });
+
+      call.on('cancel', () => {
+        console.log('[Twilio] Call cancelled');
+        updateCallState('idle');
+        activeCallRef.current = null;
+      });
+
+      call.on('error', (err) => {
+        console.error('[Twilio] Call error:', err);
+        updateCallState('idle');
+        activeCallRef.current = null;
+        setTwilioError(`Call failed: ${err.message || 'Unknown error'}`);
+      });
+
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to make call';
+      console.error('[Twilio] Connect failed:', msg);
+      updateCallState('idle');
+      setTwilioError(msg);
+    }
+  }, [currentLead, updateCallState, setCallStartTime, setCallDuration, appendTranscript]);
 
   const handleHangUp = useCallback(() => {
+    if (activeCallRef.current) {
+      activeCallRef.current.disconnect();
+      activeCallRef.current = null;
+    }
     updateCallState('ended');
     appendTranscript('[Call ended]');
   }, [updateCallState, appendTranscript]);
@@ -403,6 +518,25 @@ export default function DiallerPage() {
               {stats.interested}
             </span>
           </span>
+        </div>
+        {/* Twilio status indicator */}
+        <div className="flex items-center gap-2">
+          {twilioReady ? (
+            <span className="flex items-center gap-1.5 text-xs text-[#34d399]">
+              <Wifi size={12} />
+              Phone Ready
+            </span>
+          ) : twilioError ? (
+            <span className="flex items-center gap-1.5 text-xs text-red-400" title={twilioError}>
+              <WifiOff size={12} />
+              Phone Offline
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-xs text-[#52525b]">
+              <Loader2 size={12} className="animate-spin" />
+              Connecting...
+            </span>
+          )}
         </div>
       </div>
 
@@ -619,10 +753,15 @@ export default function DiallerPage() {
                     <>
                       <button
                         onClick={handleCall}
-                        className="bg-[#34d399] text-[#09090b] font-bold rounded-xl px-8 py-3 hover:bg-[#34d399]/90 transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                        disabled={!twilioReady || !currentLead?.phone || currentLead.phone === 'TBD'}
+                        className={`font-bold rounded-xl px-8 py-3 transition-all flex items-center gap-2 shadow-lg ${
+                          twilioReady && currentLead?.phone && currentLead.phone !== 'TBD'
+                            ? 'bg-[#34d399] text-[#09090b] hover:bg-[#34d399]/90 shadow-emerald-500/20'
+                            : 'bg-[#27272a] text-[#52525b] cursor-not-allowed shadow-none'
+                        }`}
                       >
                         <Phone size={18} />
-                        Call
+                        {!twilioReady ? 'Phone Not Ready' : !currentLead?.phone || currentLead.phone === 'TBD' ? 'No Phone Number' : 'Call'}
                       </button>
                       <button
                         onClick={() => navigate(`/leads/${currentLead.id}`)}

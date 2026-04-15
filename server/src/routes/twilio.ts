@@ -106,8 +106,15 @@ router.post('/voice', (req, res, next) => {
       return;
     }
 
+    // Record the call at network level for transcription later
+    // This records both sides — the person on the other end is NOT notified
+    twiml.record({
+      recordingStatusCallback: '/api/twilio/recording-status',
+      recordingStatusCallbackMethod: 'POST',
+    });
+
     // Dial the target number with our Twilio number as the caller ID
-    const dial = twiml.dial({ callerId: callerNumber });
+    const dial = twiml.dial({ callerId: callerNumber, record: 'record-from-answer-dual' });
     dial.number(to);
 
     logger.info({ to, callerId: callerNumber }, 'TwiML voice webhook — dialling');
@@ -116,6 +123,26 @@ router.post('/voice', (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+/**
+ * POST /api/twilio/recording-status
+ * Twilio sends recording status updates here when a recording completes.
+ * We log the recording URL for later transcription processing.
+ */
+router.post('/recording-status', (req, res) => {
+  const { RecordingSid, RecordingUrl, RecordingStatus, RecordingDuration, CallSid } = req.body;
+
+  logger.info({
+    recordingSid: RecordingSid,
+    recordingUrl: RecordingUrl,
+    status: RecordingStatus,
+    duration: RecordingDuration,
+    callSid: CallSid,
+  }, 'Recording status update received');
+
+  // Acknowledge receipt — Twilio expects a 200
+  res.sendStatus(200);
 });
 
 export default router;
