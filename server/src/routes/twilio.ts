@@ -120,8 +120,9 @@ router.post('/voice', (req, res, next) => {
     const twiml = new VoiceResponse();
 
     const rawTo = req.body.To as string | undefined;
-    // Use TWILIO_CALLER_ID (Jordan's verified mobile) if set, otherwise fall back to Twilio number
-    const callerNumber = process.env.TWILIO_CALLER_ID || process.env.TWILIO_PHONE_NUMBER;
+    // Use the Twilio number as caller ID for outbound calls
+    // TWILIO_CALLER_ID (Jordan's mobile) is used for incoming call forwarding only
+    const callerNumber = process.env.TWILIO_PHONE_NUMBER;
 
     if (!rawTo) {
       twiml.say('No phone number provided.');
