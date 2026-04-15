@@ -12,6 +12,37 @@ const logger = pino({ name: 'twilio-routes' });
 const router = Router();
 
 /**
+ * Converts Australian phone numbers to E.164 format (+61...).
+ * Handles formats like:
+ *   0438 577 512   → +61438577512
+ *   (03) 9118 0696 → +6139118069
+ *   04 1234 5678   → +61412345678
+ *   1300 669 766   → +611300669766
+ *   +61438577512   → +61438577512 (already correct)
+ */
+function formatAusNumberToE164(phone: string): string {
+  // Strip all non-digit characters except leading +
+  let cleaned = phone.replace(/[^\d+]/g, '');
+
+  // Already in E.164 format
+  if (cleaned.startsWith('+61')) return cleaned;
+  if (cleaned.startsWith('+')) return cleaned; // non-AU international number
+
+  // Remove leading 0 and prepend +61
+  if (cleaned.startsWith('0')) {
+    cleaned = '+61' + cleaned.substring(1);
+  } else if (cleaned.startsWith('61') && cleaned.length >= 11) {
+    // Already has country code but missing +
+    cleaned = '+' + cleaned;
+  } else {
+    // 1300/1800 numbers or other formats — prepend +61
+    cleaned = '+61' + cleaned;
+  }
+
+  return cleaned;
+}
+
+/**
  * GET /api/twilio/token
  * Generates a Twilio access token with a Voice grant.
  * The frontend uses this token to initialise the Twilio Device (browser SDK)
@@ -88,10 +119,10 @@ router.post('/voice', (req, res, next) => {
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
 
-    const to = req.body.To as string | undefined;
+    const rawTo = req.body.To as string | undefined;
     const callerNumber = process.env.TWILIO_PHONE_NUMBER;
 
-    if (!to) {
+    if (!rawTo) {
       twiml.say('No phone number provided.');
       res.type('text/xml');
       res.send(twiml.toString());
@@ -106,6 +137,10 @@ router.post('/voice', (req, res, next) => {
       return;
     }
 
+    // Convert Australian local numbers to E.164 format (+61...)
+    // Twilio requires international format to place calls
+    const to = formatAusNumberToE164(rawTo);
+
     // Record the call at network level for transcription later
     // This records both sides — the person on the other end is NOT notified
     twiml.record({
@@ -117,7 +152,7 @@ router.post('/voice', (req, res, next) => {
     const dial = twiml.dial({ callerId: callerNumber, record: 'record-from-answer-dual' });
     dial.number(to);
 
-    logger.info({ to, callerId: callerNumber }, 'TwiML voice webhook — dialling');
+    logger.info({ rawTo, to, callerId: callerNumber }, 'TwiML voice webhook — dialling');
     res.type('text/xml');
     res.send(twiml.toString());
   } catch (err) {
