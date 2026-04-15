@@ -38,7 +38,7 @@ Looking forward to it.`;
 
 export default function EmailComposePage() {
   const navigate = useNavigate();
-  const { currentLead, draftEmailSubject, draftEmailBody, aiProcessing, emailCc } = useDialler();
+  const { currentLead, draftEmailSubject, draftEmailBody, aiProcessing, emailTo, emailCc } = useDialler();
 
   // Track whether we've already applied the AI draft (so user edits aren't overwritten)
   const [draftApplied, setDraftApplied] = useState(false);
@@ -46,7 +46,7 @@ export default function EmailComposePage() {
   const [greetingName, setGreetingName] = useState(
     currentLead ? getContactFirstName(currentLead.name) : 'there'
   );
-  const [toEmail, setToEmail] = useState(currentLead?.email || '');
+  const [toEmail, setToEmail] = useState(emailTo || currentLead?.email || '');
   const [ccEmail, setCcEmail] = useState(emailCc || '');
   const [bccEmail, setBccEmail] = useState('');
   const [subject, setSubject] = useState(FOLLOW_UP_SUBJECT);

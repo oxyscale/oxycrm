@@ -7,6 +7,8 @@
 import { Router } from 'express';
 import twilio from 'twilio';
 import pino from 'pino';
+import { getDb } from '../db/index.js';
+import { transcribeAudio } from '../services/transcription.js';
 
 const logger = pino({ name: 'twilio-routes' });
 const router = Router();
@@ -185,9 +187,10 @@ router.post('/incoming', (req, res) => {
 /**
  * POST /api/twilio/recording-status
  * Twilio sends recording status updates here when a recording completes.
- * We log the recording URL for later transcription processing.
+ * Downloads the recording, sends it to Whisper for transcription,
+ * and updates the matching call log with the transcript.
  */
-router.post('/recording-status', (req, res) => {
+router.post('/recording-status', async (req, res) => {
   const { RecordingSid, RecordingUrl, RecordingStatus, RecordingDuration, CallSid } = req.body;
 
   logger.info({
@@ -198,8 +201,63 @@ router.post('/recording-status', (req, res) => {
     callSid: CallSid,
   }, 'Recording status update received');
 
-  // Acknowledge receipt — Twilio expects a 200
+  // Acknowledge receipt immediately — Twilio expects a fast 200
   res.sendStatus(200);
+
+  // Only process completed recordings
+  if (RecordingStatus !== 'completed' || !RecordingUrl) return;
+
+  // Process transcription in the background
+  try {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+    if (!accountSid || !authToken) {
+      logger.error('Missing Twilio credentials for recording download');
+      return;
+    }
+
+    // Download the recording from Twilio (add .mp3 extension for Whisper compatibility)
+    const recordingMp3Url = `${RecordingUrl}.mp3`;
+    logger.info({ url: recordingMp3Url }, 'Downloading recording from Twilio');
+
+    const response = await fetch(recordingMp3Url, {
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
+      },
+    });
+
+    if (!response.ok) {
+      logger.error({ status: response.status }, 'Failed to download recording');
+      return;
+    }
+
+    const audioBuffer = Buffer.from(await response.arrayBuffer());
+    logger.info({ sizeBytes: audioBuffer.length }, 'Recording downloaded, sending to Whisper');
+
+    // Transcribe via Whisper
+    const transcript = await transcribeAudio(audioBuffer, `${RecordingSid}.mp3`);
+    logger.info({ callSid: CallSid, transcriptLength: transcript.length }, 'Transcription complete');
+
+    // Find the call log that matches this CallSid and update it
+    const db = getDb();
+    const callLog = db.prepare('SELECT id FROM call_logs WHERE twilio_call_sid = ?').get(CallSid) as { id: number } | undefined;
+
+    if (callLog) {
+      db.prepare('UPDATE call_logs SET transcript = ? WHERE id = ?').run(transcript, callLog.id);
+      logger.info({ callLogId: callLog.id }, 'Call log updated with transcript');
+    } else {
+      // CallSid might not be saved yet — store it for later matching
+      logger.warn({ callSid: CallSid }, 'No call log found for CallSid — transcript will be saved when call is dispositioned');
+      // Store in a temporary table or log for retrieval
+      db.prepare(`
+        INSERT OR REPLACE INTO pending_transcripts (call_sid, transcript, created_at)
+        VALUES (?, ?, datetime('now'))
+      `).run(CallSid, transcript);
+    }
+  } catch (err) {
+    logger.error({ error: err instanceof Error ? err.message : String(err), callSid: CallSid }, 'Failed to process recording');
+  }
 });
 
 export default router;

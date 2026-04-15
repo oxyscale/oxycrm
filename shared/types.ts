@@ -76,6 +76,7 @@ export interface DispositionPayload {
   disposition: Disposition;
   callDuration: number;
   transcript: string;
+  twilioCallSid?: string;
   callbackDate?: string;
   callbackNotes?: string;
 }

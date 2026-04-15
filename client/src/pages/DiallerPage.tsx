@@ -181,7 +181,10 @@ export default function DiallerPage() {
     callDuration,
     transcript,
     stats,
+    emailTo,
     emailCc,
+    setTwilioCallSid,
+    setEmailTo,
     setEmailCc,
     setCurrentLead,
     updateCallState,
@@ -335,6 +338,8 @@ export default function DiallerPage() {
           updateCallState('idle');
           setCallDuration(0);
           setCallStartTime(null);
+          setEmailTo(lead.email || '');
+          setEmailCc('');
         })
         .catch((err) => console.error('Failed to load lead:', err));
       // Clear the state so refreshing doesn't re-trigger
@@ -366,6 +371,8 @@ export default function DiallerPage() {
     updateCallState('idle');
     setCallDuration(0);
     setCallStartTime(null);
+    setEmailTo(lead.email || '');
+    setEmailCc('');
   };
 
   // ── Auto-navigate to disposition on call end ─────────────────
@@ -430,6 +437,12 @@ export default function DiallerPage() {
         console.log('[Twilio] Call accepted/connected');
         updateCallState('connected');
         setCallStartTime(Date.now());
+        // Capture the Twilio CallSid for recording/transcript matching
+        const callSid = call.parameters?.CallSid || null;
+        if (callSid) {
+          setTwilioCallSid(callSid);
+          console.log('[Twilio] CallSid:', callSid);
+        }
         appendTranscript('[Call connected]');
       });
 
@@ -831,7 +844,7 @@ export default function DiallerPage() {
                   )}
                 </div>
 
-                {/* Email prep — visible during/after call so CC can be added mid-call */}
+                {/* Email prep — visible during/after call so email + CC can be added mid-call */}
                 {(callState === 'ringing' || callState === 'connected' || callState === 'ended') && (
                   <div className="bg-[#1f1f23] rounded-xl p-5 mb-6 border border-white/[0.06]">
                     <h3 className="text-[#fafafa] text-sm font-bold mb-3 flex items-center gap-2">
@@ -841,9 +854,13 @@ export default function DiallerPage() {
                     <div className="space-y-3">
                       <div>
                         <label className="text-[#52525b] text-xs font-medium block mb-1">To</label>
-                        <p className="text-[#a1a1aa] text-sm bg-[#18181b] rounded-lg px-3 py-2 border border-white/[0.04]">
-                          {currentLead.email || <span className="text-[#52525b] italic">No email on file</span>}
-                        </p>
+                        <input
+                          type="email"
+                          value={emailTo}
+                          onChange={(e) => setEmailTo(e.target.value)}
+                          placeholder="recipient@company.com"
+                          className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-3 py-2 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+                        />
                       </div>
                       <div>
                         <label className="text-[#52525b] text-xs font-medium block mb-1">CC</label>
@@ -854,7 +871,7 @@ export default function DiallerPage() {
                           placeholder="e.g. partner@company.com, assistant@company.com"
                           className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-3 py-2 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
                         />
-                        <p className="text-[#52525b] text-[10px] mt-1">Add CC addresses during the call so they carry through to the follow-up email</p>
+                        <p className="text-[#52525b] text-[10px] mt-1">These carry through to the follow-up email</p>
                       </div>
                     </div>
                   </div>

@@ -34,7 +34,10 @@ interface DiallerSessionState {
   aiProcessing: boolean;
   draftEmailSubject: string | null;
   draftEmailBody: string | null;
+  // Twilio call metadata
+  twilioCallSid: string | null;
   // Email prep (filled in during the call)
+  emailTo: string;
   emailCc: string;
 }
 
@@ -57,6 +60,8 @@ interface DiallerSessionActions {
   loadTodaysCallbacks: () => Promise<void>;
   refreshStats: () => void;
   resetSession: () => void;
+  setTwilioCallSid: (sid: string | null) => void;
+  setEmailTo: (to: string) => void;
   setEmailCc: (cc: string) => void;
 }
 
@@ -93,6 +98,8 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
   const [aiProcessing, setAiProcessing] = useState(false);
   const [draftEmailSubject, setDraftEmailSubject] = useState<string | null>(null);
   const [draftEmailBody, setDraftEmailBody] = useState<string | null>(null);
+  const [twilioCallSid, setTwilioCallSid] = useState<string | null>(null);
+  const [emailTo, setEmailTo] = useState('');
   const [emailCc, setEmailCc] = useState('');
 
   // ── Actions ────────────────────────────────────────────────
@@ -119,6 +126,8 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
       setCallDuration(0);
       setCallStartTime(null);
       setTranscript('');
+      setTwilioCallSid(null);
+      setEmailTo(lead.email || '');
       setEmailCc('');
     } catch (err) {
       console.error('Failed to load next lead:', err);
@@ -152,6 +161,7 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
           disposition,
           callDuration,
           transcript: callTranscript,
+          twilioCallSid: twilioCallSid || undefined,
           callbackDate,
           callbackNotes,
         });
@@ -229,7 +239,7 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [currentLead, callDuration, leadType]
+    [currentLead, callDuration, leadType, twilioCallSid]
   );
 
   const loadTodaysCallbacks = useCallback(async () => {
@@ -260,6 +270,8 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
     setAiProcessing(false);
     setDraftEmailSubject(null);
     setDraftEmailBody(null);
+    setTwilioCallSid(null);
+    setEmailTo('');
     setEmailCc('');
   }, []);
 
@@ -280,6 +292,8 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
     aiProcessing,
     draftEmailSubject,
     draftEmailBody,
+    twilioCallSid,
+    emailTo,
     emailCc,
     startSession,
     setLeads,
@@ -294,6 +308,8 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
     loadTodaysCallbacks,
     refreshStats,
     resetSession,
+    setTwilioCallSid,
+    setEmailTo,
     setEmailCc,
   };
 

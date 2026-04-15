@@ -123,6 +123,7 @@ const dispositionSchema = z.object({
   disposition: z.enum(['no_answer', 'voicemail', 'not_interested', 'interested', 'wrong_number']),
   callDuration: z.number().int().min(0),
   transcript: z.string(),
+  twilioCallSid: z.string().optional(),
   callbackDate: z.string().refine(
     (val) => !isNaN(Date.parse(val)),
     { message: 'callbackDate must be a valid date string' }
@@ -561,11 +562,21 @@ router.post('/:id/disposition', (req, res, next) => {
         throw new ApiError(404, 'Lead not found');
       }
 
-      // Always create a call log record
+      // Always create a call log record (with Twilio CallSid for transcript matching)
+      // Check if there's a pending transcript from Twilio recording
+      let transcript = payload.transcript;
+      if (payload.twilioCallSid) {
+        const pending = db.prepare('SELECT transcript FROM pending_transcripts WHERE call_sid = ?').get(payload.twilioCallSid) as { transcript: string } | undefined;
+        if (pending && pending.transcript) {
+          transcript = pending.transcript;
+          db.prepare('DELETE FROM pending_transcripts WHERE call_sid = ?').run(payload.twilioCallSid);
+        }
+      }
+
       db.prepare(`
-        INSERT INTO call_logs (lead_id, duration, transcript, disposition, created_at)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(id, payload.callDuration, payload.transcript, payload.disposition, now);
+        INSERT INTO call_logs (lead_id, duration, transcript, disposition, twilio_call_sid, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, payload.callDuration, transcript, payload.disposition, payload.twilioCallSid || null, now);
 
       // Update last_called_at timestamp
       db.prepare('UPDATE leads SET last_called_at = ?, updated_at = ? WHERE id = ?')

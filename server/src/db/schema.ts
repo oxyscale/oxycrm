@@ -129,6 +129,22 @@ export function initializeDatabase(db: Database.Database): void {
     db.exec('ALTER TABLE leads ADD COLUMN converted_to_project INTEGER DEFAULT 0');
   }
 
+  // Add twilio_call_sid column to call_logs for linking recordings
+  const callLogColumns = db.prepare("PRAGMA table_info(call_logs)").all() as { name: string }[];
+  if (!callLogColumns.some((c) => c.name === 'twilio_call_sid')) {
+    db.exec('ALTER TABLE call_logs ADD COLUMN twilio_call_sid TEXT');
+  }
+
+  // Pending transcripts — holds transcripts from Twilio recordings
+  // that arrive before the call is dispositioned
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pending_transcripts (
+      call_sid TEXT PRIMARY KEY,
+      transcript TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   // Note: monday_item_id column is retained for backward compatibility but no longer used.
   // SQLite does not support DROP COLUMN easily, so we leave it in place.
 
