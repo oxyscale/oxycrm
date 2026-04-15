@@ -145,12 +145,16 @@ router.post('/voice', (req, res, next) => {
     // Twilio requires international format to place calls
     const to = formatAusNumberToE164(rawTo);
 
-    // Dial the target number with Jordan's mobile as the caller ID
-    // record: 'record-from-answer-dual' records both sides of the call for transcription
+    // Build the absolute callback URL for recording status
+    const baseUrl = process.env.NODE_ENV === 'production'
+      ? 'https://oxycrm-production.up.railway.app'
+      : `http://localhost:${process.env.PORT || 3001}`;
+
+    // Dial the target number — record both sides for Whisper transcription
     const dial = twiml.dial({
       callerId: callerNumber,
       record: 'record-from-answer-dual',
-      recordingStatusCallback: '/api/twilio/recording-status',
+      recordingStatusCallback: `${baseUrl}/api/twilio/recording-status`,
       recordingStatusCallbackMethod: 'POST',
     });
     dial.number(to);
