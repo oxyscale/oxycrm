@@ -521,6 +521,99 @@ router.post('/process-recording', async (req, res) => {
 });
 
 /**
+ * GET /api/twilio/test-transcribe/:callSid
+ * Synchronous test endpoint — tries to download and transcribe a recording for a given CallSid.
+ * Returns detailed step-by-step results so we can see exactly where it fails.
+ */
+router.get('/test-transcribe/:callSid', async (req, res) => {
+  const callSid = req.params.callSid;
+  const steps: Array<{ step: string; status: string; detail?: unknown }> = [];
+
+  try {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+    steps.push({ step: 'credentials', status: accountSid && authToken ? 'ok' : 'MISSING' });
+
+    if (!accountSid || !authToken) {
+      res.json({ callSid, steps, error: 'Missing credentials' });
+      return;
+    }
+
+    // Step 1: Get recordings for this call
+    const recordingsUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls/${callSid}/Recordings.json`;
+    steps.push({ step: 'fetch-recordings', status: 'calling', detail: recordingsUrl });
+
+    const recRes = await fetch(recordingsUrl, {
+      headers: { 'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64') },
+    });
+
+    steps.push({ step: 'fetch-recordings-response', status: recRes.ok ? 'ok' : 'FAILED', detail: { status: recRes.status, statusText: recRes.statusText } });
+
+    if (!recRes.ok) {
+      const body = await recRes.text();
+      steps.push({ step: 'fetch-recordings-error-body', status: 'error', detail: body.substring(0, 500) });
+      res.json({ callSid, steps });
+      return;
+    }
+
+    const recData = await recRes.json() as { recordings: Array<{ sid: string; status: string; duration: string }> };
+    const recordings = recData.recordings || [];
+    steps.push({ step: 'recordings-found', status: 'ok', detail: recordings.map(r => ({ sid: r.sid, status: r.status, duration: r.duration })) });
+
+    const completed = recordings.find(r => r.status === 'completed');
+    if (!completed) {
+      steps.push({ step: 'no-completed-recording', status: 'FAILED' });
+      res.json({ callSid, steps });
+      return;
+    }
+
+    // Step 2: Download the MP3
+    const mp3Url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Recordings/${completed.sid}.mp3`;
+    steps.push({ step: 'download-mp3', status: 'calling', detail: mp3Url });
+
+    const audioRes = await fetch(mp3Url, {
+      headers: { 'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64') },
+    });
+
+    steps.push({ step: 'download-mp3-response', status: audioRes.ok ? 'ok' : 'FAILED', detail: {
+      status: audioRes.status,
+      statusText: audioRes.statusText,
+      contentType: audioRes.headers.get('content-type'),
+      contentLength: audioRes.headers.get('content-length'),
+    }});
+
+    if (!audioRes.ok) {
+      res.json({ callSid, steps });
+      return;
+    }
+
+    const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+    steps.push({ step: 'audio-downloaded', status: 'ok', detail: { sizeBytes: audioBuffer.length } });
+
+    // Step 3: Transcribe with Whisper
+    steps.push({ step: 'whisper-transcribe', status: 'calling' });
+    const transcript = await transcribeAudio(audioBuffer, `${completed.sid}.mp3`);
+    steps.push({ step: 'whisper-result', status: 'ok', detail: { transcriptLength: transcript.length, preview: transcript.substring(0, 300) } });
+
+    // Step 4: Update call log
+    const db = getDb();
+    const callLog = db.prepare('SELECT id FROM call_logs WHERE twilio_call_sid = ?').get(callSid) as { id: number } | undefined;
+    if (callLog) {
+      db.prepare('UPDATE call_logs SET transcript = ? WHERE id = ?').run(transcript, callLog.id);
+      steps.push({ step: 'call-log-updated', status: 'ok', detail: { callLogId: callLog.id } });
+    } else {
+      steps.push({ step: 'call-log-not-found', status: 'warn', detail: 'No call_log with this CallSid' });
+    }
+
+    res.json({ callSid, success: true, transcript: transcript.substring(0, 500), steps });
+  } catch (err) {
+    steps.push({ step: 'ERROR', status: 'FAILED', detail: err instanceof Error ? { message: err.message, stack: err.stack?.substring(0, 500) } : String(err) });
+    res.json({ callSid, success: false, steps });
+  }
+});
+
+/**
  * GET /api/twilio/debug
  * Diagnostic endpoint — shows the state of the recording/transcription pipeline.
  * Helps identify exactly where things are breaking.
