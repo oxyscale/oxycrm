@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Device, Call } from '@twilio/voice-sdk';
 import {
   Phone,
@@ -173,6 +173,7 @@ function PreviousCallIntel({ calls, loading }: { calls: CallLog[]; loading: bool
 
 export default function DiallerPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     currentLead,
     callState,
@@ -316,11 +317,30 @@ export default function DiallerPage() {
   }, []);
 
   // ── Load categories + leads on mount ────────────────────────
+  // If navigated from a lead profile with loadLeadId, auto-select that lead
+
+  const loadLeadIdFromState = (location.state as { loadLeadId?: number } | null)?.loadLeadId;
 
   useEffect(() => {
     api.getCategories().then(setCategories).catch(() => {});
     loadLeads();
   }, []);
+
+  // Auto-select lead when navigating from profile page
+  useEffect(() => {
+    if (loadLeadIdFromState && !currentLead) {
+      api.getLeadById(loadLeadIdFromState)
+        .then((lead) => {
+          setCurrentLead(lead);
+          updateCallState('idle');
+          setCallDuration(0);
+          setCallStartTime(null);
+        })
+        .catch((err) => console.error('Failed to load lead:', err));
+      // Clear the state so refreshing doesn't re-trigger
+      window.history.replaceState({}, document.title);
+    }
+  }, [loadLeadIdFromState]);
 
   const loadLeads = async (category?: string) => {
     try {
