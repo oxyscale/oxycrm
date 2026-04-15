@@ -141,15 +141,14 @@ router.post('/voice', (req, res, next) => {
     // Twilio requires international format to place calls
     const to = formatAusNumberToE164(rawTo);
 
-    // Record the call at network level for transcription later
-    // This records both sides — the person on the other end is NOT notified
-    twiml.record({
+    // Dial the target number with our Twilio number as the caller ID
+    // record: 'record-from-answer-dual' records both sides of the call for transcription
+    const dial = twiml.dial({
+      callerId: callerNumber,
+      record: 'record-from-answer-dual',
       recordingStatusCallback: '/api/twilio/recording-status',
       recordingStatusCallbackMethod: 'POST',
     });
-
-    // Dial the target number with our Twilio number as the caller ID
-    const dial = twiml.dial({ callerId: callerNumber, record: 'record-from-answer-dual' });
     dial.number(to);
 
     logger.info({ rawTo, to, callerId: callerNumber }, 'TwiML voice webhook — dialling');
