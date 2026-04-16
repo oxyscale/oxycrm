@@ -295,11 +295,12 @@ ${previousEmailsSection}
 1. Mention you just tried calling and left a voicemail
 2. Very briefly introduce OxyScale and what you do (AI and automation for service-based businesses)
 3. Mention you've been working specifically with businesses in their industry (${leadCategory || 'their space'})
-4. Ask them to call back or reply when they get a chance
+4. End with a soft invite to book a chat. Something like: "If you're keen for a quick 20 minute chat to see where AI could help in your business, feel free to book a time here: https://calendly.com/oxyscale/discovery" or similar. Keep it natural, not salesy.
 5. Keep it casual, short, and non-pushy
 
 ## Rules
-- Keep it under 80 words. This is a voicemail follow-up, not a sales pitch.
+- Keep it under 100 words. This is a voicemail follow-up, not a sales pitch.
+- The Calendly link (https://calendly.com/oxyscale/discovery) MUST appear in the email body. Never skip it.
 - No greeting line (no "Hi [name]," as it is added automatically).
 - No signature block.
 - Sound human. One person reaching out to another.
