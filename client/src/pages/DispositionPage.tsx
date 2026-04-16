@@ -33,7 +33,6 @@ export default function DispositionPage() {
   const { currentLead, callDuration, transcript, disposeLead, setCurrentLead } = useDialler();
 
   const [selectedTemperature, setSelectedTemperature] = useState<'hot' | 'warm' | 'cold' | null>(null);
-  const [showTranscript, setShowTranscript] = useState(false);
   const [disposing, setDisposing] = useState<Disposition | null>(null);
   const [preparingEmail, setPreparingEmail] = useState(false);
 
@@ -292,29 +291,7 @@ export default function DispositionPage() {
         </span>
       </div>
 
-      {/* Transcript preview (collapsible) */}
-      <div className="mb-8">
-        <button
-          onClick={() => setShowTranscript(!showTranscript)}
-          className="flex items-center gap-2 text-[#a1a1aa] text-sm hover:text-[#fafafa] transition-all"
-        >
-          {showTranscript ? (
-            <ChevronUp size={16} />
-          ) : (
-            <ChevronDown size={16} />
-          )}
-          {showTranscript ? 'Hide Transcript' : 'View Transcript'}
-        </button>
-        {showTranscript && (
-          <div className="mt-3 bg-[#1f1f23] rounded-xl p-5 max-h-48 overflow-y-auto">
-            <p className="text-[#a1a1aa] text-sm whitespace-pre-wrap leading-relaxed">
-              {transcript || 'No transcript available'}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Call Notes — manual notes / transcription fallback */}
+      {/* Call Notes */}
       <div className="mb-6">
         <label className="text-[#52525b] text-xs font-medium uppercase tracking-wider block mb-2">
           Call Notes
@@ -322,10 +299,13 @@ export default function DispositionPage() {
         <textarea
           value={quickNote}
           onChange={(e) => setQuickNote(e.target.value)}
-          placeholder="Add notes from the call here. These will be saved alongside the transcript. Use this as a fallback if transcription didn't capture everything."
+          placeholder="Jot down any notes from the call. The full transcript will be generated automatically from the recording."
           rows={4}
           className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all resize-none leading-relaxed"
         />
+        <p className="text-[#52525b] text-xs mt-1.5">
+          Full transcript will appear on the lead profile once the recording is processed.
+        </p>
       </div>
 
       {/* Preparing email overlay */}
