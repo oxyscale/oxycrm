@@ -139,7 +139,7 @@ const createLeadSchema = z.object({
   website: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
-  pipelineStage: z.enum(['new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost']).optional(),
+  pipelineStage: z.enum(['new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested']).optional(),
 });
 
 const updateLeadSchema = z.object({
@@ -152,7 +152,7 @@ const updateLeadSchema = z.object({
   category: z.string().nullable().optional(),
   consolidatedSummary: z.string().nullable().optional(),
   companyInfo: z.string().nullable().optional(),
-  pipelineStage: z.enum(['new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost']).optional(),
+  pipelineStage: z.enum(['new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested']).optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
 });
 
