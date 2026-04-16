@@ -48,9 +48,13 @@ router.get('/callback', async (req, res, next) => {
       logger.warn({ err: syncErr }, 'Failed to start Gmail sync after OAuth callback');
     }
 
-    // Redirect back to the app after successful auth
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-    res.redirect(`${clientUrl}?googleAuth=success`);
+    // Redirect back to the app after successful auth.
+    // Use the request's origin so it works in both local dev and production
+    // without needing CLIENT_URL to be perfectly set.
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:5173';
+    const baseUrl = process.env.CLIENT_URL || `${protocol}://${host}`;
+    res.redirect(`${baseUrl}?googleAuth=success`);
   } catch (err) {
     logger.error({ err }, 'Google OAuth callback failed');
     next(err);
