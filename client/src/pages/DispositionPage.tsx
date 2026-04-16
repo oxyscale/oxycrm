@@ -103,7 +103,8 @@ export default function DispositionPage() {
 
   const handleConnectGoogle = async () => {
     try {
-      const { url } = await getGoogleAuthUrl();
+      // Navigate directly to the auth endpoint — it redirects to Google OAuth
+      const url = '/api/google/auth';
       window.open(url, '_blank');
       // After the user connects, they'll come back — re-check auth status
       // Poll briefly to detect when they've completed the flow
