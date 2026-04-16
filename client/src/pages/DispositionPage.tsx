@@ -23,7 +23,7 @@ import {
   Snowflake,
 } from 'lucide-react';
 import { useDialler } from '../hooks/useDiallerSession';
-import { createCalendarEvent, getGoogleAuthStatus, getGoogleAuthUrl, getCalendarEvents, updateLeadTemperature, draftVoicemailEmail, sendEmail } from '../services/api';
+import { createCalendarEvent, getGoogleAuthStatus, getCalendarEvents, updateLeadTemperature, draftVoicemailEmail, sendEmail } from '../services/api';
 import { getContactFirstName } from '../utils/names';
 import type { Disposition } from '../types';
 import { buildEmailText } from '../utils/emailTemplate';
@@ -46,9 +46,6 @@ export default function DispositionPage() {
   const [vmSending, setVmSending] = useState(false);
   const [vmSent, setVmSent] = useState(false);
   const [quickNote, setQuickNote] = useState('');
-  const [callbackDate, setCallbackDate] = useState('');
-  const [callbackTime, setCallbackTime] = useState('');
-  const [callbackNotes, setCallbackNotes] = useState('');
 
   // Book Meeting state
   const [showBookMeeting, setShowBookMeeting] = useState(false);
@@ -173,11 +170,6 @@ export default function DispositionPage() {
   const handleDispose = async (disposition: Disposition) => {
     setDisposing(disposition);
 
-    const cbDateTime =
-      callbackDate && callbackTime
-        ? `${callbackDate}T${callbackTime}:00`
-        : undefined;
-
     try {
       // Update temperature if selected
       if (selectedTemperature && currentLead) {
@@ -191,9 +183,7 @@ export default function DispositionPage() {
 
       await disposeLead(
         disposition,
-        fullTranscript,
-        cbDateTime,
-        callbackNotes || undefined
+        fullTranscript
       );
 
       if (disposition === 'interested') {
@@ -862,6 +852,7 @@ export default function DispositionPage() {
                           } catch (err) {
                             console.error('Failed to send voicemail email:', err);
                             setVmSending(false);
+                            alert('Failed to send voicemail email. Please try again.');
                           }
                         }}
                         disabled={vmSending || !vmEmailSubject || !vmEmailBody}

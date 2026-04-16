@@ -127,7 +127,7 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
       setCallStartTime(null);
       setTranscript('');
       setTwilioCallSid(null);
-      setEmailTo(lead.email || '');
+      setEmailTo(lead?.email || '');
       setEmailCc('');
     } catch (err) {
       console.error('Failed to load next lead:', err);

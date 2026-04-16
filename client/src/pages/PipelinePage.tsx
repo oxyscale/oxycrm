@@ -158,7 +158,7 @@ export default function PipelinePage() {
       const nextIdx = (currentIdx + 1) % TEMPERATURE_CYCLE.length;
       const nextTemp = TEMPERATURE_CYCLE[nextIdx];
 
-      const updated = await api.updateLeadTemperature(lead.id, nextTemp || '');
+      const updated = await api.updateLeadTemperature(lead.id, nextTemp);
       // Update in local state
       setPipeline((prev) => {
         const next = { ...prev };

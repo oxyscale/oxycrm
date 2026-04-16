@@ -83,15 +83,12 @@ export default function ComposeEmailPage() {
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let finalTranscript = '';
-      let interimTranscript = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result[0]) {
           if ((result as any).isFinal) {
             finalTranscript += result[0].transcript;
-          } else {
-            interimTranscript = result[0].transcript;
           }
         }
       }
@@ -197,6 +194,7 @@ export default function ComposeEmailPage() {
     } catch (err) {
       console.error('Send failed:', err);
       setSending(false);
+      alert('Failed to send email. Please try again.');
     }
   };
 

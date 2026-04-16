@@ -710,12 +710,12 @@ router.get('/debug', async (_req, res) => {
       recentCallLogs,
       diagnosis: {
         voiceWebhookCapturingCallSids: callSessions.length > 0,
-        whisperProcessedAny: pendingTranscripts.length > 0 || recentCallLogs.some((cl: Record<string, unknown>) => {
+        whisperProcessedAny: pendingTranscripts.length > 0 || (recentCallLogs as Record<string, unknown>[]).some((cl) => {
           const preview = cl.transcript_preview as string | null;
           return preview && !preview.includes('[Call connected]');
         }),
-        callLogsHaveCallSids: recentCallLogs.filter((cl: Record<string, unknown>) => cl.twilio_call_sid).length,
-        callLogsWithRealTranscripts: recentCallLogs.filter((cl: Record<string, unknown>) => {
+        callLogsHaveCallSids: (recentCallLogs as Record<string, unknown>[]).filter((cl) => cl.twilio_call_sid).length,
+        callLogsWithRealTranscripts: (recentCallLogs as Record<string, unknown>[]).filter((cl) => {
           const preview = cl.transcript_preview as string | null;
           return preview && !preview.includes('[Call connected]') && !preview.includes('[Call ended]');
         }).length,

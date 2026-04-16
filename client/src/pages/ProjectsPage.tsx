@@ -4,8 +4,6 @@ import {
   FolderKanban,
   Plus,
   DollarSign,
-  CheckCircle2,
-  BarChart3,
   Loader2,
   X,
   Calendar,

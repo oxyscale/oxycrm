@@ -11,7 +11,6 @@ interface BrandedEmailPreviewProps {
 }
 
 export default function BrandedEmailPreview({
-  subject,
   body,
   recipientName,
   senderName = 'Jordan',
