@@ -31,6 +31,7 @@ interface SendEmailParams {
   bcc?: string;
   subject: string;
   textBody: string;
+  htmlBody?: string;
   fromName?: string;
   fromAddress?: string;
 }
@@ -46,7 +47,7 @@ interface SendEmailResult {
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   const fromName = params.fromName || process.env.EMAIL_FROM_NAME || 'OxyScale';
   const fromAddress = params.fromAddress || process.env.EMAIL_FROM_ADDRESS || 'jordan@oxyscale.ai';
-  const { to, cc, bcc, subject, textBody } = params;
+  const { to, cc, bcc, subject, textBody, htmlBody } = params;
 
   const from = `${fromName} <${fromAddress}>`;
 
@@ -72,6 +73,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
       bcc: bccList,
       subject,
       text: textBody,
+      ...(htmlBody ? { html: htmlBody } : {}),
       tags: [
         { name: 'source', value: 'oxyscale-dialler' },
         { name: 'type', value: 'follow-up' },

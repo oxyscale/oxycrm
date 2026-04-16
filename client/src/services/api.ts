@@ -352,6 +352,7 @@ export async function draftFollowUpEmail(params: {
   summary: string;
   leadName: string;
   leadCompany?: string | null;
+  leadCategory?: string | null;
   callContext?: string;
 }): Promise<{ subject: string; body: string }> {
   return request<{ subject: string; body: string }>('/ai/draft-email', {
@@ -533,4 +534,44 @@ export async function getPipelineStats(): Promise<{
 
 export async function getEmailsForLead(leadId: number): Promise<EmailSent[]> {
   return request<EmailSent[]>(`/leads/${leadId}/emails`);
+}
+
+// ── Settings ────────────────────────────────────────────────
+
+export async function getSettings(): Promise<Record<string, string>> {
+  return request<Record<string, string>>('/settings');
+}
+
+export async function updateSettings(data: Record<string, string>): Promise<Record<string, string>> {
+  return request<Record<string, string>>('/settings', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+// ── Category Prompts ────────────────────────────────────────
+
+export interface CategoryPrompt {
+  id: number;
+  category: string;
+  prompt: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getCategoryPrompts(): Promise<CategoryPrompt[]> {
+  return request<CategoryPrompt[]>('/settings/prompts');
+}
+
+export async function saveCategoryPrompt(category: string, prompt: string): Promise<CategoryPrompt> {
+  return request<CategoryPrompt>(`/settings/prompts/${encodeURIComponent(category)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ prompt }),
+  });
+}
+
+export async function deleteCategoryPrompt(category: string): Promise<void> {
+  return request<void>(`/settings/prompts/${encodeURIComponent(category)}`, {
+    method: 'DELETE',
+  });
 }

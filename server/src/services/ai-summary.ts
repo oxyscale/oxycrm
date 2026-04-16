@@ -5,6 +5,7 @@
 
 import pino from 'pino';
 import { EMAIL_STYLE_GUIDE } from '../prompts/emailDraft.js';
+import { getDb } from '../db/index.js';
 
 const logger = pino({ name: 'ai-summary-service' });
 
@@ -58,6 +59,44 @@ async function callClaude(prompt: string, maxTokens: number = 2000): Promise<str
     .filter((c) => c.type === 'text')
     .map((c) => c.text)
     .join('');
+}
+
+// ── Playbook + Settings context helper ──────────────────────
+
+function getCategoryPrompt(category: string | null): string {
+  if (!category) return '';
+  try {
+    const db = getDb();
+    const row = db.prepare('SELECT prompt FROM category_prompts WHERE category = ?').get(category) as {
+      prompt: string;
+    } | undefined;
+    if (!row || !row.prompt?.trim()) return '';
+    return `\n## Industry context for ${category}\n${row.prompt}\n\nUse the above context to make the email specific to their industry. Weave in the most relevant points naturally, don't list them all.\n`;
+  } catch {
+    return '';
+  }
+}
+
+function getSettingsContext(): { calendlyLink: string; calendlyDuration: string; companyDescription: string; signOff: string } {
+  try {
+    const db = getDb();
+    const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+    const map: Record<string, string> = {};
+    for (const r of rows) map[r.key] = r.value;
+    return {
+      calendlyLink: map.calendly_link || 'https://calendly.com/jordan-oxyscale/30min',
+      calendlyDuration: map.calendly_duration || '20',
+      companyDescription: map.company_description || 'AI and automation consultancy that helps businesses cut down on repetitive manual work.',
+      signOff: map.email_sign_off || 'Cheers',
+    };
+  } catch {
+    return {
+      calendlyLink: 'https://calendly.com/jordan-oxyscale/30min',
+      calendlyDuration: '30',
+      companyDescription: 'AI and automation consultancy that helps businesses cut down on repetitive manual work.',
+      signOff: 'Cheers',
+    };
+  }
 }
 
 /**
@@ -190,12 +229,13 @@ export async function draftFollowUpEmail(
   leadName: string,
   leadCompany: string | null,
   callContext?: string,
-  previousEmails?: string
+  previousEmails?: string,
+  leadCategory?: string | null
 ): Promise<EmailDraftResult> {
   const startTime = Date.now();
 
   logger.info(
-    { leadName, leadCompany, hasCallContext: !!callContext, hasPreviousEmails: !!previousEmails },
+    { leadName, leadCompany, leadCategory, hasCallContext: !!callContext, hasPreviousEmails: !!previousEmails },
     'Starting email draft generation'
   );
 
@@ -203,12 +243,16 @@ export async function draftFollowUpEmail(
     ? `\n## Jordan's previously sent emails (match this style and tone closely)\n${previousEmails}\n`
     : '';
 
-  const prompt = `You are writing a follow-up email for Jordan Bell from OxyScale (AI & Automation consultancy) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}.
+  const playbookSection = getCategoryPrompt(leadCategory || null);
+  const ctx = getSettingsContext();
+
+  const prompt = `You are writing a follow-up email for Jordan Bell from OxyScale (${ctx.companyDescription}) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
 
 A sales call just happened. Write a personalised follow-up email based on what was discussed.
 
 ${EMAIL_STYLE_GUIDE}
 ${previousEmailsSection}
+${playbookSection}
 
 ## Structure
 1. One line referencing the call warmly
@@ -216,8 +260,9 @@ ${previousEmailsSection}
 3. Brief OxyScale positioning (1-2 sentences, tailored to their context)
 4. Acknowledge what they already have in place, frame OxyScale as additive
 5. Pull in 2-3 specific things discussed on the call and weave them in naturally
-6. Clear next step (demo, catch up, meet face to face)
+6. Clear next step (demo, catch up, meet face to face). If appropriate, include the booking link: ${ctx.calendlyLink}
 7. "Looking forward to hearing your thoughts."
+8. Sign off with "${ctx.signOff},"
 
 ## Call transcript
 ${transcript}
@@ -284,26 +329,31 @@ export async function draftVoicemailEmail(
     ? `\n## Jordan's previously sent emails (match this style and tone closely)\n${previousEmails}\n`
     : '';
 
-  const prompt = `You are writing a short follow-up email for Jordan Bell from OxyScale (AI & Automation consultancy) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
+  const playbookSection = getCategoryPrompt(leadCategory);
+  const ctx = getSettingsContext();
+
+  const prompt = `You are writing a short follow-up email for Jordan Bell from OxyScale (${ctx.companyDescription}) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
 
 Jordan just tried calling this person and left a voicemail. Now write a brief follow-up email to accompany the voicemail.
 
 ${EMAIL_STYLE_GUIDE}
 ${previousEmailsSection}
+${playbookSection}
 
 ## Key points to cover
 1. Mention you just tried calling and left a voicemail
-2. Very briefly introduce OxyScale and what you do (AI and automation for service-based businesses)
-3. Mention you've been working specifically with businesses in their industry (${leadCategory || 'their space'})
-4. End with a soft invite to book a chat. Something like: "If you're keen for a quick 20 minute chat to see where AI could help in your business, feel free to book a time here: https://calendly.com/oxyscale/discovery" or similar. Keep it natural, not salesy.
+2. Very briefly introduce OxyScale and what you do, tailored to their industry if playbook context is available above
+3. If playbook context is available, mention 1-2 specific pain points that are relevant to their business. Frame it as "if any of these sound familiar" rather than assuming.
+4. End with a soft invite to book a chat: "If you're keen for a quick ${ctx.calendlyDuration} minute chat to see where AI could help in your business, feel free to book a time here: ${ctx.calendlyLink}"
 5. Keep it casual, short, and non-pushy
 
 ## Rules
 - Keep it under 100 words. This is a voicemail follow-up, not a sales pitch.
-- The Calendly link (https://calendly.com/oxyscale/discovery) MUST appear in the email body. Never skip it.
+- The Calendly link (${ctx.calendlyLink}) MUST appear in the email body. Never skip it.
 - No greeting line (no "Hi [name]," as it is added automatically).
 - No signature block.
 - Sound human. One person reaching out to another.
+- Sign off with "${ctx.signOff},"
 
 ## Output format
 Return ONLY valid JSON in this exact format, no other text:
@@ -350,12 +400,16 @@ export async function draftEmailFromInstructions(
     'Starting email draft from instructions'
   );
 
-  const prompt = `You are writing an email for Jordan Bell from OxyScale (AI & Automation consultancy) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
+  const playbookSection = getCategoryPrompt(leadCategory);
+  const ctx = getSettingsContext();
+
+  const prompt = `You are writing an email for Jordan Bell from OxyScale (${ctx.companyDescription}) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
 
 Jordan has given you these instructions on what the email should say:
 "${instructions}"
 
 ${EMAIL_STYLE_GUIDE}
+${playbookSection}
 
 ${existingContext ? `## Context about this lead (previous interactions)\n${existingContext}\n` : ''}
 
@@ -364,8 +418,10 @@ ${existingContext ? `## Context about this lead (previous interactions)\n${exist
 - Follow the instructions closely. If Jordan says "tell them X", write about X.
 - If the instructions are brief, keep the email brief. Match the energy.
 - Don't assume a call just happened unless Jordan says so.
+- If the instructions mention booking a call or meeting, include this Calendly link: ${ctx.calendlyLink}
 - No greeting line (no "Hi ${firstName}," as it is added automatically).
 - No signature block.
+- Sign off with "${ctx.signOff},"
 
 ## Output format
 Return ONLY valid JSON in this exact format, no other text:

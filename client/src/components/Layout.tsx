@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { Home, Users, Phone, Kanban, FolderKanban, Brain, BarChart3, HelpCircle } from 'lucide-react';
+import { Home, Users, Phone, Kanban, FolderKanban, Brain, BarChart3, HelpCircle, Settings } from 'lucide-react';
 import Logo from './Logo';
 import SearchBar from './SearchBar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
@@ -14,6 +14,7 @@ const navItems = [
   { path: '/projects', icon: FolderKanban, label: 'Projects' },
   { path: '/intelligence', icon: Brain, label: 'Call Intelligence' },
   { path: '/dashboard', icon: BarChart3, label: 'Stats' },
+  { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 // All shortcuts displayed in the help modal
@@ -27,6 +28,7 @@ const shortcutEntries = [
   { label: '5', description: 'Go to Projects' },
   { label: '6', description: 'Go to Intelligence' },
   { label: '7', description: 'Go to Stats' },
+  { label: '8', description: 'Go to Settings' },
 ];
 
 export default function Layout() {
@@ -53,6 +55,7 @@ export default function Layout() {
       { key: '5', handler: () => navigate('/projects'), description: 'Go to Projects' },
       { key: '6', handler: () => navigate('/intelligence'), description: 'Go to Intelligence' },
       { key: '7', handler: () => navigate('/dashboard'), description: 'Go to Stats' },
+      { key: '8', handler: () => navigate('/settings'), description: 'Go to Settings' },
     ],
     [navigate]
   );

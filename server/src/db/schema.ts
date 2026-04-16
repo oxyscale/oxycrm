@@ -251,5 +251,21 @@ export function initializeDatabase(db: Database.Database): void {
     -- Index for pipeline stage filtering
     CREATE INDEX IF NOT EXISTS idx_leads_pipeline_stage
       ON leads(pipeline_stage);
+
+    -- Settings table: key-value pairs for app configuration
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Category prompts: free-text AI context per industry category
+    CREATE TABLE IF NOT EXISTS category_prompts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT NOT NULL UNIQUE,
+      prompt TEXT NOT NULL DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 }

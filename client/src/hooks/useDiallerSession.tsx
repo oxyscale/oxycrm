@@ -216,6 +216,7 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
                   summary: summaryResult.summary,
                   leadName: leadSnapshot.name,
                   leadCompany: leadSnapshot.company,
+                  leadCategory: leadSnapshot.category,
                 });
                 setDraftEmailSubject(emailDraft.subject);
                 setDraftEmailBody(emailDraft.body);

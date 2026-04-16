@@ -57,6 +57,7 @@ const draftEmailSchema = z.object({
   summary: z.string().min(1, 'Summary is required'),
   leadName: z.string().min(1, 'Lead name is required'),
   leadCompany: z.string().nullable().optional(),
+  leadCategory: z.string().nullable().optional(),
   callContext: z.string().optional(),
 });
 
@@ -158,7 +159,8 @@ router.post('/ai/draft-email', async (req, res, next) => {
       data.leadName,
       data.leadCompany ?? null,
       data.callContext,
-      previousEmails
+      previousEmails,
+      data.leadCategory ?? null
     );
 
     res.json(result);

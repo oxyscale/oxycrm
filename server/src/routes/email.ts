@@ -6,6 +6,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { sendEmail } from '../services/email.js';
+import { buildEmailSignature } from '../services/emailSignature.js';
+import { buildBrandedEmailHtml } from '../services/emailTemplate.js';
 import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import pino from 'pino';
@@ -41,12 +43,51 @@ router.post('/send', async (req, res, next) => {
       'Processing email send request'
     );
 
+    // ── Fetch settings for signature ─────────────────────────
+    const db = getDb();
+    const settingsRows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+    const settingsMap: Record<string, string> = {};
+    for (const row of settingsRows) {
+      settingsMap[row.key] = row.value;
+    }
+
+    const senderName = settingsMap.sender_name || 'Jordan Bell';
+    const senderTitle = settingsMap.sender_title || 'Co-Founder';
+    const senderPhone = settingsMap.sender_phone || '0478 197 600';
+    const companyName = settingsMap.company_name || 'OxyScale';
+    const websiteUrl = settingsMap.website_url || 'https://oxyscale.ai';
+    const calendlyLink = settingsMap.calendly_link || 'https://calendly.com/jordan-oxyscale/30min';
+    const signOff = settingsMap.email_sign_off || 'Cheers';
+
+    // Get recipient name from lead record
+    const lead = db.prepare('SELECT name FROM leads WHERE id = ?').get(payload.leadId) as { name: string } | undefined;
+    const recipientName = lead?.name?.split(' ')[0] || 'there';
+
+    // Build branded HTML version
+    const signature = buildEmailSignature({
+      sender_name: senderName,
+      sender_title: senderTitle,
+      sender_phone: senderPhone,
+      company_name: companyName,
+      website_url: websiteUrl,
+      calendly_link: calendlyLink,
+    });
+
+    const htmlBody = buildBrandedEmailHtml({
+      body: payload.body,
+      recipientName,
+      senderName,
+      signOff,
+      signature,
+    });
+
     const result = await sendEmail({
       to: payload.to,
       cc: payload.cc,
       bcc: payload.bcc,
       subject: payload.subject,
       textBody: payload.body,
+      htmlBody,
     });
 
     logger.info(
@@ -56,7 +97,6 @@ router.post('/send', async (req, res, next) => {
 
     // Record the sent email and create an activity
     try {
-      const db = getDb();
       const now = new Date().toISOString();
       // Store the FULL email body so it can be viewed later on the profile page
       const bodySnippet = payload.body;

@@ -27,6 +27,7 @@ import notesRouter from './routes/notes.js';
 import projectsRouter from './routes/projects.js';
 import activitiesRouter from './routes/activities.js';
 import pipelineRouter from './routes/pipeline.js';
+import settingsRouter from './routes/settings.js';
 import { startGmailSync } from './services/gmail-sync.js';
 
 // Import error handling middleware
@@ -86,6 +87,7 @@ app.use('/api/notes', notesRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/activities', activitiesRouter);
 app.use('/api/pipeline', pipelineRouter);
+app.use('/api/settings', settingsRouter);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

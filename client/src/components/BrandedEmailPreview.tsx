@@ -6,6 +6,11 @@ interface BrandedEmailPreviewProps {
   body: string;
   recipientName: string;
   senderName?: string;
+  senderTitle?: string;
+  senderPhone?: string;
+  websiteUrl?: string;
+  calendlyLink?: string;
+  signOff?: string;
   ctaLabel?: string | null; // null = no CTA button shown
   ctaUrl?: string;
 }
@@ -13,12 +18,18 @@ interface BrandedEmailPreviewProps {
 export default function BrandedEmailPreview({
   body,
   recipientName,
-  senderName = 'Jordan',
+  senderName = 'Jordan Bell',
+  senderTitle = 'Co-Founder',
+  senderPhone = '0478 197 600',
+  websiteUrl = 'https://oxyscale.ai',
+  calendlyLink = 'https://calendly.com/jordan-oxyscale/30min',
+  signOff = 'Cheers',
   ctaLabel = null,
   ctaUrl = 'https://calendly.com/jordan-oxyscale/30min',
 }: BrandedEmailPreviewProps) {
   // Convert newlines to <br> for HTML rendering
   const htmlBody = body.replace(/\n/g, '<br />');
+  const cleanWebsiteUrl = websiteUrl.replace(/^https?:\/\//, '');
 
   const ctaHtml = ctaLabel
     ? `
@@ -92,19 +103,63 @@ export default function BrandedEmailPreview({
                 </td>
               </tr>
 
-              <!-- Sign off -->
+              <!-- Sign off + Signature -->
               <tr>
                 <td style="background-color: #ffffff; padding: 0 48px 36px 48px;">
                   <p style="margin: 0 0 4px 0; color: #3f3f46; font-size: 15px; line-height: 1.7;">
-                    Kind regards,
+                    ${signOff},
                   </p>
-                  <p style="margin: 0 0 2px 0; color: #18181b; font-size: 15px; font-weight: 600; line-height: 1.7;">
-                    ${senderName}
-                  </p>
-                  <p style="margin: 0; color: #a1a1aa; font-size: 13px; line-height: 1.5;">
-                    OxyScale<br />
-                    0478 197 600
-                  </p>
+                  <!-- Signature block -->
+                  <table cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-top: 24px; width: 100%;">
+                    <tr>
+                      <td style="padding: 0 0 16px 0;">
+                        <table cellpadding="0" cellspacing="0" style="border-collapse: collapse; width: 100%;">
+                          <tr>
+                            <td style="width: 60px; height: 2px; background-color: #34d399; font-size: 0; line-height: 0;"></td>
+                            <td style="height: 2px; font-size: 0; line-height: 0;"></td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 0 0 2px 0;">
+                        <span style="color: #18181b; font-size: 14px; font-weight: 700;">${senderName}</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 0 0 10px 0;">
+                        <span style="color: #71717a; font-size: 12px;">${senderTitle}</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 0 0 8px 0;">
+                        <span style="font-family: 'Outfit', -apple-system, sans-serif; font-weight: 800; font-size: 15px; letter-spacing: -0.03em;">
+                          <span style="color: #18181b;">Oxy</span><span style="color: #34d399;">Scale</span>
+                        </span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 0 0 4px 0;">
+                        <span style="color: #71717a; font-size: 12px;">${senderPhone}</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 0 0 12px 0;">
+                        <a href="${websiteUrl}" style="color: #34d399; font-size: 12px; text-decoration: none; font-weight: 500;">${cleanWebsiteUrl}</a>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 0;">
+                        <table cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                          <tr>
+                            <td style="background-color: #34d399; border-radius: 6px; padding: 8px 16px;">
+                              <a href="${calendlyLink}" style="color: #09090b; font-size: 12px; font-weight: 700; text-decoration: none; display: block;">Book a call</a>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
 
