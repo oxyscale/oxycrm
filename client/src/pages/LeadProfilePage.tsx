@@ -623,6 +623,15 @@ export default function LeadProfilePage() {
           Email
         </button>
 
+        {/* Book Meeting button */}
+        <button
+          onClick={() => navigate(`/book-meeting/${lead.id}`)}
+          className="flex items-center gap-2 bg-transparent text-[#a1a1aa] border border-white/[0.06] rounded-lg px-4 py-2.5 text-sm hover:bg-white/[0.03] hover:text-[#fafafa] transition-all"
+        >
+          <CalendarDays size={15} />
+          Book Meeting
+        </button>
+
         {/* Add Note button */}
         <button
           onClick={() => {
@@ -636,19 +645,6 @@ export default function LeadProfilePage() {
         >
           <Plus size={15} />
           Add Note
-        </button>
-
-        {/* Book Meeting button */}
-        <button
-          onClick={() => {
-            // Navigate to disposition page with this lead pre-loaded for meeting booking
-            // Pass state so the disposition page knows to open the meeting section
-            navigate('/dialler', { state: { loadLeadId: lead.id, openMeeting: true } });
-          }}
-          className="flex items-center gap-2 bg-transparent text-[#a1a1aa] border border-white/[0.06] rounded-lg px-4 py-2.5 text-sm hover:bg-white/[0.03] hover:text-[#fafafa] transition-all"
-        >
-          <CalendarDays size={15} />
-          Book Meeting
         </button>
 
         {/* Spacer */}

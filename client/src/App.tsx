@@ -13,6 +13,7 @@ import LeadProfilePage from './pages/LeadProfilePage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import ComposeEmailPage from './pages/ComposeEmailPage';
+import BookMeetingPage from './pages/BookMeetingPage';
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/disposition" element={<DispositionPage />} />
           <Route path="/email" element={<EmailComposePage />} />
 <Route path="/compose/:leadId" element={<ComposeEmailPage />} />
+          <Route path="/book-meeting/:leadId" element={<BookMeetingPage />} />
           <Route path="/pipeline" element={<PipelinePage />} />
           <Route path="/intelligence" element={<IntelligencePage />} />
           <Route path="/projects" element={<ProjectsPage />} />
