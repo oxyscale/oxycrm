@@ -45,6 +45,7 @@ export default function DispositionPage() {
   const [vmSending, setVmSending] = useState(false);
   const [vmSent, setVmSent] = useState(false);
   const [quickNote, setQuickNote] = useState('');
+  const [followUpDate, setFollowUpDate] = useState('');
 
   // Book Meeting state
   const [showBookMeeting, setShowBookMeeting] = useState(false);
@@ -182,7 +183,10 @@ export default function DispositionPage() {
 
       await disposeLead(
         disposition,
-        fullTranscript
+        fullTranscript,
+        undefined,
+        undefined,
+        followUpDate || undefined
       );
 
       if (disposition === 'interested') {
@@ -345,6 +349,33 @@ export default function DispositionPage() {
               </button>
             );
           })}
+        </div>
+      </div>
+
+      {/* Schedule Follow-Up */}
+      <div className="mb-6">
+        <label className="text-[#52525b] text-xs font-medium uppercase tracking-wider block mb-2">
+          Schedule Follow-Up
+        </label>
+        <div className="flex items-center gap-3">
+          <input
+            type="date"
+            value={followUpDate}
+            onChange={(e) => setFollowUpDate(e.target.value)}
+            min={new Date().toISOString().split('T')[0]}
+            className="bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all [color-scheme:dark]"
+          />
+          {followUpDate && (
+            <button
+              onClick={() => setFollowUpDate('')}
+              className="text-[#52525b] hover:text-[#a1a1aa] transition-colors"
+            >
+              <X size={16} />
+            </button>
+          )}
+          <span className="text-[#52525b] text-xs">
+            {followUpDate ? 'Lead will be moved to Follow Up queue' : 'Optional — set a date to follow up'}
+          </span>
         </div>
       </div>
 

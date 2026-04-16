@@ -46,6 +46,7 @@ interface CallbackWithLeadRow extends CallbackRow {
   l_pipeline_stage: string;
   l_temperature: string | null;
   l_converted_to_project: number;
+  l_follow_up_date: string | null;
   l_queue_position: number;
   l_last_called_at: string | null;
   l_created_at: string;
@@ -104,6 +105,7 @@ function mapCallbackWithLeadRow(row: CallbackWithLeadRow): CallbackWithLead {
     pipelineStage: row.l_pipeline_stage as Lead['pipelineStage'],
     temperature: (row.l_temperature as Lead['temperature']) ?? null,
     convertedToProject: row.l_converted_to_project === 1,
+    followUpDate: row.l_follow_up_date,
     queuePosition: row.l_queue_position,
     lastCalledAt: row.l_last_called_at,
     createdAt: row.l_created_at,

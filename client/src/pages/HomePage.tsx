@@ -24,7 +24,7 @@ import {
 import Logo from '../components/Logo';
 import { useDialler } from '../hooks/useDiallerSession';
 import * as api from '../services/api';
-import type { ImportResult, DuplicateLead, Activity } from '../types';
+import type { ImportResult, DuplicateLead, Activity, Lead } from '../types';
 
 // ── Pipeline stage display config ────────────────────────────
 const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
@@ -73,6 +73,7 @@ export default function HomePage() {
     avgDuration: number;
   } | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [followUpQueue, setFollowUpQueue] = useState<(Lead & { isOverdue: boolean })[]>([]);
 
   // Import / Create state
   const [showImport, setShowImport] = useState(false);
@@ -109,15 +110,17 @@ export default function HomePage() {
     const loadDashboard = async () => {
       setDashboardLoading(true);
       try {
-        const [statsRes, activitiesRes, callStatsRes] = await Promise.allSettled([
+        const [statsRes, activitiesRes, callStatsRes, followUpsRes] = await Promise.allSettled([
           api.getPipelineStats(),
           api.getRecentActivities(),
           fetch('/api/calls/stats?period=week').then((r) => r.json()),
+          api.getFollowUpQueue(),
         ]);
 
         if (statsRes.status === 'fulfilled') setPipelineStats(statsRes.value);
         if (activitiesRes.status === 'fulfilled') setRecentActivities(activitiesRes.value);
         if (callStatsRes.status === 'fulfilled') setCallStats(callStatsRes.value);
+        if (followUpsRes.status === 'fulfilled') setFollowUpQueue(followUpsRes.value);
       } catch {
         // Silently fail — dashboard still works with partial data
       } finally {
@@ -618,52 +621,159 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* Today's Callbacks */}
-          {todaysCallbacks.length > 0 && (
-            <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-[#fafafa] font-bold text-sm tracking-tight flex items-center gap-2">
-                  Today's Callbacks
-                  <span className="bg-[rgba(52,211,153,0.15)] text-[#34d399] text-xs font-medium px-2 py-0.5 rounded-full">
-                    {todaysCallbacks.length}
-                  </span>
-                </h2>
-              </div>
+          {/* Follow-Up Queue */}
+          {followUpQueue.length > 0 && (() => {
+            const overdueLeads = followUpQueue.filter((l) => l.isOverdue);
+            const upcomingLeads = followUpQueue.filter((l) => !l.isOverdue);
+            const today = new Date().toISOString().split('T')[0];
+            const dueTodayLeads = upcomingLeads.filter((l) => l.followUpDate === today);
+            const futureLeads = upcomingLeads.filter((l) => l.followUpDate !== today);
+            const noDateLeads = followUpQueue.filter((l) => !l.followUpDate);
 
-              <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
-                {todaysCallbacks.map((cb) => (
-                  <div
-                    key={cb.id}
-                    className="bg-[#1f1f23] rounded-lg p-4 flex items-center justify-between gap-3"
+            const formatFollowUpDate = (dateStr: string | null) => {
+              if (!dateStr) return 'No date set';
+              const d = new Date(dateStr + 'T00:00:00');
+              return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+            };
+
+            const daysOverdue = (dateStr: string) => {
+              const diff = Math.floor((Date.now() - new Date(dateStr + 'T00:00:00').getTime()) / 86400000);
+              return diff === 1 ? '1 day overdue' : `${diff} days overdue`;
+            };
+
+            return (
+              <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-[#fafafa] font-bold text-sm tracking-tight flex items-center gap-2">
+                    <Clock size={16} className="text-[#60a5fa]" />
+                    Follow-Up Queue
+                    <span className="bg-[rgba(96,165,250,0.15)] text-[#60a5fa] text-xs font-medium px-2 py-0.5 rounded-full">
+                      {followUpQueue.length}
+                    </span>
+                    {overdueLeads.length > 0 && (
+                      <span className="bg-red-500/15 text-red-400 text-xs font-medium px-2 py-0.5 rounded-full">
+                        {overdueLeads.length} overdue
+                      </span>
+                    )}
+                  </h2>
+                  <button
+                    onClick={() => navigate('/pipeline')}
+                    className="text-[#60a5fa] text-xs font-medium hover:underline flex items-center gap-1"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[#fafafa] font-medium text-sm truncate">{cb.lead.name}</span>
-                        {cb.lead.category && (
-                          <span className="bg-[rgba(52,211,153,0.15)] text-[#34d399] text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0">
-                            {cb.lead.category}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[#52525b] text-xs mt-0.5">
-                        {cb.lead.company || 'No company'} — {cb.lead.phone}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        startSession('callback');
-                        navigate('/dialler');
-                      }}
-                      className="bg-[#34d399] text-[#09090b] font-bold text-xs rounded-lg px-3 py-1.5 hover:bg-[#34d399]/90 transition-all flex-shrink-0 flex items-center gap-1"
+                    View All <ArrowRight size={12} />
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                  {/* Overdue leads first */}
+                  {overdueLeads.map((lead) => (
+                    <div
+                      key={lead.id}
+                      onClick={() => navigate(`/leads/${lead.id}`)}
+                      className="bg-red-500/5 border border-red-500/10 rounded-lg p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-red-500/10 transition-all"
                     >
-                      <Phone size={12} />
-                      Call
-                    </button>
-                  </div>
-                ))}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#fafafa] font-medium text-sm truncate">{lead.name}</span>
+                          {lead.category && (
+                            <span className="bg-[rgba(52,211,153,0.15)] text-[#34d399] text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0">
+                              {lead.category}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-red-400 text-xs mt-0.5 font-medium">
+                          {lead.followUpDate ? daysOverdue(lead.followUpDate) : 'No date'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-red-400 text-xs">{formatFollowUpDate(lead.followUpDate)}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('/dialler', { state: { loadLeadId: lead.id } });
+                          }}
+                          className="bg-[#34d399] text-[#09090b] font-bold text-xs rounded-lg px-3 py-1.5 hover:bg-[#34d399]/90 transition-all flex items-center gap-1"
+                        >
+                          <Phone size={12} />
+                          Call
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Due today */}
+                  {dueTodayLeads.map((lead) => (
+                    <div
+                      key={lead.id}
+                      onClick={() => navigate(`/leads/${lead.id}`)}
+                      className="bg-amber-500/5 border border-amber-500/10 rounded-lg p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-amber-500/10 transition-all"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#fafafa] font-medium text-sm truncate">{lead.name}</span>
+                          {lead.category && (
+                            <span className="bg-[rgba(52,211,153,0.15)] text-[#34d399] text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0">
+                              {lead.category}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-amber-400 text-xs mt-0.5 font-medium">Due today</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-amber-400 text-xs">Today</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('/dialler', { state: { loadLeadId: lead.id } });
+                          }}
+                          className="bg-[#34d399] text-[#09090b] font-bold text-xs rounded-lg px-3 py-1.5 hover:bg-[#34d399]/90 transition-all flex items-center gap-1"
+                        >
+                          <Phone size={12} />
+                          Call
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Upcoming and no-date leads */}
+                  {[...futureLeads, ...noDateLeads].map((lead) => (
+                    <div
+                      key={lead.id}
+                      onClick={() => navigate(`/leads/${lead.id}`)}
+                      className="bg-[#1f1f23] rounded-lg p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-white/[0.04] transition-all"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#fafafa] font-medium text-sm truncate">{lead.name}</span>
+                          {lead.category && (
+                            <span className="bg-[rgba(52,211,153,0.15)] text-[#34d399] text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0">
+                              {lead.category}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[#52525b] text-xs mt-0.5">
+                          {lead.company || 'No company'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[#52525b] text-xs">{formatFollowUpDate(lead.followUpDate)}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('/dialler', { state: { loadLeadId: lead.id } });
+                          }}
+                          className="bg-[#34d399] text-[#09090b] font-bold text-xs rounded-lg px-3 py-1.5 hover:bg-[#34d399]/90 transition-all flex items-center gap-1"
+                        >
+                          <Phone size={12} />
+                          Call
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* Right: Recent Activity Feed */}

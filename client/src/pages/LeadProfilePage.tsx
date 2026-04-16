@@ -686,6 +686,56 @@ export default function LeadProfilePage() {
           )}
         </div>
 
+        {/* Follow-up date */}
+        <div className="flex items-center gap-2 bg-[#18181b] border border-white/[0.06] rounded-lg px-3 py-1.5">
+          <CalendarDays size={13} className="text-[#52525b] flex-shrink-0" />
+          <input
+            type="date"
+            value={lead.followUpDate || ''}
+            onChange={async (e) => {
+              const val = e.target.value || null;
+              try {
+                const updated = await api.updateLead(lead.id, {
+                  followUpDate: val,
+                  ...(val && lead.pipelineStage !== 'follow_up' ? { pipelineStage: 'follow_up' } : {}),
+                } as Partial<Lead>);
+                setLead(updated);
+                if (tab === 'activity') loadActivities();
+              } catch (err) {
+                console.error('Failed to update follow-up date:', err);
+              }
+            }}
+            className="bg-transparent text-[#a1a1aa] text-xs focus:outline-none [color-scheme:dark] cursor-pointer"
+            title="Follow-up date"
+          />
+          {lead.followUpDate && (() => {
+            const today = new Date().toISOString().split('T')[0];
+            const isOverdue = lead.followUpDate < today;
+            const isToday = lead.followUpDate === today;
+            return isOverdue ? (
+              <span className="text-red-400 text-[10px] font-medium">Overdue</span>
+            ) : isToday ? (
+              <span className="text-amber-400 text-[10px] font-medium">Today</span>
+            ) : null;
+          })()}
+          {lead.followUpDate && (
+            <button
+              onClick={async () => {
+                try {
+                  const updated = await api.updateLead(lead.id, { followUpDate: null } as Partial<Lead>);
+                  setLead(updated);
+                } catch (err) {
+                  console.error('Failed to clear follow-up date:', err);
+                }
+              }}
+              className="text-[#52525b] hover:text-[#a1a1aa] transition-colors"
+              title="Clear follow-up date"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+
         {/* Temperature toggle */}
         <div className="flex items-center gap-1 bg-[#18181b] border border-white/[0.06] rounded-lg p-1">
           {TEMPERATURES.map((temp) => (

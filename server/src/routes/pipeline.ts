@@ -36,6 +36,7 @@ interface LeadRow {
   pipeline_stage: string;
   temperature: string | null;
   converted_to_project: number;
+  follow_up_date: string | null;
   queue_position: number;
   last_called_at: string | null;
   created_at: string;
@@ -62,6 +63,7 @@ function mapLeadRow(row: LeadRow): Lead {
     pipelineStage: row.pipeline_stage as PipelineStage,
     temperature: (row.temperature as Temperature) ?? null,
     convertedToProject: row.converted_to_project === 1,
+    followUpDate: row.follow_up_date,
     queuePosition: row.queue_position,
     lastCalledAt: row.last_called_at,
     createdAt: row.created_at,
@@ -158,6 +160,38 @@ router.get('/', (req, res, next) => {
 
     logger.info({ filters: { temperature, category }, totalLeads: leadRows.length }, 'Fetched pipeline');
     res.json({ stages, counts });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/pipeline/follow-ups
+ * Returns all leads in follow_up stage, sorted by follow-up date.
+ * Includes an isOverdue flag for dates in the past.
+ */
+router.get('/follow-ups', (_req, res, next) => {
+  try {
+    const db = getDb();
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+    const rows = db.prepare(`
+      SELECT *,
+        CASE WHEN follow_up_date IS NOT NULL AND follow_up_date < ? THEN 1 ELSE 0 END as is_overdue
+      FROM leads
+      WHERE pipeline_stage = 'follow_up'
+      ORDER BY
+        CASE WHEN follow_up_date IS NULL THEN 1 ELSE 0 END,
+        follow_up_date ASC,
+        updated_at DESC
+    `).all(today) as (LeadRow & { is_overdue: number })[];
+
+    const leads = rows.map((row) => ({
+      ...mapLeadRow(row),
+      isOverdue: row.is_overdue === 1,
+    }));
+
+    res.json(leads);
   } catch (err) {
     next(err);
   }

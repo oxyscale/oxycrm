@@ -530,6 +530,10 @@ export async function getPipelineStats(): Promise<{
   return request('/pipeline/stats');
 }
 
+export async function getFollowUpQueue(): Promise<(Lead & { isOverdue: boolean })[]> {
+  return request<(Lead & { isOverdue: boolean })[]>('/pipeline/follow-ups');
+}
+
 // ── Emails Sent ──────────────────────────────────────────────
 
 export async function getEmailsForLead(leadId: number): Promise<EmailSent[]> {

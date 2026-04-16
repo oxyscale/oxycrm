@@ -41,6 +41,7 @@ interface LeadRow {
   pipeline_stage: string;
   temperature: string | null;
   converted_to_project: number;
+  follow_up_date: string | null;
   queue_position: number;
   last_called_at: string | null;
   created_at: string;
@@ -81,6 +82,7 @@ function mapLeadRow(row: LeadRow): Lead {
     pipelineStage: row.pipeline_stage as PipelineStage,
     temperature: (row.temperature as Temperature) ?? null,
     convertedToProject: row.converted_to_project === 1,
+    followUpDate: row.follow_up_date,
     queuePosition: row.queue_position,
     lastCalledAt: row.last_called_at,
     createdAt: row.created_at,
@@ -129,6 +131,7 @@ const dispositionSchema = z.object({
     { message: 'callbackDate must be a valid date string' }
   ).optional(),
   callbackNotes: z.string().optional(),
+  followUpDate: z.string().nullable().optional(),
 });
 
 const createLeadSchema = z.object({
@@ -154,6 +157,7 @@ const updateLeadSchema = z.object({
   companyInfo: z.string().nullable().optional(),
   pipelineStage: z.enum(['new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested']).optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
+  followUpDate: z.string().nullable().optional(),
 });
 
 // ============================================================
@@ -663,6 +667,12 @@ router.post('/:id/disposition', (req, res, next) => {
           break;
         }
       }
+
+      // If a follow-up date was provided, set it and move to follow_up stage
+      if (payload.followUpDate && payload.disposition !== 'wrong_number') {
+        db.prepare('UPDATE leads SET follow_up_date = ?, pipeline_stage = ? WHERE id = ?')
+          .run(payload.followUpDate, 'follow_up', id);
+      }
     });
 
     processDisposition();
@@ -750,6 +760,10 @@ router.patch('/:id', (req, res, next) => {
     if (updates.temperature !== undefined) {
       setClauses.push('temperature = @temperature');
       params.temperature = updates.temperature;
+    }
+    if (updates.followUpDate !== undefined) {
+      setClauses.push('follow_up_date = @followUpDate');
+      params.followUpDate = updates.followUpDate;
     }
 
     if (setClauses.length === 0) {

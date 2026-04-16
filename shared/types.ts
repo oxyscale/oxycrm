@@ -28,6 +28,7 @@ export interface Lead {
   pipelineStage: PipelineStage;
   temperature: Temperature | null;
   convertedToProject: boolean;
+  followUpDate: string | null;
   queuePosition: number;
   lastCalledAt: string | null;
   createdAt: string;
@@ -79,6 +80,7 @@ export interface DispositionPayload {
   twilioCallSid?: string;
   callbackDate?: string;
   callbackNotes?: string;
+  followUpDate?: string;
 }
 
 export interface ImportResult {

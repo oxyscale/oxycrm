@@ -55,7 +55,8 @@ interface DiallerSessionActions {
     disposition: Disposition,
     transcript: string,
     callbackDate?: string,
-    callbackNotes?: string
+    callbackNotes?: string,
+    followUpDate?: string
   ) => Promise<void>;
   loadTodaysCallbacks: () => Promise<void>;
   refreshStats: () => void;
@@ -148,7 +149,8 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
       disposition: Disposition,
       callTranscript: string,
       callbackDate?: string,
-      callbackNotes?: string
+      callbackNotes?: string,
+      followUpDate?: string
     ) => {
       if (!currentLead) return;
 
@@ -164,6 +166,7 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
           twilioCallSid: twilioCallSid || undefined,
           callbackDate,
           callbackNotes,
+          followUpDate,
         });
 
         // Trigger recording download + Whisper transcription in the background.

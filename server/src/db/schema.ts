@@ -156,6 +156,11 @@ export function initializeDatabase(db: Database.Database): void {
     )
   `);
 
+  // Add follow_up_date column for scheduling follow-up calls
+  if (!columns.some((c) => c.name === 'follow_up_date')) {
+    db.exec('ALTER TABLE leads ADD COLUMN follow_up_date TEXT DEFAULT NULL');
+  }
+
   // Note: monday_item_id column is retained for backward compatibility but no longer used.
   // SQLite does not support DROP COLUMN easily, so we leave it in place.
 
@@ -251,6 +256,11 @@ export function initializeDatabase(db: Database.Database): void {
     -- Index for pipeline stage filtering
     CREATE INDEX IF NOT EXISTS idx_leads_pipeline_stage
       ON leads(pipeline_stage);
+
+    -- Index for follow-up date queries
+    CREATE INDEX IF NOT EXISTS idx_leads_follow_up_date
+      ON leads(follow_up_date)
+      WHERE pipeline_stage = 'follow_up' AND follow_up_date IS NOT NULL;
 
     -- Settings table: key-value pairs for app configuration
     CREATE TABLE IF NOT EXISTS settings (
