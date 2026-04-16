@@ -58,7 +58,8 @@ router.post('/send', async (req, res, next) => {
     try {
       const db = getDb();
       const now = new Date().toISOString();
-      const bodySnippet = payload.body.substring(0, 200);
+      // Store the FULL email body so it can be viewed later on the profile page
+      const bodySnippet = payload.body;
 
       db.transaction(() => {
         db.prepare(`

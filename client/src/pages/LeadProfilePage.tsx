@@ -276,6 +276,7 @@ export default function LeadProfilePage() {
   // Emails tab
   const [emails, setEmails] = useState<EmailSent[]>([]);
   const [loadingEmails, setLoadingEmails] = useState(false);
+  const [expandedEmails, setExpandedEmails] = useState<Set<number>>(new Set());
 
   // Stage dropdown
   const [showStageDropdown, setShowStageDropdown] = useState(false);
@@ -1113,6 +1114,11 @@ export default function LeadProfilePage() {
                         <div className="px-4 py-3 space-y-3">
                           {chronological.map((email) => {
                             const isSent = email.direction === 'sent';
+                            const isLong = (email.bodySnippet?.length || 0) > 200;
+                            const isExpanded = expandedEmails.has(email.id);
+                            const displayText = email.bodySnippet
+                              ? (isLong && !isExpanded ? email.bodySnippet.substring(0, 200) + '...' : email.bodySnippet)
+                              : null;
 
                             return (
                               <div
@@ -1120,7 +1126,19 @@ export default function LeadProfilePage() {
                                 className={`flex ${isSent ? 'justify-end' : 'justify-start'}`}
                               >
                                 <div
+                                  onClick={() => {
+                                    if (isLong) {
+                                      setExpandedEmails(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(email.id)) next.delete(email.id);
+                                        else next.add(email.id);
+                                        return next;
+                                      });
+                                    }
+                                  }}
                                   className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                                    isLong ? 'cursor-pointer' : ''
+                                  } ${
                                     isSent
                                       ? 'bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.15)]'
                                       : 'bg-[#1f1f23] border border-white/[0.06]'
@@ -1142,12 +1160,19 @@ export default function LeadProfilePage() {
                                   </div>
 
                                   {/* Email body */}
-                                  {email.bodySnippet ? (
-                                    <p className={`text-sm leading-relaxed whitespace-pre-line ${
-                                      isSent ? 'text-[#d1fae5]' : 'text-[#a1a1aa]'
-                                    }`}>
-                                      {email.bodySnippet}
-                                    </p>
+                                  {displayText ? (
+                                    <>
+                                      <p className={`text-sm leading-relaxed whitespace-pre-line ${
+                                        isSent ? 'text-[#d1fae5]' : 'text-[#a1a1aa]'
+                                      }`}>
+                                        {displayText}
+                                      </p>
+                                      {isLong && (
+                                        <p className="text-[#52525b] text-xs mt-2">
+                                          {isExpanded ? 'Click to collapse' : 'Click to read full email'}
+                                        </p>
+                                      )}
+                                    </>
                                   ) : (
                                     <p className="text-[#52525b] text-sm italic">No preview available</p>
                                   )}
