@@ -175,7 +175,7 @@ export default function LeadsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-[#fafafa] text-2xl font-bold tracking-tight">
-            All Leads
+            Leads
           </h1>
           <p className="text-[#a1a1aa] text-sm mt-1">
             {leads.length} total &middot; {leads.filter((l) => l.status === 'not_called').length} not called &middot; {leads.filter((l) => l.status === 'called').length} called
