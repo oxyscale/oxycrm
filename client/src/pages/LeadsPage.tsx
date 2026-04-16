@@ -255,10 +255,10 @@ export default function LeadsPage() {
                   {sortField === 'status' && <ArrowUpDown size={12} className="text-[#34d399]" />}
                 </span>
               </th>
-              <th className="w-[65px] text-left text-[#52525b] text-xs font-medium uppercase tracking-wider px-3 py-3 select-none">
+              <th className="w-[90px] text-left text-[#52525b] text-xs font-medium uppercase tracking-wider px-3 py-3 select-none">
                 Temp
               </th>
-              <th className="w-[100px] text-left text-[#52525b] text-xs font-medium uppercase tracking-wider px-3 py-3 select-none cursor-pointer hover:text-[#a1a1aa] transition-colors" onClick={() => handleSort('lastCalledAt')}>
+              <th className="w-[110px] text-left text-[#52525b] text-xs font-medium uppercase tracking-wider px-3 py-3 select-none cursor-pointer hover:text-[#a1a1aa] transition-colors" onClick={() => handleSort('lastCalledAt')}>
                 <span className="flex items-center gap-1">
                   Last Called
                   {sortField === 'lastCalledAt' && <ArrowUpDown size={12} className="text-[#34d399]" />}
