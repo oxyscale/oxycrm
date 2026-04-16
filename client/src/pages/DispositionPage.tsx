@@ -429,60 +429,6 @@ export default function DispositionPage() {
         })}
       </div>
 
-      {/* Schedule callback section */}
-      <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6 mb-6">
-        <h3 className="text-[#fafafa] text-sm font-bold mb-4 flex items-center gap-2">
-          <Calendar size={16} className="text-[#34d399]" />
-          Schedule a Callback
-        </h3>
-
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="text-[#52525b] text-xs font-medium block mb-1.5">
-              Date
-            </label>
-            <input
-              type="date"
-              value={callbackDate}
-              onChange={(e) => setCallbackDate(e.target.value)}
-              className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all [color-scheme:dark]"
-            />
-          </div>
-          <div>
-            <label className="text-[#52525b] text-xs font-medium block mb-1.5">
-              Time
-            </label>
-            <input
-              type="time"
-              value={callbackTime}
-              onChange={(e) => setCallbackTime(e.target.value)}
-              className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all [color-scheme:dark]"
-            />
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <label className="text-[#52525b] text-xs font-medium block mb-1.5">
-            Notes
-          </label>
-          <textarea
-            value={callbackNotes}
-            onChange={(e) => setCallbackNotes(e.target.value)}
-            placeholder="Callback notes..."
-            rows={2}
-            className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all resize-none"
-          />
-        </div>
-
-        <button
-          disabled={!callbackDate || !callbackTime}
-          className="bg-transparent text-[#a1a1aa] border border-white/[0.06] rounded-lg px-5 py-2.5 text-sm hover:bg-white/[0.03] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          <Calendar size={14} />
-          Add to Calendar
-        </button>
-      </div>
-
       {/* Book Meeting section */}
       <div className="bg-[#18181b] border border-white/[0.06] rounded-xl overflow-hidden">
         <button
