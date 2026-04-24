@@ -11,6 +11,7 @@ import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import type { Lead, CallLog, ImportResult, DispositionPayload, DuplicateLead, PipelineStage, Temperature } from '../../../shared/types.js';
 import pino from 'pino';
+import { summariseAndPersistCall } from '../services/ai-summary.js';
 
 const logger = pino({ name: 'leads-routes' });
 const router = Router();
@@ -565,6 +566,7 @@ router.post('/:id/disposition', (req, res, next) => {
     // Captures the inserted call_log id so the client can PATCH the AI summary back
     // onto this specific call row once Claude returns.
     let createdCallLogId: number | null = null;
+    let usedPendingTranscript = false;
     const processDisposition = db.transaction(() => {
       // Re-fetch lead inside transaction for data consistency
       const leadRow = db.prepare('SELECT * FROM leads WHERE id = ?').get(id) as LeadRow | undefined;
@@ -598,11 +600,13 @@ router.post('/:id/disposition', (req, res, next) => {
       }
 
       // Check if there's a pending transcript from Twilio recording
+      // (Whisper finished before the rep clicked a disposition — race-winner path)
       let transcript = payload.transcript;
       if (callSid) {
         const pending = db.prepare('SELECT transcript FROM pending_transcripts WHERE call_sid = ?').get(callSid) as { transcript: string } | undefined;
         if (pending && pending.transcript) {
           transcript = pending.transcript;
+          usedPendingTranscript = true;
           db.prepare('DELETE FROM pending_transcripts WHERE call_sid = ?').run(callSid);
           logger.info({ leadId: id, callSid }, 'Used pending transcript from Twilio recording');
         }
@@ -710,6 +714,13 @@ router.post('/:id/disposition', (req, res, next) => {
       logger.info({ leadId: id, disposition: payload.disposition }, 'Disposition processed (lead deleted)');
       res.json({ deleted: true, id });
       return;
+    }
+
+    // If Whisper beat us to it (pending_transcripts path), the call_log already
+    // has a real transcript. Fire server-side summarisation now — same helper
+    // that the Whisper webhook uses when it arrives late. Non-blocking.
+    if (usedPendingTranscript && createdCallLogId) {
+      summariseAndPersistCall(createdCallLogId, id).catch(() => {});
     }
 
     // Return the updated lead + the id of the call_log we just created so the

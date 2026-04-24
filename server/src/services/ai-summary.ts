@@ -134,28 +134,32 @@ export async function summariseCall(
   previousNotes?: string
 ): Promise<CallSummaryResult> {
   const startTime = Date.now();
+  const hasPreviousNotes = !!(previousNotes && previousNotes.trim().length > 0);
+
   logger.info(
-    { leadName, leadCompany, isCallback, hasPreviousNotes: !!previousNotes },
+    { leadName, leadCompany, isCallback, hasPreviousNotes },
     'Starting call summarisation'
   );
 
-  const previousNotesSection = isCallback && previousNotes
+  // Consolidation is driven by whether prior notes exist, NOT by the session's
+  // leadType flag. A lead marked "new" in a dialler session can still have
+  // prior call history — we must honour it.
+  const previousNotesSection = hasPreviousNotes
     ? `
-## Previous call notes (DO NOT discard these — consolidate them with the new call)
+## Previous relationship history (consolidate this with the new call — DO NOT discard)
 ${previousNotes}
 `
     : '';
 
-  const consolidationInstruction = isCallback && previousNotes
-    ? `This is a CALLBACK lead with prior call history. You MUST produce a CONSOLIDATED summary that weaves together ALL previous notes with the new call. Do not just summarise the latest call. The summary should read as a complete relationship history.`
-    : `This is a NEW lead with no prior call history. Summarise only this call.`;
+  const consolidationInstruction = hasPreviousNotes
+    ? `This lead has prior call history. Produce a CONSOLIDATED summary that weaves the new call together with everything above. Preserve every personable detail from prior calls (family, hobbies, personal milestones, inside jokes) even if not discussed in this specific call. The summary should read as the complete relationship story up to and including this call.`
+    : `This is the first recorded call with this lead. Summarise only this call.`;
 
-  const prompt = `You are a sales assistant for OxyScale, an AI and automation consultancy. Analyse this sales call transcript and produce a structured summary.
+  const prompt = `You are a sales assistant for OxyScale, an AI and automation consultancy. Analyse this sales call transcript and produce a structured summary that keeps the relationship personal and compounding across every call.
 
 ## Lead info
 - Name: ${leadName}
 - Company: ${leadCompany || 'Unknown'}
-- Lead type: ${isCallback ? 'Callback (has been called before)' : 'New lead (first contact)'}
 
 ${consolidationInstruction}
 
@@ -164,21 +168,29 @@ ${previousNotesSection}
 ## Call transcript
 ${transcript}
 
+## What to capture
+A good summary mixes BUSINESS signal with PERSONABLE detail. Jordan should be able to open this lead's profile a month from now and instantly remember who they are as a person, not just as a prospect.
+
+- **Business bullets**: what was discussed, pain points surfaced, current tools, decision makers, budget signals, timeline.
+- **Personable bullets**: anything the lead mentioned about their life outside work — family ("son plays footy"), hobbies, travel ("just back from Bali"), health, personal milestones, off-hand remarks, inside jokes from the call. Tag these with a leading "(personal)" so they're easy to spot. These are gold for future rapport — never drop them.
+- **Objections**: anything they pushed back on.
+
 ## Output format
 Return ONLY valid JSON in this exact format, no other text:
 {
-  "summary": "3-5 bullet points as a single string, each bullet on a new line starting with '- '. Be specific about what was discussed, not generic.",
+  "summary": "Bullet points as a single string, each bullet on a new line starting with '- '. Mix business and personable bullets. Keep the TOTAL length under ~400 words. If consolidating a long history, compress older business chatter but NEVER drop personable details — they stay verbatim.",
   "keyTopics": ["topic 1", "topic 2", "topic 3"],
   "actionItems": ["action 1", "action 2"],
   "sentiment": "one of: very_positive, positive, neutral, negative, very_negative"
 }
 
 Guidelines:
-- Summary bullet points should be concise and specific to what was discussed
-- Key topics are the main subjects covered (e.g. "AI automation for recruitment", "current CRM setup")
-- Action items are concrete next steps (e.g. "Send case study", "Schedule demo for next week")
-- Sentiment reflects the prospect's overall interest and engagement level
-- Keep it direct and practical. No corporate waffle.`;
+- Personable details are FIRST-CLASS — they carry across every consolidation.
+- Bullet points should be concrete and specific. No corporate waffle.
+- Key topics: main business subjects (e.g. "AI automation for recruitment", "current CRM setup").
+- Action items: concrete next steps (e.g. "Ask about son's footy final", "Send case study", "Schedule demo next week").
+- Sentiment reflects the prospect's overall interest and engagement.
+- If the transcript is empty or only contains call status markers like "[Call connected]", return a minimal summary that only preserves prior personable details (if any) — do not invent content.`;
 
   try {
     const responseText = await callClaude(prompt);
@@ -452,5 +464,94 @@ Return ONLY valid JSON in this exact format, no other text:
       'Email draft from instructions failed'
     );
     throw error;
+  }
+}
+
+// ── Post-transcript summarisation + persistence ────────────────
+//
+// The source-of-truth summariser. Runs AFTER Whisper has deposited the real
+// transcript on a call_log row. Reads the transcript + the lead's current
+// consolidated_summary, calls Claude, then writes the result back to both:
+//   - call_logs.{summary, key_topics, action_items, sentiment}  (per-call row)
+//   - leads.consolidated_summary                                (rolling history)
+//
+// Fire-and-forget — never throws. Safe to call from webhook handlers where
+// failure must not block the primary flow (e.g. Twilio recording webhook).
+export async function summariseAndPersistCall(callLogId: number, leadId: number): Promise<void> {
+  try {
+    const db = getDb();
+
+    const callLog = db
+      .prepare('SELECT transcript FROM call_logs WHERE id = ?')
+      .get(callLogId) as { transcript: string | null } | undefined;
+
+    // Guard: if transcript is missing or too short to extract meaning, skip.
+    // A 20-char threshold avoids wasting a Claude call on "[Call connected]\n[Call ended]".
+    const transcript = callLog?.transcript?.trim() || '';
+    if (transcript.length < 20) {
+      logger.info(
+        { callLogId, transcriptLength: transcript.length },
+        'Skipping post-transcript summarisation — transcript too short to be meaningful',
+      );
+      return;
+    }
+
+    const lead = db
+      .prepare('SELECT name, company, consolidated_summary FROM leads WHERE id = ?')
+      .get(leadId) as { name: string; company: string | null; consolidated_summary: string | null } | undefined;
+
+    if (!lead) {
+      logger.warn({ callLogId, leadId }, 'Lead not found for post-transcript summarisation');
+      return;
+    }
+
+    logger.info(
+      { callLogId, leadId, hasPrior: !!lead.consolidated_summary },
+      'Running post-Whisper summarisation',
+    );
+
+    // isCallback here is just for logging inside summariseCall; the real switch
+    // is whether previousNotes is populated, which is what drives consolidation.
+    const result = await summariseCall(
+      transcript,
+      lead.name,
+      lead.company,
+      !!lead.consolidated_summary,
+      lead.consolidated_summary || undefined,
+    );
+
+    const now = new Date().toISOString();
+
+    // Persist per-call fields on the call_log row
+    db.prepare(
+      `UPDATE call_logs
+       SET summary = ?, key_topics = ?, action_items = ?, sentiment = ?
+       WHERE id = ?`,
+    ).run(
+      result.summary,
+      JSON.stringify(result.keyTopics),
+      JSON.stringify(result.actionItems),
+      result.sentiment,
+      callLogId,
+    );
+
+    // Persist rolling relationship summary on the lead
+    db.prepare('UPDATE leads SET consolidated_summary = ?, updated_at = ? WHERE id = ?').run(
+      result.summary,
+      now,
+      leadId,
+    );
+
+    logger.info({ callLogId, leadId }, 'Post-Whisper summarisation persisted');
+  } catch (error) {
+    // Never throw — this runs off the main request path.
+    logger.error(
+      {
+        callLogId,
+        leadId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Post-Whisper summarisation failed (non-blocking)',
+    );
   }
 }

@@ -9,6 +9,7 @@ import twilio from 'twilio';
 import pino from 'pino';
 import { getDb } from '../db/index.js';
 import { transcribeAudio } from '../services/transcription.js';
+import { summariseAndPersistCall } from '../services/ai-summary.js';
 
 const logger = pino({ name: 'twilio-routes' });
 const router = Router();
@@ -304,11 +305,14 @@ router.post('/recording-status', async (req, res) => {
 
     // Strategy 1: Direct match by CallSid
     if (CallSid) {
-      const callLog = db.prepare('SELECT id FROM call_logs WHERE twilio_call_sid = ?').get(CallSid) as { id: number } | undefined;
+      const callLog = db.prepare('SELECT id, lead_id FROM call_logs WHERE twilio_call_sid = ?').get(CallSid) as { id: number; lead_id: number } | undefined;
       if (callLog) {
         db.prepare('UPDATE call_logs SET transcript = ? WHERE id = ?').run(transcript, callLog.id);
         logger.info({ callLogId: callLog.id, strategy: 'direct-callsid' }, 'Call log updated with transcript');
         updated = true;
+        // Fire the real-transcript Claude summary now that Whisper has completed.
+        // Non-blocking; updates call_logs.summary + leads.consolidated_summary.
+        summariseAndPersistCall(callLog.id, callLog.lead_id).catch(() => {});
       }
     }
 
@@ -340,6 +344,7 @@ router.post('/recording-status', async (req, res) => {
               .run(transcript, CallSid, recentCallLog.id);
             logger.info({ callLogId: recentCallLog.id, leadId: lead.id, strategy: 'phone-match' }, 'Call log updated with transcript via phone match');
             updated = true;
+            summariseAndPersistCall(recentCallLog.id, lead.id).catch(() => {});
           }
         }
       }
@@ -470,11 +475,12 @@ router.post('/process-recording', async (req, res) => {
       let updated = false;
 
       // Strategy 1: Direct match by CallSid
-      const callLog = db.prepare('SELECT id FROM call_logs WHERE twilio_call_sid = ?').get(callSid) as { id: number } | undefined;
+      const callLog = db.prepare('SELECT id, lead_id FROM call_logs WHERE twilio_call_sid = ?').get(callSid) as { id: number; lead_id: number } | undefined;
       if (callLog) {
         db.prepare('UPDATE call_logs SET transcript = ? WHERE id = ?').run(transcript, callLog.id);
         logger.info({ callLogId: callLog.id, callSid }, 'Call log updated with Whisper transcript (via polling)');
         updated = true;
+        summariseAndPersistCall(callLog.id, callLog.lead_id).catch(() => {});
       }
 
       // Strategy 2: Find by phone number from call_sessions
@@ -498,6 +504,7 @@ router.post('/process-recording', async (req, res) => {
                 .run(transcript, callSid, recentLog.id);
               logger.info({ callLogId: recentLog.id, callSid }, 'Call log updated with Whisper transcript (via phone match)');
               updated = true;
+              summariseAndPersistCall(recentLog.id, lead.id).catch(() => {});
             }
           }
         }
@@ -598,10 +605,11 @@ router.get('/test-transcribe/:callSid', async (req, res) => {
 
     // Step 4: Update call log
     const db = getDb();
-    const callLog = db.prepare('SELECT id FROM call_logs WHERE twilio_call_sid = ?').get(callSid) as { id: number } | undefined;
+    const callLog = db.prepare('SELECT id, lead_id FROM call_logs WHERE twilio_call_sid = ?').get(callSid) as { id: number; lead_id: number } | undefined;
     if (callLog) {
       db.prepare('UPDATE call_logs SET transcript = ? WHERE id = ?').run(transcript, callLog.id);
       steps.push({ step: 'call-log-updated', status: 'ok', detail: { callLogId: callLog.id } });
+      summariseAndPersistCall(callLog.id, callLog.lead_id).catch(() => {});
     } else {
       steps.push({ step: 'call-log-not-found', status: 'warn', detail: 'No call_log with this CallSid' });
     }
