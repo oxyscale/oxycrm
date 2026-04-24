@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import * as api from '../services/api';
 import type { Project, ProjectTask, ProjectStatus } from '../types';
+import EyebrowLabel from '../components/ui/EyebrowLabel';
 
 const STATUS_CONFIG: Record<
   ProjectStatus,
@@ -39,9 +40,9 @@ const STATUS_CONFIG: Record<
   },
   complete: {
     label: 'Complete',
-    color: 'text-[#34d399]',
-    bg: 'bg-[rgba(52,211,153,0.15)]',
-    border: 'border-[rgba(52,211,153,0.3)]',
+    color: 'text-sky-ink',
+    bg: 'bg-[rgba(10,156,212,0.15)]',
+    border: 'border-[rgba(10,156,212,0.3)]',
   },
 };
 
@@ -216,7 +217,7 @@ export default function ProjectDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Loader2 size={24} className="animate-spin text-[#52525b]" />
+        <Loader2 size={24} className="animate-spin text-ink-dim" />
       </div>
     );
   }
@@ -226,29 +227,29 @@ export default function ProjectDetailPage() {
       <div className="p-8">
         <button
           onClick={() => navigate('/projects')}
-          className="flex items-center gap-2 text-[#a1a1aa] hover:text-[#fafafa] transition-colors mb-6"
+          className="flex items-center gap-2 text-ink-muted hover:text-ink transition-colors mb-6"
         >
           <ArrowLeft size={16} />
           <span className="text-sm">Back to Projects</span>
         </button>
         <div className="text-center py-16">
-          <FolderKanban size={32} className="text-[#52525b] mx-auto mb-3" />
+          <FolderKanban size={32} className="text-ink-dim mx-auto mb-3" />
           <p className="text-red-400 text-sm mb-1">{error || 'Project not found'}</p>
-          <p className="text-[#52525b] text-xs mb-4">
+          <p className="text-ink-dim text-xs mb-4">
             {error ? 'Something went wrong loading this project.' : 'This project may have been deleted or the link is invalid.'}
           </p>
           <div className="flex items-center justify-center gap-3">
             {error && (
               <button
                 onClick={() => id && loadProject(parseInt(id))}
-                className="bg-[#34d399] text-[#09090b] font-bold rounded-lg px-5 py-2.5 text-sm hover:bg-[#34d399]/90 transition-all"
+                className="bg-ink text-white font-bold rounded-lg px-5 py-2.5 text-sm hover:bg-ink/90 transition-all"
               >
                 Retry
               </button>
             )}
             <button
               onClick={() => navigate('/projects')}
-              className="bg-transparent text-[#a1a1aa] border border-white/[0.06] rounded-lg px-5 py-2.5 text-sm hover:bg-white/[0.03] hover:text-[#fafafa] transition-all"
+              className="bg-transparent text-ink-muted border border-hair-soft rounded-lg px-5 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all"
             >
               Back to Projects
             </button>
@@ -266,57 +267,60 @@ export default function ProjectDetailPage() {
   const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-10 max-w-4xl min-h-full bg-cream">
       {/* Back button */}
       <button
         onClick={() => navigate('/projects')}
-        className="flex items-center gap-2 text-[#a1a1aa] hover:text-[#fafafa] transition-colors mb-6"
+        className="flex items-center gap-2 text-ink-muted hover:text-sky-ink transition-colors mb-6"
       >
         <ArrowLeft size={16} />
         <span className="text-sm">Back to Projects</span>
       </button>
 
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-8">
+        <EyebrowLabel variant="pill" className="mb-4">
+          DELIVERY · PROJECT
+        </EyebrowLabel>
         <div className="flex items-center gap-3 mb-1">
-          <h1 className="text-[#fafafa] text-2xl font-bold tracking-tight">{project.name}</h1>
+          <h1 className="text-sky-ink text-[34px] font-semibold tracking-section">{project.name}</h1>
           <span
             className={`${cfg.bg} ${cfg.color} text-xs font-medium px-2.5 py-0.5 rounded-full`}
           >
             {cfg.label}
           </span>
         </div>
-        <p className="text-[#a1a1aa] text-sm">{project.clientName}</p>
+        <p className="text-ink-muted text-sm">{project.clientName}</p>
       </div>
 
       {/* Info bar */}
-      <div className="flex items-center gap-6 mb-6 bg-[#18181b] border border-white/[0.06] rounded-xl px-5 py-3">
+      <div className="flex items-center gap-6 mb-6 bg-paper border border-hair-soft rounded-xl px-5 py-3">
         <div className="flex items-center gap-1.5">
-          <DollarSign size={14} className="text-[#52525b]" />
-          <span className="text-[#fafafa] text-sm font-medium">
+          <DollarSign size={14} className="text-ink-dim" />
+          <span className="text-ink text-sm font-medium">
             {formatCurrency(project.value)} AUD
           </span>
         </div>
-        <div className="w-px h-4 bg-white/[0.06]" />
+        <div className="w-px h-4 bg-hair-soft" />
         <div className="flex items-center gap-1.5">
-          <Calendar size={14} className="text-[#52525b]" />
-          <span className="text-[#a1a1aa] text-sm">
+          <Calendar size={14} className="text-ink-dim" />
+          <span className="text-ink-muted text-sm">
             Start: {formatDate(project.startDate)}
           </span>
         </div>
-        <div className="w-px h-4 bg-white/[0.06]" />
+        <div className="w-px h-4 bg-hair-soft" />
         <div className="flex items-center gap-1.5">
-          <Calendar size={14} className="text-[#52525b]" />
-          <span className="text-[#a1a1aa] text-sm">
+          <Calendar size={14} className="text-ink-dim" />
+          <span className="text-ink-muted text-sm">
             End: {formatDate(project.endDate)}
           </span>
         </div>
         {project.leadId && (
           <>
-            <div className="w-px h-4 bg-white/[0.06]" />
+            <div className="w-px h-4 bg-hair-soft" />
             <button
               onClick={() => navigate(`/leads?highlight=${project.leadId}`)}
-              className="flex items-center gap-1.5 text-[#34d399] text-sm hover:underline"
+              className="flex items-center gap-1.5 text-sky-ink text-sm hover:underline"
             >
               <ExternalLink size={12} />
               View Lead
@@ -327,7 +331,7 @@ export default function ProjectDetailPage() {
 
       {/* Status selector */}
       <div className="mb-8">
-        <p className="text-[#52525b] text-xs font-medium uppercase tracking-wider mb-2">Status</p>
+        <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-2">Status</p>
         <div className="flex items-center gap-2">
           {STATUS_ORDER.map((status, index) => {
             const sCfg = STATUS_CONFIG[status];
@@ -340,7 +344,7 @@ export default function ProjectDetailPage() {
                 {index > 0 && (
                   <div
                     className={`w-8 h-px ${
-                      isPast ? 'bg-[#34d399]/40' : 'bg-white/[0.06]'
+                      isPast ? 'bg-ink/40' : 'bg-hair-soft'
                     }`}
                   />
                 )}
@@ -351,8 +355,8 @@ export default function ProjectDetailPage() {
                     isCurrent
                       ? `${sCfg.bg} ${sCfg.color} ${sCfg.border}`
                       : isPast
-                        ? 'bg-white/[0.02] text-[#a1a1aa] border-white/[0.06]'
-                        : 'bg-transparent text-[#52525b] border-white/[0.06] hover:text-[#a1a1aa] hover:border-white/[0.1]'
+                        ? 'bg-white/[0.02] text-ink-muted border-hair-soft'
+                        : 'bg-transparent text-ink-dim border-hair-soft hover:text-ink-muted hover:border-hair'
                   } disabled:opacity-50`}
                 >
                   {sCfg.label}
@@ -361,14 +365,14 @@ export default function ProjectDetailPage() {
             );
           })}
           {updatingStatus && (
-            <Loader2 size={14} className="animate-spin text-[#52525b] ml-2" />
+            <Loader2 size={14} className="animate-spin text-ink-dim ml-2" />
           )}
         </div>
       </div>
 
       {/* Description */}
       <div className="mb-8">
-        <p className="text-[#52525b] text-xs font-medium uppercase tracking-wider mb-2">
+        <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-2">
           Description
         </p>
         <textarea
@@ -380,24 +384,24 @@ export default function ProjectDetailPage() {
           onBlur={handleDescriptionBlur}
           rows={3}
           placeholder="Add a project description..."
-          className="w-full bg-[#18181b] border border-white/[0.06] rounded-xl px-4 py-3 text-sm text-[#a1a1aa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all resize-none leading-relaxed"
+          className="w-full bg-paper border border-hair-soft rounded-xl px-4 py-3 text-sm text-ink-muted placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
         />
       </div>
 
       {/* Tasks */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-[#52525b] text-xs font-medium uppercase tracking-wider">Tasks</p>
-          <span className="text-[#52525b] text-xs">
+          <p className="text-ink-dim text-xs font-medium uppercase tracking-wider">Tasks</p>
+          <span className="text-ink-dim text-xs">
             {completedCount} of {totalCount} tasks complete
           </span>
         </div>
 
         {/* Progress bar */}
         {totalCount > 0 && (
-          <div className="w-full h-1.5 bg-[#1f1f23] rounded-full overflow-hidden mb-4">
+          <div className="w-full h-1.5 bg-tray rounded-full overflow-hidden mb-4">
             <div
-              className="h-full bg-[#34d399] rounded-full transition-all duration-500"
+              className="h-full bg-ink rounded-full transition-all duration-500"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -414,19 +418,19 @@ export default function ProjectDetailPage() {
                 if (e.key === 'Enter') handleAddTask();
               }}
               placeholder="Add a task and press Enter..."
-              className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-2.5 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all pr-10"
+              className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-2.5 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all pr-10"
             />
             {addingTask && (
               <Loader2
                 size={14}
-                className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[#52525b]"
+                className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-ink-dim"
               />
             )}
           </div>
           <button
             onClick={handleAddTask}
             disabled={!newTaskTitle.trim() || addingTask}
-            className="bg-[#34d399] text-[#09090b] rounded-lg p-2.5 hover:bg-[#34d399]/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-ink text-white rounded-lg p-2.5 hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Plus size={16} />
           </button>
@@ -438,12 +442,12 @@ export default function ProjectDetailPage() {
             {incompleteTasks.map((task) => (
               <div
                 key={task.id}
-                className="flex items-center gap-3 bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-2.5 group hover:bg-white/[0.02] transition-all"
+                className="flex items-center gap-3 bg-paper border border-hair-soft rounded-lg px-4 py-2.5 group hover:bg-[rgba(10,156,212,0.04)] transition-all"
               >
                 {/* Checkbox */}
                 <button
                   onClick={() => handleToggleTask(task)}
-                  className="w-5 h-5 rounded border border-white/[0.12] flex-shrink-0 flex items-center justify-center hover:border-[#34d399] transition-colors"
+                  className="w-5 h-5 rounded border border-hair-strong flex-shrink-0 flex items-center justify-center hover:border-sky-ink transition-colors"
                 >
                   {/* empty */}
                 </button>
@@ -460,12 +464,12 @@ export default function ProjectDetailPage() {
                       if (e.key === 'Enter') handleSaveEditTask();
                       if (e.key === 'Escape') setEditingTaskId(null);
                     }}
-                    className="flex-1 bg-transparent text-sm text-[#fafafa] focus:outline-none border-b border-[rgba(52,211,153,0.3)]"
+                    className="flex-1 bg-transparent text-sm text-ink focus:outline-none border-b border-[rgba(10,156,212,0.3)]"
                   />
                 ) : (
                   <span
                     onClick={() => handleStartEditTask(task)}
-                    className="flex-1 text-sm text-[#fafafa] cursor-text hover:text-[#34d399] transition-colors"
+                    className="flex-1 text-sm text-ink cursor-text hover:text-sky-ink transition-colors"
                   >
                     {task.title}
                   </span>
@@ -475,13 +479,13 @@ export default function ProjectDetailPage() {
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => handleStartEditTask(task)}
-                    className="text-[#52525b] hover:text-[#a1a1aa] transition-colors p-1"
+                    className="text-ink-dim hover:text-ink-muted transition-colors p-1"
                   >
                     <Pencil size={12} />
                   </button>
                   <button
                     onClick={() => handleDeleteTask(task.id)}
-                    className="text-[#52525b] hover:text-red-400 transition-colors p-1"
+                    className="text-ink-dim hover:text-red-400 transition-colors p-1"
                   >
                     <Trash2 size={12} />
                   </button>
@@ -495,19 +499,19 @@ export default function ProjectDetailPage() {
         {completedTasks.length > 0 && (
           <div className="space-y-1">
             {incompleteTasks.length > 0 && (
-              <div className="border-t border-white/[0.06] my-3" />
+              <div className="border-t border-hair-soft my-3" />
             )}
             {completedTasks.map((task) => (
               <div
                 key={task.id}
-                className="flex items-center gap-3 bg-[#18181b]/50 border border-white/[0.04] rounded-lg px-4 py-2.5 group hover:bg-white/[0.02] transition-all opacity-60"
+                className="flex items-center gap-3 bg-paper/50 border border-hair-soft rounded-lg px-4 py-2.5 group hover:bg-[rgba(10,156,212,0.04)] transition-all opacity-60"
               >
                 {/* Checkbox (checked) */}
                 <button
                   onClick={() => handleToggleTask(task)}
-                  className="w-5 h-5 rounded border border-[#34d399]/40 bg-[rgba(52,211,153,0.15)] flex-shrink-0 flex items-center justify-center hover:border-[#34d399] transition-colors"
+                  className="w-5 h-5 rounded border border-sky-ink/40 bg-[rgba(10,156,212,0.15)] flex-shrink-0 flex items-center justify-center hover:border-sky-ink transition-colors"
                 >
-                  <Check size={12} className="text-[#34d399]" />
+                  <Check size={12} className="text-sky-ink" />
                 </button>
 
                 {/* Title (strikethrough) */}
@@ -522,12 +526,12 @@ export default function ProjectDetailPage() {
                       if (e.key === 'Enter') handleSaveEditTask();
                       if (e.key === 'Escape') setEditingTaskId(null);
                     }}
-                    className="flex-1 bg-transparent text-sm text-[#a1a1aa] focus:outline-none border-b border-[rgba(52,211,153,0.3)]"
+                    className="flex-1 bg-transparent text-sm text-ink-muted focus:outline-none border-b border-[rgba(10,156,212,0.3)]"
                   />
                 ) : (
                   <span
                     onClick={() => handleStartEditTask(task)}
-                    className="flex-1 text-sm text-[#a1a1aa] line-through cursor-text"
+                    className="flex-1 text-sm text-ink-muted line-through cursor-text"
                   >
                     {task.title}
                   </span>
@@ -537,7 +541,7 @@ export default function ProjectDetailPage() {
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => handleDeleteTask(task.id)}
-                    className="text-[#52525b] hover:text-red-400 transition-colors p-1"
+                    className="text-ink-dim hover:text-red-400 transition-colors p-1"
                   >
                     <Trash2 size={12} />
                   </button>
@@ -549,16 +553,16 @@ export default function ProjectDetailPage() {
 
         {/* Empty state */}
         {totalCount === 0 && (
-          <div className="text-center py-8 bg-[#18181b] border border-white/[0.06] rounded-xl">
-            <p className="text-[#52525b] text-sm">No tasks yet</p>
-            <p className="text-[#52525b] text-xs mt-1">Add your first task above</p>
+          <div className="text-center py-8 bg-paper border border-hair-soft rounded-xl">
+            <p className="text-ink-dim text-sm">No tasks yet</p>
+            <p className="text-ink-dim text-xs mt-1">Add your first task above</p>
           </div>
         )}
       </div>
 
       {/* Notes */}
       <div className="mb-8">
-        <p className="text-[#52525b] text-xs font-medium uppercase tracking-wider mb-2">Notes</p>
+        <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-2">Notes</p>
         <textarea
           value={notes}
           onChange={(e) => {
@@ -568,7 +572,7 @@ export default function ProjectDetailPage() {
           onBlur={handleNotesBlur}
           rows={5}
           placeholder="Add notes about this project..."
-          className="w-full bg-[#18181b] border border-white/[0.06] rounded-xl px-4 py-3 text-sm text-[#a1a1aa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all resize-none leading-relaxed"
+          className="w-full bg-paper border border-hair-soft rounded-xl px-4 py-3 text-sm text-ink-muted placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
         />
       </div>
     </div>

@@ -211,7 +211,7 @@ export default function ComposeEmailPage() {
   if (loadingLead) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Loader2 size={24} className="animate-spin text-[#52525b]" />
+        <Loader2 size={24} className="animate-spin text-ink-dim" />
       </div>
     );
   }
@@ -219,8 +219,8 @@ export default function ComposeEmailPage() {
   if (!lead) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3">
-        <p className="text-[#a1a1aa]">Lead not found</p>
-        <button onClick={() => navigate(-1)} className="text-[#34d399] text-sm hover:underline">
+        <p className="text-ink-muted">Lead not found</p>
+        <button onClick={() => navigate(-1)} className="text-sky-ink text-sm hover:underline">
           Go back
         </button>
       </div>
@@ -231,29 +231,29 @@ export default function ComposeEmailPage() {
   if (sent) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <div className="w-16 h-16 rounded-full bg-[rgba(52,211,153,0.15)] flex items-center justify-center">
-          <Send size={24} className="text-[#34d399]" />
+        <div className="w-16 h-16 rounded-full bg-[rgba(10,156,212,0.15)] flex items-center justify-center">
+          <Send size={24} className="text-sky-ink" />
         </div>
-        <p className="text-[#fafafa] font-bold text-lg">Email sent</p>
-        <p className="text-[#52525b] text-sm">Redirecting to profile...</p>
+        <p className="text-ink font-bold text-lg">Email sent</p>
+        <p className="text-ink-dim text-sm">Redirecting to profile...</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-cream">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] flex-shrink-0">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-hair-soft flex-shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(`/leads/${lead.id}`)}
-            className="text-[#52525b] hover:text-[#a1a1aa] transition-colors p-1"
+            className="text-ink-dim hover:text-ink-muted transition-colors p-1"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-[#fafafa] font-bold">Compose Email</h1>
-            <span className="text-[#52525b] text-sm">
+            <h1 className="text-ink font-bold">Compose Email</h1>
+            <span className="text-ink-dim text-sm">
               {lead.name}
               {lead.company ? ` \u00b7 ${lead.company}` : ''}
             </span>
@@ -265,8 +265,8 @@ export default function ComposeEmailPage() {
             onClick={() => setShowPreview(!showPreview)}
             className={`flex items-center gap-2 border rounded-lg px-4 py-2.5 text-sm transition-all ${
               showPreview
-                ? 'bg-[rgba(52,211,153,0.1)] border-[rgba(52,211,153,0.2)] text-[#34d399]'
-                : 'bg-transparent border-white/[0.06] text-[#a1a1aa] hover:bg-white/[0.03]'
+                ? 'bg-[rgba(10,156,212,0.1)] border-[rgba(10,156,212,0.2)] text-sky-ink'
+                : 'bg-transparent border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)]'
             }`}
           >
             <Eye size={14} />
@@ -275,7 +275,7 @@ export default function ComposeEmailPage() {
           <button
             onClick={handleSend}
             disabled={!toEmail || !subject || !body || sending}
-            className="bg-[#34d399] text-[#09090b] font-bold text-sm rounded-lg px-5 py-2.5 hover:bg-[#34d399]/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            className="bg-ink text-white font-bold text-sm rounded-lg px-5 py-2.5 hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {sending ? (
               <>
@@ -295,17 +295,17 @@ export default function ComposeEmailPage() {
       {/* Main content */}
       <div className="flex-1 overflow-hidden flex">
         {/* Left column — compose */}
-        <div className={`flex-1 flex flex-col overflow-y-auto ${showPreview ? 'border-r border-white/[0.06]' : ''}`}>
+        <div className={`flex-1 flex flex-col overflow-y-auto ${showPreview ? 'border-r border-hair-soft' : ''}`}>
           <div className="p-6 space-y-4 flex-1">
 
             {/* Voice instructions panel — shown before draft */}
             {!drafted && (
-              <div className="bg-[#1f1f23] border border-white/[0.06] rounded-xl p-5">
+              <div className="bg-tray border border-hair-soft rounded-xl p-5">
                 <div className="flex items-center gap-2 mb-3">
-                  <Sparkles size={16} className="text-[#34d399]" />
-                  <p className="text-[#fafafa] text-sm font-medium">What do you want to say?</p>
+                  <Sparkles size={16} className="text-sky-ink" />
+                  <p className="text-ink text-sm font-medium">What do you want to say?</p>
                 </div>
-                <p className="text-[#52525b] text-xs mb-3">
+                <p className="text-ink-dim text-xs mb-3">
                   Type your instructions or hit the mic to dictate. Claude will draft the email for you.
                 </p>
 
@@ -314,7 +314,7 @@ export default function ComposeEmailPage() {
                   onChange={(e) => setInstructions(e.target.value)}
                   placeholder='e.g. "Send David an email checking in on the project timeline, ask if he needs anything from us before Friday"'
                   rows={4}
-                  className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all resize-none leading-relaxed mb-3"
+                  className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed mb-3"
                 />
 
                 <div className="flex items-center gap-3">
@@ -324,7 +324,7 @@ export default function ComposeEmailPage() {
                     className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
                       isListening
                         ? 'bg-red-500/15 text-red-400 border border-red-500/30 animate-pulse'
-                        : 'bg-[#18181b] text-[#a1a1aa] border border-white/[0.06] hover:bg-white/[0.03] hover:text-[#fafafa]'
+                        : 'bg-paper text-ink-muted border border-hair-soft hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
                     }`}
                   >
                     {isListening ? <MicOff size={14} /> : <Mic size={14} />}
@@ -335,7 +335,7 @@ export default function ComposeEmailPage() {
                   <button
                     onClick={handleDraft}
                     disabled={!instructions.trim() || drafting}
-                    className="bg-[#34d399] text-[#09090b] font-bold text-sm rounded-lg px-5 py-2.5 hover:bg-[#34d399]/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="bg-ink text-white font-bold text-sm rounded-lg px-5 py-2.5 hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {drafting ? (
                       <>
@@ -358,7 +358,7 @@ export default function ComposeEmailPage() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setDrafted(false)}
-                  className="flex items-center gap-2 text-[#a1a1aa] text-sm hover:text-[#34d399] transition-colors"
+                  className="flex items-center gap-2 text-ink-muted text-sm hover:text-sky-ink transition-colors"
                 >
                   <Sparkles size={14} />
                   Re-draft with new instructions
@@ -369,63 +369,63 @@ export default function ComposeEmailPage() {
             {/* Email fields — always visible so you can manually compose too */}
             <div className="flex gap-4">
               <div className="flex-1">
-                <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1.5 block">To</label>
+                <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">To</label>
                 <input
                   type="email"
                   value={toEmail}
                   onChange={(e) => setToEmail(e.target.value)}
                   placeholder="recipient@company.com"
-                  className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                  className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
                 />
               </div>
               <div className="w-48">
-                <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1.5 block">Greeting name</label>
+                <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">Greeting name</label>
                 <input
                   type="text"
                   value={greetingName}
                   onChange={(e) => setGreetingName(e.target.value)}
                   placeholder="e.g. Brianna"
-                  className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                  className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1.5 block">CC</label>
+              <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">CC</label>
               <input
                 type="text"
                 value={ccEmail}
                 onChange={(e) => setCcEmail(e.target.value)}
                 placeholder="cc@company.com"
-                className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
               />
             </div>
 
             <div>
-              <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1.5 block">Subject</label>
+              <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">Subject</label>
               <input
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Email subject"
-                className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
               />
             </div>
 
             <div className="flex-1">
-              <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1.5 block">Email Body</label>
+              <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">Email Body</label>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 rows={14}
                 placeholder={drafted ? '' : 'Use the voice/text instructions above to generate a draft, or type your email directly here'}
-                className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all resize-none leading-relaxed"
+                className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
               />
             </div>
 
             {/* Attachments */}
             <div>
-              <label className="inline-flex items-center gap-1.5 text-[#a1a1aa] text-sm cursor-pointer hover:text-[#34d399] transition-colors">
+              <label className="inline-flex items-center gap-1.5 text-ink-muted text-sm cursor-pointer hover:text-sky-ink transition-colors">
                 <Paperclip size={14} />
                 Attach file
                 <input type="file" multiple onChange={handleAttach} className="hidden" />
@@ -433,10 +433,10 @@ export default function ComposeEmailPage() {
               {attachments.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {attachments.map((file, i) => (
-                    <span key={i} className="flex items-center gap-1.5 bg-[#1f1f23] text-[#a1a1aa] text-xs px-3 py-1.5 rounded-lg">
+                    <span key={i} className="flex items-center gap-1.5 bg-tray text-ink-muted text-xs px-3 py-1.5 rounded-lg">
                       <Paperclip size={12} />
                       {file.name}
-                      <button onClick={() => removeAttachment(i)} className="text-[#52525b] hover:text-red-400 transition-colors">
+                      <button onClick={() => removeAttachment(i)} className="text-ink-dim hover:text-red-400 transition-colors">
                         <X size={12} />
                       </button>
                     </span>
@@ -449,19 +449,19 @@ export default function ComposeEmailPage() {
 
         {/* Right column — Preview (toggleable) */}
         {showPreview && (
-          <div className="flex-1 overflow-y-auto bg-[#1f1f23]">
+          <div className="flex-1 overflow-y-auto bg-tray">
             <div className="p-6">
-              <span className="text-[#52525b] text-xs uppercase tracking-wider block mb-4">
+              <span className="text-ink-dim text-xs uppercase tracking-wider block mb-4">
                 Email Preview
               </span>
               <div className="bg-white rounded-xl p-8 shadow-lg">
-                <p className="text-[#52525b] text-xs mb-4 font-mono">
+                <p className="text-ink-dim text-xs mb-4 font-mono">
                   To: {toEmail || '...'}{ccEmail ? ` | CC: ${ccEmail}` : ''}
                 </p>
-                <p className="text-[#18181b] text-sm font-semibold mb-4 pb-3 border-b border-gray-200">
+                <p className="text-ink text-sm font-semibold mb-4 pb-3 border-b border-hair-soft">
                   {subject || 'No subject'}
                 </p>
-                <pre className="text-[#3f3f46] text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                <pre className="text-ink-faint text-sm whitespace-pre-wrap font-sans leading-relaxed">
                   {buildEmailText(body || '...', greetingName || 'there')}
                 </pre>
               </div>

@@ -169,12 +169,12 @@ export default function SearchBar() {
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 pointer-events-none">
         <div
-          className="w-full max-w-lg bg-[#18181b] border border-white/[0.06] rounded-xl shadow-2xl pointer-events-auto overflow-hidden"
+          className="w-full max-w-lg bg-paper border border-hair-soft rounded-xl shadow-2xl pointer-events-auto overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Search input */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06]">
-            <Search size={18} className="text-[#52525b] flex-shrink-0" />
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-hair-soft">
+            <Search size={18} className="text-ink-dim flex-shrink-0" />
             <input
               ref={inputRef}
               type="text"
@@ -182,17 +182,17 @@ export default function SearchBar() {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search leads by name, company, phone, or email..."
-              className="flex-1 bg-transparent text-[#fafafa] placeholder-[#52525b] text-sm outline-none"
+              className="flex-1 bg-transparent text-ink placeholder-ink-dim text-sm outline-none"
             />
             {query && (
               <button
                 onClick={() => setQuery('')}
-                className="text-[#52525b] hover:text-[#a1a1aa] transition-colors"
+                className="text-ink-dim hover:text-ink-muted transition-colors"
               >
                 <X size={16} />
               </button>
             )}
-            <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-[#52525b] bg-[#09090b] border border-white/[0.06] rounded">
+            <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-ink-dim bg-cream border border-hair-soft rounded">
               ESC
             </kbd>
           </div>
@@ -205,25 +205,25 @@ export default function SearchBar() {
             {/* Loading state */}
             {loading && query.trim().length >= 2 && (
               <div className="px-4 py-8 text-center">
-                <div className="inline-block w-5 h-5 border-2 border-[#34d399]/30 border-t-[#34d399] rounded-full animate-spin" />
-                <p className="text-[#52525b] text-xs mt-2">Searching...</p>
+                <div className="inline-block w-5 h-5 border-2 border-sky-ink/30 border-t-sky-ink rounded-full animate-spin" />
+                <p className="text-ink-dim text-xs mt-2">Searching...</p>
               </div>
             )}
 
             {/* Empty query hint */}
             {!loading && query.trim().length < 2 && (
               <div className="px-4 py-8 text-center">
-                <Search size={24} className="mx-auto text-[#52525b] mb-2" />
-                <p className="text-[#52525b] text-sm">Type at least 2 characters to search</p>
+                <Search size={24} className="mx-auto text-ink-dim mb-2" />
+                <p className="text-ink-dim text-sm">Type at least 2 characters to search</p>
               </div>
             )}
 
             {/* No results */}
             {!loading && query.trim().length >= 2 && results.length === 0 && (
               <div className="px-4 py-8 text-center">
-                <User size={24} className="mx-auto text-[#52525b] mb-2" />
-                <p className="text-[#a1a1aa] text-sm">No leads found</p>
-                <p className="text-[#52525b] text-xs mt-1">Try a different search term</p>
+                <User size={24} className="mx-auto text-ink-dim mb-2" />
+                <p className="text-ink-muted text-sm">No leads found</p>
+                <p className="text-ink-dim text-xs mt-1">Try a different search term</p>
               </div>
             )}
 
@@ -238,36 +238,36 @@ export default function SearchBar() {
                       onMouseEnter={() => setSelectedIndex(index)}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
                         index === selectedIndex
-                          ? 'bg-[#1f1f23]'
-                          : 'hover:bg-[#1f1f23]/50'
+                          ? 'bg-tray'
+                          : 'hover:bg-tray/50'
                       }`}
                     >
                       {/* Avatar / icon */}
-                      <div className="w-9 h-9 rounded-lg bg-[#09090b] border border-white/[0.06] flex items-center justify-center flex-shrink-0">
-                        <User size={16} className="text-[#52525b]" />
+                      <div className="w-9 h-9 rounded-lg bg-cream border border-hair-soft flex items-center justify-center flex-shrink-0">
+                        <User size={16} className="text-ink-dim" />
                       </div>
 
                       {/* Lead info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-[#fafafa] truncate">
+                          <span className="text-sm font-medium text-ink truncate">
                             {lead.name}
                           </span>
                           {lead.category && (
-                            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-[#34d399]/10 text-[#34d399] flex-shrink-0">
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-ink/10 text-sky-ink flex-shrink-0">
                               {lead.category}
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-3 mt-0.5">
                           {lead.company && (
-                            <span className="flex items-center gap-1 text-xs text-[#a1a1aa] truncate">
+                            <span className="flex items-center gap-1 text-xs text-ink-muted truncate">
                               <Building2 size={11} className="flex-shrink-0" />
                               {lead.company}
                             </span>
                           )}
                           {lead.phone && (
-                            <span className="flex items-center gap-1 text-xs text-[#52525b] flex-shrink-0">
+                            <span className="flex items-center gap-1 text-xs text-ink-dim flex-shrink-0">
                               <Phone size={11} />
                               {lead.phone}
                             </span>
@@ -277,13 +277,13 @@ export default function SearchBar() {
 
                       {/* Stage badge + arrow */}
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-[10px] text-[#52525b]">
+                        <span className="text-[10px] text-ink-dim">
                           {stageLabel(lead.pipelineStage)}
                         </span>
                         <ArrowRight
                           size={14}
                           className={`transition-colors ${
-                            index === selectedIndex ? 'text-[#34d399]' : 'text-[#52525b]'
+                            index === selectedIndex ? 'text-sky-ink' : 'text-ink-dim'
                           }`}
                         />
                       </div>
@@ -296,21 +296,21 @@ export default function SearchBar() {
 
           {/* Footer hint */}
           {results.length > 0 && (
-            <div className="px-4 py-2 border-t border-white/[0.06] flex items-center gap-4 text-[10px] text-[#52525b]">
+            <div className="px-4 py-2 border-t border-hair-soft flex items-center gap-4 text-[10px] text-ink-dim">
               <span className="flex items-center gap-1">
-                <kbd className="px-1 py-0.5 bg-[#09090b] border border-white/[0.06] rounded text-[10px]">
+                <kbd className="px-1 py-0.5 bg-cream border border-hair-soft rounded text-[10px]">
                   ↑↓
                 </kbd>
                 Navigate
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1 py-0.5 bg-[#09090b] border border-white/[0.06] rounded text-[10px]">
+                <kbd className="px-1 py-0.5 bg-cream border border-hair-soft rounded text-[10px]">
                   ↵
                 </kbd>
                 Open
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1 py-0.5 bg-[#09090b] border border-white/[0.06] rounded text-[10px]">
+                <kbd className="px-1 py-0.5 bg-cream border border-hair-soft rounded text-[10px]">
                   Esc
                 </kbd>
                 Close

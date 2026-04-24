@@ -40,9 +40,9 @@ function PreviousCallIntel({ calls, loading }: { calls: CallLog[]; loading: bool
     voicemail: 'Left Voicemail',
   };
   const dispositionColor: Record<string, string> = {
-    interested: 'text-[#34d399]',
+    interested: 'text-sky-ink',
     not_interested: 'text-red-400',
-    no_answer: 'text-[#52525b]',
+    no_answer: 'text-ink-dim',
     voicemail: 'text-amber-400',
   };
 
@@ -58,21 +58,21 @@ function PreviousCallIntel({ calls, loading }: { calls: CallLog[]; loading: bool
   const uniqueTopics = [...new Set(allTopics)].slice(0, 6);
 
   return (
-    <div className="bg-gradient-to-b from-[#1a1a2e] to-[#1f1f23] rounded-xl border border-[rgba(52,211,153,0.12)] mb-6 overflow-hidden">
+    <div className="bg-gradient-to-b from-sky-wash to-paper rounded-xl border border-sky-hair mb-6 overflow-hidden">
       {/* Header */}
-      <div className="px-5 py-4 flex items-center justify-between border-b border-white/[0.06]">
+      <div className="px-5 py-4 flex items-center justify-between border-b border-hair-soft">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[rgba(52,211,153,0.12)] flex items-center justify-center">
-            <ShieldAlert size={16} className="text-[#34d399]" />
+          <div className="w-8 h-8 rounded-lg bg-[rgba(10,156,212,0.12)] flex items-center justify-center">
+            <ShieldAlert size={16} className="text-sky-ink" />
           </div>
           <div>
-            <h3 className="text-[#fafafa] text-sm font-bold">Previous Call Intel</h3>
-            <p className="text-[#52525b] text-xs">{calls.length} previous call{calls.length > 1 ? 's' : ''} on record</p>
+            <h3 className="text-ink text-sm font-bold">Previous Call Intel</h3>
+            <p className="text-ink-dim text-xs">{calls.length} previous call{calls.length > 1 ? 's' : ''} on record</p>
           </div>
         </div>
         <button
           onClick={() => setExpanded(!expanded)}
-          className="text-[#52525b] hover:text-[#a1a1aa] transition-colors p-1"
+          className="text-ink-dim hover:text-ink-muted transition-colors p-1"
         >
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
@@ -82,31 +82,31 @@ function PreviousCallIntel({ calls, loading }: { calls: CallLog[]; loading: bool
       <div className="px-5 py-4 space-y-3">
         {/* Last call meta */}
         <div className="flex items-center gap-4 text-xs">
-          <span className="text-[#a1a1aa] flex items-center gap-1.5">
+          <span className="text-ink-muted flex items-center gap-1.5">
             <Clock size={12} />
             Last called: {new Date(lastCall.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
           </span>
-          <span className={`font-medium ${dispositionColor[lastCall.disposition] || 'text-[#a1a1aa]'}`}>
+          <span className={`font-medium ${dispositionColor[lastCall.disposition] || 'text-ink-muted'}`}>
             {dispositionLabel[lastCall.disposition] || lastCall.disposition}
           </span>
-          <span className="text-[#52525b]">{formatDur(lastCall.duration)}</span>
+          <span className="text-ink-dim">{formatDur(lastCall.duration)}</span>
         </div>
 
         {/* Summary */}
         {lastCall.summary && (
           <div>
-            <p className="text-[#52525b] text-[10px] font-bold uppercase tracking-wider mb-1.5">Summary</p>
-            <p className="text-[#a1a1aa] text-sm leading-relaxed">{lastCall.summary}</p>
+            <p className="text-ink-dim text-[10px] font-bold uppercase tracking-wider mb-1.5">Summary</p>
+            <p className="text-ink-muted text-sm leading-relaxed">{lastCall.summary}</p>
           </div>
         )}
 
         {/* Key topics as tags */}
         {uniqueTopics.length > 0 && (
           <div>
-            <p className="text-[#52525b] text-[10px] font-bold uppercase tracking-wider mb-1.5">Key Topics</p>
+            <p className="text-ink-dim text-[10px] font-bold uppercase tracking-wider mb-1.5">Key Topics</p>
             <div className="flex flex-wrap gap-1.5">
               {uniqueTopics.map((topic) => (
-                <span key={topic} className="bg-[rgba(52,211,153,0.08)] text-[#34d399] text-[10px] px-2 py-0.5 rounded-full">
+                <span key={topic} className="bg-[rgba(10,156,212,0.08)] text-sky-ink text-[10px] px-2 py-0.5 rounded-full">
                   {topic}
                 </span>
               ))}
@@ -117,14 +117,14 @@ function PreviousCallIntel({ calls, loading }: { calls: CallLog[]; loading: bool
         {/* Action items from last call */}
         {lastCall.actionItems && lastCall.actionItems.length > 0 && (
           <div>
-            <p className="text-[#52525b] text-[10px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+            <p className="text-ink-dim text-[10px] font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <TrendingUp size={10} />
               Action Items / Talking Points
             </p>
             <ul className="space-y-1">
               {lastCall.actionItems.map((item, i) => (
-                <li key={i} className="text-[#a1a1aa] text-sm flex items-start gap-2">
-                  <span className="text-[#34d399] mt-0.5">&#8226;</span>
+                <li key={i} className="text-ink-muted text-sm flex items-start gap-2">
+                  <span className="text-sky-ink mt-0.5">&#8226;</span>
                   {item}
                 </li>
               ))}
@@ -135,9 +135,9 @@ function PreviousCallIntel({ calls, loading }: { calls: CallLog[]; loading: bool
         {/* Sentiment */}
         {lastCall.sentiment && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-[#52525b]">Sentiment:</span>
+            <span className="text-ink-dim">Sentiment:</span>
             <span className={`font-medium ${
-              lastCall.sentiment.toLowerCase().includes('positive') ? 'text-[#34d399]' :
+              lastCall.sentiment.toLowerCase().includes('positive') ? 'text-sky-ink' :
               lastCall.sentiment.toLowerCase().includes('negative') ? 'text-red-400' :
               'text-amber-400'
             }`}>{lastCall.sentiment}</span>
@@ -147,21 +147,21 @@ function PreviousCallIntel({ calls, loading }: { calls: CallLog[]; loading: bool
 
       {/* Expanded — older calls */}
       {expanded && calls.length > 1 && (
-        <div className="border-t border-white/[0.06] px-5 py-4 space-y-4">
-          <p className="text-[#52525b] text-[10px] font-bold uppercase tracking-wider">Older Calls</p>
+        <div className="border-t border-hair-soft px-5 py-4 space-y-4">
+          <p className="text-ink-dim text-[10px] font-bold uppercase tracking-wider">Older Calls</p>
           {calls.slice(1).map((call) => (
-            <div key={call.id} className="bg-[#18181b] rounded-lg p-3 space-y-2">
+            <div key={call.id} className="bg-paper rounded-lg p-3 space-y-2">
               <div className="flex items-center gap-3 text-xs">
-                <span className="text-[#a1a1aa]">
+                <span className="text-ink-muted">
                   {new Date(call.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </span>
-                <span className={`font-medium ${dispositionColor[call.disposition] || 'text-[#a1a1aa]'}`}>
+                <span className={`font-medium ${dispositionColor[call.disposition] || 'text-ink-muted'}`}>
                   {dispositionLabel[call.disposition] || call.disposition}
                 </span>
-                <span className="text-[#52525b]">{formatDur(call.duration)}</span>
+                <span className="text-ink-dim">{formatDur(call.duration)}</span>
               </div>
               {call.summary && (
-                <p className="text-[#a1a1aa] text-sm leading-relaxed">{call.summary}</p>
+                <p className="text-ink-muted text-sm leading-relaxed">{call.summary}</p>
               )}
             </div>
           ))}
@@ -509,26 +509,26 @@ export default function DiallerPage() {
   // ── Main view ───────────────────────────────────────────────
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-cream">
       {/* Stats bar */}
-      <div className="bg-[#18181b] border-b border-white/[0.06] px-8 py-3 flex items-center justify-between text-sm">
+      <div className="bg-paper border-b border-hair-soft px-8 py-3 flex items-center justify-between text-sm">
         <div className="flex items-center gap-6">
-          <span className="text-[#a1a1aa]">
+          <span className="text-ink-muted">
             Leads:{' '}
-            <span className="text-[#fafafa] font-medium">
+            <span className="text-ink font-medium">
               {leads.length}
             </span>
           </span>
           {categories.length > 0 && (
             <>
-              <span className="text-[#52525b]">|</span>
+              <span className="text-ink-dim">|</span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleCategoryChange('all')}
                   className={`text-xs px-3 py-1 rounded-full transition-all ${
                     activeCategory === 'all'
-                      ? 'bg-[rgba(52,211,153,0.15)] text-[#34d399]'
-                      : 'text-[#52525b] hover:text-[#a1a1aa]'
+                      ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink'
+                      : 'text-ink-dim hover:text-ink-muted'
                   }`}
                 >
                   All
@@ -539,8 +539,8 @@ export default function DiallerPage() {
                     onClick={() => handleCategoryChange(cat)}
                     className={`text-xs px-3 py-1 rounded-full transition-all ${
                       activeCategory === cat
-                        ? 'bg-[rgba(52,211,153,0.15)] text-[#34d399]'
-                        : 'text-[#52525b] hover:text-[#a1a1aa]'
+                        ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink'
+                        : 'text-ink-dim hover:text-ink-muted'
                     }`}
                   >
                     {cat}
@@ -551,16 +551,16 @@ export default function DiallerPage() {
           )}
         </div>
         <div className="flex items-center gap-6">
-          <span className="text-[#a1a1aa]">
+          <span className="text-ink-muted">
             Calls made:{' '}
-            <span className="text-[#fafafa] font-medium">
+            <span className="text-ink font-medium">
               {stats.callsMade}
             </span>
           </span>
-          <span className="text-[#52525b]">|</span>
-          <span className="text-[#a1a1aa]">
+          <span className="text-ink-dim">|</span>
+          <span className="text-ink-muted">
             Interested:{' '}
-            <span className="text-[#34d399] font-medium">
+            <span className="text-sky-ink font-medium">
               {stats.interested}
             </span>
           </span>
@@ -568,7 +568,7 @@ export default function DiallerPage() {
         {/* Twilio status indicator */}
         <div className="flex items-center gap-2">
           {twilioReady ? (
-            <span className="flex items-center gap-1.5 text-xs text-[#34d399]">
+            <span className="flex items-center gap-1.5 text-xs text-sky-ink">
               <Wifi size={12} />
               Phone Ready
             </span>
@@ -578,7 +578,7 @@ export default function DiallerPage() {
               Phone Offline
             </span>
           ) : (
-            <span className="flex items-center gap-1.5 text-xs text-[#52525b]">
+            <span className="flex items-center gap-1.5 text-xs text-ink-dim">
               <Loader2 size={12} className="animate-spin" />
               Connecting...
             </span>
@@ -589,9 +589,9 @@ export default function DiallerPage() {
       {/* Main content — two columns */}
       <div className="flex-1 overflow-hidden flex">
         {/* Left column — Lead list */}
-        <div className="w-[40%] border-r border-white/[0.06] flex flex-col">
-          <div className="px-5 py-3 border-b border-white/[0.06]">
-            <h3 className="text-[#52525b] text-xs font-bold uppercase tracking-wider">
+        <div className="w-[40%] border-r border-hair-soft flex flex-col bg-paper">
+          <div className="px-5 py-3 border-b border-hair-soft">
+            <h3 className="font-mono text-sky-ink text-[10.5px] font-bold uppercase tracking-[0.22em]">
               Lead Queue
             </h3>
           </div>
@@ -599,12 +599,12 @@ export default function DiallerPage() {
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 size={20} className="animate-spin text-[#52525b]" />
+                <Loader2 size={20} className="animate-spin text-ink-dim" />
               </div>
             ) : leads.length === 0 ? (
               <div className="text-center py-12 px-5">
-                <Phone size={24} className="text-[#52525b] mx-auto mb-3" />
-                <p className="text-[#52525b] text-sm">No leads in queue</p>
+                <Phone size={24} className="text-ink-dim mx-auto mb-3" />
+                <p className="text-ink-dim text-sm">No leads in queue</p>
               </div>
             ) : (
               leads.map((lead) => {
@@ -613,15 +613,15 @@ export default function DiallerPage() {
                   <div
                     key={lead.id}
                     onClick={() => selectLead(lead)}
-                    className={`w-full text-left px-5 py-4 border-b border-white/[0.04] transition-colors cursor-pointer ${
+                    className={`w-full text-left px-5 py-4 border-b border-hair-soft transition-colors cursor-pointer ${
                       isSelected
-                        ? 'bg-[rgba(52,211,153,0.08)] border-l-2 border-l-[#34d399]'
-                        : 'hover:bg-white/[0.02]'
+                        ? 'bg-[rgba(10,156,212,0.08)] border-l-2 border-l-sky-ink'
+                        : 'hover:bg-[rgba(10,156,212,0.04)]'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span
-                        className={`text-sm font-medium truncate hover:text-[#34d399] transition-colors ${lead.name ? 'text-[#fafafa]' : 'text-[#52525b] italic'}`}
+                        className={`text-sm font-medium truncate hover:text-sky-ink transition-colors ${lead.name ? 'text-ink' : 'text-ink-dim italic'}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           navigate(`/leads/${lead.id}`);
@@ -630,25 +630,25 @@ export default function DiallerPage() {
                         {lead.name || 'Unknown'}
                       </span>
                       {lead.category && (
-                        <span className="bg-[rgba(52,211,153,0.15)] text-[#34d399] text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ml-2">
+                        <span className="bg-[rgba(10,156,212,0.15)] text-sky-ink text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ml-2">
                           {lead.category}
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="text-[#52525b]">{lead.company || 'No company'}</span>
-                      <span className="text-[#52525b]">&middot;</span>
-                      <span className="text-[#52525b]">{lead.phone}</span>
+                      <span className="text-ink-dim">{lead.company || 'No company'}</span>
+                      <span className="text-ink-dim">&middot;</span>
+                      <span className="text-ink-dim">{lead.phone}</span>
                     </div>
                     {lead.website && (
                       <div className="flex items-center gap-1.5 mt-1">
-                        <Globe size={10} className="text-[#52525b]" />
+                        <Globe size={10} className="text-ink-dim" />
                         <a
                           href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="text-[#52525b] text-[11px] hover:text-[#34d399] transition-colors truncate max-w-[200px]"
+                          className="text-ink-dim text-[11px] hover:text-sky-ink transition-colors truncate max-w-[200px]"
                         >
                           {lead.website.replace(/^https?:\/\/(www\.)?/, '')}
                         </a>
@@ -662,7 +662,7 @@ export default function DiallerPage() {
                             VM left
                           </span>
                         )}
-                        <span className="text-[#52525b] text-[10px]">
+                        <span className="text-ink-dim text-[10px]">
                           {lead.unansweredCalls} attempt{lead.unansweredCalls > 1 ? 's' : ''}
                         </span>
                       </div>
@@ -689,17 +689,17 @@ export default function DiallerPage() {
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') saveEdit('name'); if (e.key === 'Escape') cancelEdit(); }}
-                        className="bg-[#1f1f23] border border-[rgba(52,211,153,0.4)] rounded-lg px-3 py-1.5 text-[#fafafa] text-2xl font-bold tracking-tight focus:outline-none w-full"
+                        className="bg-tray border border-[rgba(10,156,212,0.4)] rounded-lg px-3 py-1.5 text-ink text-2xl font-bold tracking-tight focus:outline-none w-full"
                       />
-                      <button onClick={() => saveEdit('name')} disabled={saving} className="text-[#34d399] hover:text-[#34d399]/80 p-1"><Check size={18} /></button>
-                      <button onClick={cancelEdit} className="text-[#52525b] hover:text-[#a1a1aa] p-1"><X size={18} /></button>
+                      <button onClick={() => saveEdit('name')} disabled={saving} className="text-sky-ink hover:text-sky-ink/80 p-1"><Check size={18} /></button>
+                      <button onClick={cancelEdit} className="text-ink-dim hover:text-ink-muted p-1"><X size={18} /></button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <h1 className="text-[#fafafa] text-2xl font-bold tracking-tight">
-                        {currentLead.name || <span className="text-[#52525b] italic">No name</span>}
+                      <h1 className="text-ink text-2xl font-bold tracking-tight">
+                        {currentLead.name || <span className="text-ink-dim italic">No name</span>}
                       </h1>
-                      <button onClick={() => startEdit('name', currentLead.name)} className="opacity-0 group-hover:opacity-100 text-[#52525b] hover:text-[#a1a1aa] transition-all p-1"><Pencil size={14} /></button>
+                      <button onClick={() => startEdit('name', currentLead.name)} className="opacity-0 group-hover:opacity-100 text-ink-dim hover:text-ink-muted transition-all p-1"><Pencil size={14} /></button>
                     </div>
                   )}
                 </div>
@@ -713,24 +713,24 @@ export default function DiallerPage() {
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') saveEdit('company'); if (e.key === 'Escape') cancelEdit(); }}
-                        className="bg-[#1f1f23] border border-[rgba(52,211,153,0.4)] rounded-lg px-3 py-1.5 text-[#a1a1aa] text-lg focus:outline-none w-full"
+                        className="bg-tray border border-[rgba(10,156,212,0.4)] rounded-lg px-3 py-1.5 text-ink-muted text-lg focus:outline-none w-full"
                       />
-                      <button onClick={() => saveEdit('company')} disabled={saving} className="text-[#34d399] hover:text-[#34d399]/80 p-1"><Check size={18} /></button>
-                      <button onClick={cancelEdit} className="text-[#52525b] hover:text-[#a1a1aa] p-1"><X size={18} /></button>
+                      <button onClick={() => saveEdit('company')} disabled={saving} className="text-sky-ink hover:text-sky-ink/80 p-1"><Check size={18} /></button>
+                      <button onClick={cancelEdit} className="text-ink-dim hover:text-ink-muted p-1"><X size={18} /></button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <p className="text-[#a1a1aa] text-lg">
-                        {currentLead.company || <span className="text-[#52525b] italic">No company</span>}
+                      <p className="text-ink-muted text-lg">
+                        {currentLead.company || <span className="text-ink-dim italic">No company</span>}
                       </p>
-                      <button onClick={() => startEdit('company', currentLead.company || '')} className="opacity-0 group-hover:opacity-100 text-[#52525b] hover:text-[#a1a1aa] transition-all p-1"><Pencil size={14} /></button>
+                      <button onClick={() => startEdit('company', currentLead.company || '')} className="opacity-0 group-hover:opacity-100 text-ink-dim hover:text-ink-muted transition-all p-1"><Pencil size={14} /></button>
                     </div>
                   )}
                 </div>
 
                 {/* Phone (not editable — display only) */}
-                <p className="text-[#34d399] font-mono text-lg mb-1">
-                  {currentLead.phone || <span className="text-[#52525b] italic font-sans">No phone</span>}
+                <p className="text-sky-ink font-mono text-lg mb-1">
+                  {currentLead.phone || <span className="text-ink-dim italic font-sans">No phone</span>}
                 </p>
 
                 {/* Editable Email */}
@@ -743,17 +743,17 @@ export default function DiallerPage() {
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') saveEdit('email'); if (e.key === 'Escape') cancelEdit(); }}
-                        className="bg-[#1f1f23] border border-[rgba(52,211,153,0.4)] rounded-lg px-3 py-1.5 text-[#a1a1aa] text-sm focus:outline-none w-full"
+                        className="bg-tray border border-[rgba(10,156,212,0.4)] rounded-lg px-3 py-1.5 text-ink-muted text-sm focus:outline-none w-full"
                       />
-                      <button onClick={() => saveEdit('email')} disabled={saving} className="text-[#34d399] hover:text-[#34d399]/80 p-1"><Check size={16} /></button>
-                      <button onClick={cancelEdit} className="text-[#52525b] hover:text-[#a1a1aa] p-1"><X size={16} /></button>
+                      <button onClick={() => saveEdit('email')} disabled={saving} className="text-sky-ink hover:text-sky-ink/80 p-1"><Check size={16} /></button>
+                      <button onClick={cancelEdit} className="text-ink-dim hover:text-ink-muted p-1"><X size={16} /></button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <p className="text-[#a1a1aa] text-sm">
-                        {currentLead.email || <span className="text-[#52525b] italic">No email</span>}
+                      <p className="text-ink-muted text-sm">
+                        {currentLead.email || <span className="text-ink-dim italic">No email</span>}
                       </p>
-                      <button onClick={() => startEdit('email', currentLead.email || '')} className="opacity-0 group-hover:opacity-100 text-[#52525b] hover:text-[#a1a1aa] transition-all p-1"><Pencil size={12} /></button>
+                      <button onClick={() => startEdit('email', currentLead.email || '')} className="opacity-0 group-hover:opacity-100 text-ink-dim hover:text-ink-muted transition-all p-1"><Pencil size={12} /></button>
                     </div>
                   )}
                 </div>
@@ -768,10 +768,10 @@ export default function DiallerPage() {
                         onChange={(e) => setEditValue(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') saveEdit('website'); if (e.key === 'Escape') cancelEdit(); }}
                         placeholder="https://example.com"
-                        className="bg-[#1f1f23] border border-[rgba(52,211,153,0.4)] rounded-lg px-3 py-1.5 text-[#a1a1aa] text-sm focus:outline-none w-full"
+                        className="bg-tray border border-[rgba(10,156,212,0.4)] rounded-lg px-3 py-1.5 text-ink-muted text-sm focus:outline-none w-full"
                       />
-                      <button onClick={() => saveEdit('website')} disabled={saving} className="text-[#34d399] hover:text-[#34d399]/80 p-1"><Check size={16} /></button>
-                      <button onClick={cancelEdit} className="text-[#52525b] hover:text-[#a1a1aa] p-1"><X size={16} /></button>
+                      <button onClick={() => saveEdit('website')} disabled={saving} className="text-sky-ink hover:text-sky-ink/80 p-1"><Check size={16} /></button>
+                      <button onClick={cancelEdit} className="text-ink-dim hover:text-ink-muted p-1"><X size={16} /></button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
@@ -780,15 +780,15 @@ export default function DiallerPage() {
                           href={currentLead.website.startsWith('http') ? currentLead.website : `https://${currentLead.website}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[#34d399] text-sm hover:underline flex items-center gap-1"
+                          className="text-sky-ink text-sm hover:underline flex items-center gap-1"
                         >
                           {currentLead.website}
                           <ExternalLink size={12} />
                         </a>
                       ) : (
-                        <span className="text-[#52525b] italic text-sm">No website</span>
+                        <span className="text-ink-dim italic text-sm">No website</span>
                       )}
-                      <button onClick={() => startEdit('website', currentLead.website || '')} className="opacity-0 group-hover:opacity-100 text-[#52525b] hover:text-[#a1a1aa] transition-all p-1"><Pencil size={12} /></button>
+                      <button onClick={() => startEdit('website', currentLead.website || '')} className="opacity-0 group-hover:opacity-100 text-ink-dim hover:text-ink-muted transition-all p-1"><Pencil size={12} /></button>
                     </div>
                   )}
                 </div>
@@ -802,8 +802,8 @@ export default function DiallerPage() {
                         disabled={!twilioReady || !currentLead?.phone || currentLead.phone === 'TBD'}
                         className={`font-bold rounded-xl px-8 py-3 transition-all flex items-center gap-2 shadow-lg ${
                           twilioReady && currentLead?.phone && currentLead.phone !== 'TBD'
-                            ? 'bg-[#34d399] text-[#09090b] hover:bg-[#34d399]/90 shadow-emerald-500/20'
-                            : 'bg-[#27272a] text-[#52525b] cursor-not-allowed shadow-none'
+                            ? 'bg-ink text-white hover:bg-ink/90 shadow-emerald-500/20'
+                            : 'bg-tray text-ink-dim cursor-not-allowed shadow-none'
                         }`}
                       >
                         <Phone size={18} />
@@ -811,7 +811,7 @@ export default function DiallerPage() {
                       </button>
                       <button
                         onClick={() => navigate(`/leads/${currentLead.id}`)}
-                        className="bg-[#1f1f23] border border-white/[0.06] text-[#a1a1aa] font-medium rounded-xl px-6 py-3 hover:text-[#fafafa] hover:border-white/[0.12] transition-all flex items-center gap-2"
+                        className="bg-tray border border-hair-soft text-ink-muted font-medium rounded-xl px-6 py-3 hover:text-ink hover:border-hair-strong transition-all flex items-center gap-2"
                       >
                         <User size={18} />
                         View Profile
@@ -821,13 +821,13 @@ export default function DiallerPage() {
 
                   {callState === 'ringing' && (
                     <div className="flex items-center gap-4">
-                      <div className="bg-amber-500 text-[#09090b] font-bold rounded-xl px-8 py-3 flex items-center gap-2 animate-pulse">
+                      <div className="bg-amber-500 text-white font-bold rounded-xl px-8 py-3 flex items-center gap-2 animate-pulse">
                         <Phone size={18} />
                         Ringing...
                       </div>
                       <button
                         onClick={handleHangUp}
-                        className="bg-red-500 hover:bg-red-600 text-[#fafafa] font-bold rounded-xl px-6 py-3 transition-all flex items-center gap-2"
+                        className="bg-red-500 hover:bg-red-600 text-ink font-bold rounded-xl px-6 py-3 transition-all flex items-center gap-2"
                       >
                         <PhoneOff size={18} />
                         Cancel
@@ -837,13 +837,13 @@ export default function DiallerPage() {
 
                   {callState === 'connected' && (
                     <div className="flex items-center gap-4">
-                      <div className="bg-[#34d399] text-[#09090b] font-bold rounded-xl px-8 py-3 flex items-center gap-2 ring-2 ring-emerald-500/30">
+                      <div className="bg-ink text-white font-bold rounded-xl px-8 py-3 flex items-center gap-2 ring-2 ring-emerald-500/30">
                         <Phone size={18} />
                         Connected — {formatDuration(callDuration)}
                       </div>
                       <button
                         onClick={handleHangUp}
-                        className="bg-red-500 hover:bg-red-600 text-[#fafafa] font-bold rounded-xl px-6 py-3 transition-all flex items-center gap-2"
+                        className="bg-red-500 hover:bg-red-600 text-ink font-bold rounded-xl px-6 py-3 transition-all flex items-center gap-2"
                       >
                         <PhoneOff size={18} />
                         Hang Up
@@ -852,7 +852,7 @@ export default function DiallerPage() {
                   )}
 
                   {callState === 'ended' && (
-                    <div className="bg-[#27272a] text-[#52525b] font-bold rounded-xl px-8 py-3 flex items-center gap-2">
+                    <div className="bg-tray text-ink-dim font-bold rounded-xl px-8 py-3 flex items-center gap-2">
                       <PhoneOff size={18} />
                       Call Ended — {formatDuration(callDuration)}
                     </div>
@@ -861,32 +861,32 @@ export default function DiallerPage() {
 
                 {/* Email prep — visible during/after call so email + CC can be added mid-call */}
                 {(callState === 'ringing' || callState === 'connected' || callState === 'ended') && (
-                  <div className="bg-[#1f1f23] rounded-xl p-5 mb-6 border border-white/[0.06]">
-                    <h3 className="text-[#fafafa] text-sm font-bold mb-3 flex items-center gap-2">
-                      <Mail size={14} className="text-[#34d399]" />
+                  <div className="bg-tray rounded-xl p-5 mb-6 border border-hair-soft">
+                    <h3 className="text-ink text-sm font-bold mb-3 flex items-center gap-2">
+                      <Mail size={14} className="text-sky-ink" />
                       Email Prep
                     </h3>
                     <div className="space-y-3">
                       <div>
-                        <label className="text-[#52525b] text-xs font-medium block mb-1">To</label>
+                        <label className="text-ink-dim text-xs font-medium block mb-1">To</label>
                         <input
                           type="email"
                           value={emailTo}
                           onChange={(e) => setEmailTo(e.target.value)}
                           placeholder="recipient@company.com"
-                          className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-3 py-2 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+                          className="w-full bg-paper border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
                         />
                       </div>
                       <div>
-                        <label className="text-[#52525b] text-xs font-medium block mb-1">CC</label>
+                        <label className="text-ink-dim text-xs font-medium block mb-1">CC</label>
                         <input
                           type="text"
                           value={emailCc}
                           onChange={(e) => setEmailCc(e.target.value)}
                           placeholder="e.g. partner@company.com, assistant@company.com"
-                          className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-3 py-2 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+                          className="w-full bg-paper border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
                         />
-                        <p className="text-[#52525b] text-[10px] mt-1">These carry through to the follow-up email</p>
+                        <p className="text-ink-dim text-[10px] mt-1">These carry through to the follow-up email</p>
                       </div>
                     </div>
                   </div>
@@ -894,14 +894,14 @@ export default function DiallerPage() {
 
                 {/* Call history */}
                 {(currentLead.unansweredCalls > 0 || currentLead.voicemailLeft) && (
-                  <div className="bg-[#1f1f23] rounded-xl p-5 mb-6">
-                    <h3 className="text-[#fafafa] text-sm font-bold mb-3">
+                  <div className="bg-tray rounded-xl p-5 mb-6">
+                    <h3 className="text-ink text-sm font-bold mb-3">
                       Call History
                     </h3>
                     <div className="space-y-2 text-sm">
-                      <p className="text-[#a1a1aa]">
+                      <p className="text-ink-muted">
                         Call attempts:{' '}
-                        <span className="text-[#fafafa]">
+                        <span className="text-ink">
                           {currentLead.unansweredCalls}
                         </span>
                       </p>
@@ -922,19 +922,19 @@ export default function DiallerPage() {
                   <PreviousCallIntel calls={previousCalls} loading={loadingHistory} />
                 )}
                 {loadingHistory && previousCalls.length === 0 && (
-                  <div className="bg-[#1f1f23] rounded-xl p-5 mb-6 flex items-center gap-3">
-                    <Loader2 size={16} className="animate-spin text-[#52525b]" />
-                    <span className="text-[#52525b] text-sm">Loading call history...</span>
+                  <div className="bg-tray rounded-xl p-5 mb-6 flex items-center gap-3">
+                    <Loader2 size={16} className="animate-spin text-ink-dim" />
+                    <span className="text-ink-dim text-sm">Loading call history...</span>
                   </div>
                 )}
 
                 {/* Live transcript */}
                 {transcript && (
-                  <div className="bg-[#1f1f23] rounded-xl p-5">
-                    <h3 className="text-[#52525b] text-xs font-bold uppercase tracking-wider mb-2">
+                  <div className="bg-tray rounded-xl p-5">
+                    <h3 className="text-ink-dim text-xs font-bold uppercase tracking-wider mb-2">
                       Live Transcript
                     </h3>
-                    <p className="text-[#a1a1aa] text-sm whitespace-pre-wrap leading-relaxed">
+                    <p className="text-ink-muted text-sm whitespace-pre-wrap leading-relaxed">
                       {transcript}
                     </p>
                   </div>
@@ -944,8 +944,8 @@ export default function DiallerPage() {
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
-                <Phone size={32} className="text-[#52525b] mx-auto mb-3" />
-                <p className="text-[#52525b] text-sm">
+                <Phone size={32} className="text-ink-dim mx-auto mb-3" />
+                <p className="text-ink-dim text-sm">
                   Select a lead from the list to start calling
                 </p>
               </div>

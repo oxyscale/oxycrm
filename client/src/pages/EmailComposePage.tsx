@@ -138,21 +138,21 @@ export default function EmailComposePage() {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-cream">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] flex-shrink-0">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-hair-soft flex-shrink-0 bg-paper">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/dialler')}
-            className="text-[#52525b] hover:text-[#a1a1aa] transition-colors p-1"
+            className="text-ink-dim hover:text-ink-muted transition-colors p-1"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-[#fafafa] font-bold">
+            <h1 className="text-ink font-bold">
               {currentLead?.name || 'Follow-up Email'}
             </h1>
-            <span className="text-[#52525b] text-sm">
+            <span className="text-ink-dim text-sm">
               {currentLead?.company || ''}
               {currentLead?.company && currentLead?.category ? ' \u00b7 ' : ''}
               {currentLead?.category || ''}
@@ -163,7 +163,7 @@ export default function EmailComposePage() {
         <div className="flex items-center gap-3">
           <button
             onClick={handleSkip}
-            className="bg-transparent text-[#a1a1aa] border border-white/[0.06] rounded-lg px-4 py-2.5 hover:bg-white/[0.03] transition-all flex items-center gap-2 text-sm"
+            className="bg-transparent text-ink-muted border border-hair-soft rounded-lg px-4 py-2.5 hover:bg-[rgba(11,13,14,0.03)] transition-all flex items-center gap-2 text-sm"
           >
             <SkipForward size={14} />
             Skip
@@ -171,7 +171,7 @@ export default function EmailComposePage() {
           <button
             onClick={handleSend}
             disabled={!toEmail || sending}
-            className="bg-[#34d399] text-[#09090b] font-bold text-sm rounded-lg px-5 py-2.5 hover:bg-[#34d399]/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            className="bg-ink text-white font-bold text-sm rounded-lg px-5 py-2.5 hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {sending ? (
               <>
@@ -191,13 +191,13 @@ export default function EmailComposePage() {
       {/* Main content — two columns */}
       <div className="flex-1 overflow-hidden flex">
         {/* Left column — Editor */}
-        <div className="flex-1 flex flex-col overflow-y-auto border-r border-white/[0.06]">
+        <div className="flex-1 flex flex-col overflow-y-auto border-r border-hair-soft">
           <div className="p-6 space-y-4 flex-1">
             {/* AI draft loading indicator */}
             {aiProcessing && !draftApplied && (
-              <div className="flex items-center gap-3 bg-[#1f1f23] border border-[rgba(52,211,153,0.2)] rounded-lg px-4 py-3">
-                <Loader2 size={16} className="animate-spin text-[#34d399]" />
-                <span className="text-[#a1a1aa] text-sm">
+              <div className="flex items-center gap-3 bg-tray border border-[rgba(10,156,212,0.2)] rounded-lg px-4 py-3">
+                <Loader2 size={16} className="animate-spin text-sky-ink" />
+                <span className="text-ink-muted text-sm">
                   Generating personalised email draft...
                 </span>
               </div>
@@ -206,7 +206,7 @@ export default function EmailComposePage() {
             {/* To + Greeting name */}
             <div className="flex gap-4">
               <div className="flex-1">
-                <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1.5 block">
+                <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">
                   To
                 </label>
                 <input
@@ -214,11 +214,11 @@ export default function EmailComposePage() {
                   value={toEmail}
                   onChange={(e) => setToEmail(e.target.value)}
                   placeholder="recipient@company.com"
-                  className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                  className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
                 />
               </div>
               <div className="w-48">
-                <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1.5 block">
+                <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">
                   Greeting name
                 </label>
                 <input
@@ -226,14 +226,14 @@ export default function EmailComposePage() {
                   value={greetingName}
                   onChange={(e) => setGreetingName(e.target.value)}
                   placeholder="e.g. Brianna"
-                  className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                  className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
                 />
               </div>
             </div>
 
             {/* CC field */}
             <div>
-              <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1.5 block">
+              <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">
                 CC
               </label>
               <input
@@ -241,13 +241,13 @@ export default function EmailComposePage() {
                 value={ccEmail}
                 onChange={(e) => setCcEmail(e.target.value)}
                 placeholder="cc@company.com, another@company.com"
-                className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
               />
             </div>
 
             {/* BCC field */}
             <div>
-              <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1.5 block">
+              <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">
                 BCC
               </label>
               <input
@@ -255,39 +255,39 @@ export default function EmailComposePage() {
                 value={bccEmail}
                 onChange={(e) => setBccEmail(e.target.value)}
                 placeholder="bcc@company.com"
-                className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
               />
             </div>
 
             {/* Subject field */}
             <div>
-              <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1.5 block">
+              <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">
                 Subject
               </label>
               <input
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
               />
             </div>
 
             {/* Body textarea */}
             <div className="flex-1">
-              <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1.5 block">
+              <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">
                 Email Body
               </label>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 rows={14}
-                className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all resize-none leading-relaxed"
+                className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
               />
             </div>
 
             {/* Attachments */}
             <div>
-              <label className="inline-flex items-center gap-1.5 text-[#a1a1aa] text-sm cursor-pointer hover:text-[#34d399] transition-colors">
+              <label className="inline-flex items-center gap-1.5 text-ink-muted text-sm cursor-pointer hover:text-sky-ink transition-colors">
                 <Paperclip size={14} />
                 Attach file
                 <input
@@ -302,13 +302,13 @@ export default function EmailComposePage() {
                   {attachments.map((file, i) => (
                     <span
                       key={i}
-                      className="flex items-center gap-1.5 bg-[#1f1f23] text-[#a1a1aa] text-xs px-3 py-1.5 rounded-lg"
+                      className="flex items-center gap-1.5 bg-tray text-ink-muted text-xs px-3 py-1.5 rounded-lg"
                     >
                       <Paperclip size={12} />
                       {file.name}
                       <button
                         onClick={() => removeAttachment(i)}
-                        className="text-[#52525b] hover:text-red-400 transition-colors"
+                        className="text-ink-dim hover:text-red-400 transition-colors"
                       >
                         <X size={12} />
                       </button>
@@ -320,9 +320,9 @@ export default function EmailComposePage() {
           </div>
 
           {/* Bottom bar */}
-          <div className="px-6 py-4 border-t border-white/[0.06] flex items-center">
+          <div className="px-6 py-4 border-t border-hair-soft flex items-center">
             <div className="flex items-center gap-3">
-              <label className="text-[#52525b] text-xs uppercase tracking-wider">
+              <label className="text-ink-dim text-xs uppercase tracking-wider">
                 Move to pipeline stage:
               </label>
               <select
@@ -330,7 +330,7 @@ export default function EmailComposePage() {
                 onChange={(e) =>
                   handleGroupChange(e.target.value as 'follow_up' | 'call_booked')
                 }
-                className="bg-[#18181b] border border-white/[0.06] rounded-lg px-3 py-2 text-sm text-[#a1a1aa] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                className="bg-paper border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink-muted focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
               >
                 <option value="follow_up">Follow Up</option>
                 <option value="call_booked">Call Booked</option>
@@ -340,19 +340,19 @@ export default function EmailComposePage() {
         </div>
 
         {/* Right column — Plain text preview */}
-        <div className="flex-1 overflow-y-auto bg-[#1f1f23]">
+        <div className="flex-1 overflow-y-auto bg-tray">
           <div className="p-6">
-            <span className="text-[#52525b] text-xs uppercase tracking-wider block mb-4">
+            <span className="text-ink-dim text-xs uppercase tracking-wider block mb-4">
               Email Preview
             </span>
             <div className="bg-white rounded-xl p-8 shadow-lg">
-              <p className="text-[#52525b] text-xs mb-4 font-mono">
+              <p className="text-ink-dim text-xs mb-4 font-mono">
                 To: {toEmail || '...'}{ccEmail ? ` | CC: ${ccEmail}` : ''}
               </p>
-              <p className="text-[#18181b] text-sm font-semibold mb-4 pb-3 border-b border-gray-200">
+              <p className="text-ink text-sm font-semibold mb-4 pb-3 border-b border-hair-soft">
                 {subject || 'No subject'}
               </p>
-              <pre className="text-[#3f3f46] text-sm whitespace-pre-wrap font-sans leading-relaxed">
+              <pre className="text-ink-faint text-sm whitespace-pre-wrap font-sans leading-relaxed">
                 {buildEmailText(body || '...', greetingName || 'there')}
               </pre>
             </div>

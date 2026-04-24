@@ -10,6 +10,8 @@ import {
   PhoneMissed,
   Loader2,
 } from 'lucide-react';
+import EyebrowLabel from '../components/ui/EyebrowLabel';
+import SectionHeading from '../components/ui/SectionHeading';
 
 interface CallStats {
   totalCalls: number;
@@ -64,28 +66,29 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-10 max-w-5xl mx-auto min-h-full bg-cream">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-start justify-between mb-8 gap-6">
         <div>
-          <h1 className="text-[#fafafa] text-2xl font-bold tracking-tight">
-            Dashboard
-          </h1>
-          <p className="text-[#a1a1aa] text-sm mt-1">
-            Your calling performance at a glance
+          <EyebrowLabel variant="pill" className="mb-4">
+            ANALYTICS · STATS
+          </EyebrowLabel>
+          <SectionHeading size="section">Performance.</SectionHeading>
+          <p className="text-ink-muted text-sm mt-3">
+            Your calling performance at a glance.
           </p>
         </div>
 
         {/* Period toggle */}
-        <div className="flex gap-1 bg-[#18181b] border border-white/[0.06] rounded-lg p-1">
+        <div className="flex gap-1 bg-paper border border-hair-soft rounded-lg p-1">
           {(['today', 'week', 'month', 'all'] as Period[]).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                 period === p
-                  ? 'bg-[rgba(52,211,153,0.15)] text-[#34d399]'
-                  : 'text-[#52525b] hover:text-[#a1a1aa]'
+                  ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink'
+                  : 'text-ink-dim hover:text-ink-muted'
               }`}
             >
               {periodLabels[p]}
@@ -96,7 +99,7 @@ export default function DashboardPage() {
 
       {loading || !stats ? (
         <div className="flex items-center justify-center h-64">
-          <Loader2 size={32} className="animate-spin text-[#34d399]" />
+          <Loader2 size={32} className="animate-spin text-sky-ink" />
         </div>
       ) : (
         <>
@@ -133,8 +136,8 @@ export default function DashboardPage() {
           {/* Disposition breakdown */}
           <div className="grid grid-cols-2 gap-4 mb-8">
             {/* Left — breakdown */}
-            <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6">
-              <h3 className="text-[#fafafa] text-sm font-bold mb-5">
+            <div className="bg-paper border border-hair-soft rounded-xl p-6">
+              <h3 className="text-ink text-sm font-bold mb-5">
                 Call Outcomes
               </h3>
               <div className="space-y-4">
@@ -143,7 +146,7 @@ export default function DashboardPage() {
                   label="Interested"
                   count={stats.interested}
                   total={stats.totalCalls}
-                  color="#34d399"
+                  color="#0a9cd4"
                 />
                 <OutcomeRow
                   icon={ThumbsDown}
@@ -157,7 +160,7 @@ export default function DashboardPage() {
                   label="No Answer"
                   count={stats.noAnswer}
                   total={stats.totalCalls}
-                  color="#a1a1aa"
+                  color="#55606a"
                 />
                 <OutcomeRow
                   icon={Voicemail}
@@ -170,17 +173,17 @@ export default function DashboardPage() {
             </div>
 
             {/* Right — best time + hourly chart */}
-            <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6">
-              <h3 className="text-[#fafafa] text-sm font-bold mb-5">
+            <div className="bg-paper border border-hair-soft rounded-xl p-6">
+              <h3 className="text-ink text-sm font-bold mb-5">
                 Calling Activity
               </h3>
 
               {stats.bestHour !== null && (
-                <div className="bg-[rgba(52,211,153,0.08)] border border-[rgba(52,211,153,0.15)] rounded-lg p-4 mb-5">
-                  <p className="text-[#a1a1aa] text-xs uppercase tracking-wider mb-1">
+                <div className="bg-[rgba(10,156,212,0.08)] border border-[rgba(10,156,212,0.15)] rounded-lg p-4 mb-5">
+                  <p className="text-ink-muted text-xs uppercase tracking-wider mb-1">
                     Best time for connects
                   </p>
-                  <p className="text-[#34d399] text-lg font-bold">
+                  <p className="text-sky-ink text-lg font-bold">
                     {formatHour(stats.bestHour)}
                   </p>
                 </div>
@@ -196,17 +199,17 @@ export default function DashboardPage() {
                     const width = maxCount > 0 ? (h.count / maxCount) * 100 : 0;
                     return (
                       <div key={h.hour} className="flex items-center gap-3">
-                        <span className="text-[#52525b] text-xs w-12 text-right font-mono">
+                        <span className="text-ink-dim text-xs w-12 text-right font-mono">
                           {formatHour(h.hour)}
                         </span>
-                        <div className="flex-1 h-5 bg-[#1f1f23] rounded overflow-hidden">
+                        <div className="flex-1 h-5 bg-tray rounded overflow-hidden">
                           <div
-                            className="h-full bg-[#34d399]/30 rounded relative"
+                            className="h-full bg-ink/30 rounded relative"
                             style={{ width: `${width}%` }}
                           >
                             {h.interested_count > 0 && (
                               <div
-                                className="absolute left-0 top-0 h-full bg-[#34d399] rounded"
+                                className="absolute left-0 top-0 h-full bg-ink rounded"
                                 style={{
                                   width: `${(h.interested_count / h.count) * 100}%`,
                                 }}
@@ -214,7 +217,7 @@ export default function DashboardPage() {
                             )}
                           </div>
                         </div>
-                        <span className="text-[#a1a1aa] text-xs w-6 font-mono">
+                        <span className="text-ink-muted text-xs w-6 font-mono">
                           {h.count}
                         </span>
                       </div>
@@ -222,7 +225,7 @@ export default function DashboardPage() {
                   })}
                 </div>
               ) : (
-                <p className="text-[#52525b] text-sm italic">
+                <p className="text-ink-dim text-sm italic">
                   No call data for this period yet
                 </p>
               )}
@@ -250,25 +253,25 @@ function StatCard({
   accent: boolean;
 }) {
   return (
-    <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-5">
+    <div className="bg-paper border border-hair-soft rounded-xl p-5">
       <div className="flex items-center gap-2 mb-3">
         <Icon
           size={16}
-          className={accent ? 'text-[#34d399]' : 'text-[#52525b]'}
+          className={accent ? 'text-sky-ink' : 'text-ink-dim'}
         />
-        <span className="text-[#52525b] text-xs font-medium uppercase tracking-wider">
+        <span className="text-ink-dim text-xs font-medium uppercase tracking-wider">
           {label}
         </span>
       </div>
       <p
         className={`text-2xl font-bold tracking-tight ${
-          accent ? 'text-[#34d399]' : 'text-[#fafafa]'
+          accent ? 'text-sky-ink' : 'text-ink'
         }`}
       >
         {value}
       </p>
       {subtitle && (
-        <p className="text-[#52525b] text-xs mt-1">{subtitle}</p>
+        <p className="text-ink-dim text-xs mt-1">{subtitle}</p>
       )}
     </div>
   );
@@ -291,17 +294,17 @@ function OutcomeRow({
   return (
     <div className="flex items-center gap-3">
       <Icon size={16} style={{ color }} />
-      <span className="text-[#a1a1aa] text-sm flex-1">{label}</span>
-      <span className="text-[#fafafa] text-sm font-medium w-8 text-right">
+      <span className="text-ink-muted text-sm flex-1">{label}</span>
+      <span className="text-ink text-sm font-medium w-8 text-right">
         {count}
       </span>
-      <div className="w-24 h-2 bg-[#1f1f23] rounded-full overflow-hidden">
+      <div className="w-24 h-2 bg-tray rounded-full overflow-hidden">
         <div
           className="h-full rounded-full"
           style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </div>
-      <span className="text-[#52525b] text-xs w-10 text-right">{pct}%</span>
+      <span className="text-ink-dim text-xs w-10 text-right">{pct}%</span>
     </div>
   );
 }

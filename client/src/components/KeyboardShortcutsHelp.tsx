@@ -52,17 +52,17 @@ export default function KeyboardShortcutsHelp({
       <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 pointer-events-none">
         <div
           ref={panelRef}
-          className="w-full max-w-md bg-[#18181b] border border-white/[0.06] rounded-xl shadow-2xl pointer-events-auto overflow-hidden"
+          className="w-full max-w-md bg-paper border border-hair-soft rounded-xl shadow-2xl pointer-events-auto overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-            <h2 className="text-sm font-semibold text-[#fafafa]">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-hair-soft">
+            <h2 className="text-sm font-semibold text-ink">
               Keyboard Shortcuts
             </h2>
             <button
               onClick={onClose}
-              className="text-[#52525b] hover:text-[#a1a1aa] transition-colors"
+              className="text-ink-dim hover:text-ink-muted transition-colors"
             >
               <X size={16} />
             </button>
@@ -75,8 +75,8 @@ export default function KeyboardShortcutsHelp({
                 key={i}
                 className="flex items-center justify-between py-1.5"
               >
-                <span className="text-sm text-[#a1a1aa]">{s.description}</span>
-                <kbd className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-[#a1a1aa] bg-[#09090b] border border-white/[0.06] rounded">
+                <span className="text-sm text-ink-muted">{s.description}</span>
+                <kbd className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-ink-muted bg-cream border border-hair-soft rounded">
                   {s.label}
                 </kbd>
               </div>
@@ -84,8 +84,8 @@ export default function KeyboardShortcutsHelp({
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-2 border-t border-white/[0.06]">
-            <p className="text-[10px] text-[#52525b]">
+          <div className="px-4 py-2 border-t border-hair-soft">
+            <p className="text-[10px] text-ink-dim">
               Press Esc to close
             </p>
           </div>

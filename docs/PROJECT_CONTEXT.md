@@ -69,7 +69,7 @@ GitHub: https://github.com/oxyscale/oxycrm
 |---|---|---|
 | Frontend framework | React 18 | |
 | Build tool | Vite | |
-| Styling | Tailwind CSS | Dark mode only |
+| Styling | Tailwind CSS | Light editorial theme (Cream/Ink/Sky) — see `CLAUDE.md` Brand rules |
 | Language | TypeScript (strict) | |
 | Backend | Node.js + Express | |
 | Database | SQLite via `better-sqlite3` | WAL mode |

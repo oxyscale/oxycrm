@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import * as api from '../services/api';
 import type { Lead } from '../types';
+import EyebrowLabel from '../components/ui/EyebrowLabel';
 
 export default function BookMeetingPage() {
   const { leadId } = useParams<{ leadId: string }>();
@@ -145,7 +146,7 @@ export default function BookMeetingPage() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Loader2 size={24} className="animate-spin text-[#52525b]" />
+        <Loader2 size={24} className="animate-spin text-ink-dim" />
       </div>
     );
   }
@@ -153,42 +154,45 @@ export default function BookMeetingPage() {
   if (!lead) return null;
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-2xl mx-auto px-6 py-8">
+    <div className="h-full overflow-y-auto bg-cream">
+      <div className="max-w-2xl mx-auto px-6 py-10">
         {/* Header */}
         <button
           onClick={() => navigate(`/leads/${lead.id}`)}
-          className="flex items-center gap-2 text-[#52525b] hover:text-[#a1a1aa] text-sm mb-6 transition-colors"
+          className="flex items-center gap-2 text-ink-dim hover:text-sky-ink text-sm mb-6 transition-colors"
         >
           <ArrowLeft size={16} />
           Back to {lead.name}
         </button>
 
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-[#fafafa] mb-1">
-            Book a Meeting
+          <EyebrowLabel variant="pill" className="mb-4">
+            CALENDAR · BOOK
+          </EyebrowLabel>
+          <h1 className="text-[34px] font-semibold text-sky-ink tracking-section mb-1">
+            Book a meeting.
           </h1>
-          <p className="text-[#52525b] text-sm">
+          <p className="text-ink-muted text-sm">
             with {lead.name}{lead.company ? ` at ${lead.company}` : ''}
           </p>
         </div>
 
         {/* Google Calendar auth check */}
         {checkingAuth && (
-          <div className="flex items-center gap-2 text-[#a1a1aa] text-sm mb-6">
+          <div className="flex items-center gap-2 text-ink-muted text-sm mb-6">
             <Loader2 size={14} className="animate-spin" />
             Checking Google Calendar connection...
           </div>
         )}
 
         {calendarAuthenticated === false && !checkingAuth && (
-          <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6 mb-6">
-            <p className="text-[#a1a1aa] text-sm mb-4">
+          <div className="bg-paper border border-hair-soft rounded-xl p-6 mb-6">
+            <p className="text-ink-muted text-sm mb-4">
               Connect your Google Calendar to book meetings and see your schedule.
             </p>
             <button
               onClick={handleConnectGoogle}
-              className="bg-[#1f1f23] border border-white/[0.06] text-[#a1a1aa] rounded-lg px-5 py-3 text-sm hover:bg-white/[0.03] hover:text-[#fafafa] transition-all flex items-center gap-2"
+              className="bg-tray border border-hair-soft text-ink-muted rounded-lg px-5 py-3 text-sm hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all flex items-center gap-2"
             >
               <ExternalLink size={14} />
               Connect Google Calendar
@@ -197,10 +201,10 @@ export default function BookMeetingPage() {
         )}
 
         {/* Meeting form */}
-        <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6 space-y-5">
+        <div className="bg-paper border border-hair-soft rounded-xl p-6 space-y-5">
           {/* Their email */}
           <div>
-            <label className="text-[#52525b] text-xs font-medium block mb-1.5">
+            <label className="text-ink-dim text-xs font-medium block mb-1.5">
               Their Email
             </label>
             <input
@@ -208,13 +212,13 @@ export default function BookMeetingPage() {
               value={meetingEmail}
               onChange={(e) => setMeetingEmail(e.target.value)}
               placeholder="client@example.com"
-              className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+              className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
             />
           </div>
 
           {/* Additional guests */}
           <div>
-            <label className="text-[#52525b] text-xs font-medium block mb-1.5 flex items-center gap-1">
+            <label className="text-ink-dim text-xs font-medium block mb-1.5 flex items-center gap-1">
               <UserPlus size={12} />
               Additional Guests
             </label>
@@ -233,7 +237,7 @@ export default function BookMeetingPage() {
                     }
                   }
                 }}
-                className="flex-1 bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+                className="flex-1 bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
               />
               <button
                 type="button"
@@ -247,7 +251,7 @@ export default function BookMeetingPage() {
                     }
                   }
                 }}
-                className="bg-[#1f1f23] border border-white/[0.06] rounded-lg px-3 py-2.5 text-[#52525b] hover:text-[#a1a1aa] transition-all text-sm"
+                className="bg-tray border border-hair-soft rounded-lg px-3 py-2.5 text-ink-dim hover:text-ink-muted transition-all text-sm"
               >
                 Add
               </button>
@@ -257,7 +261,7 @@ export default function BookMeetingPage() {
                 {meetingGuests.split(',').map((guest, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 bg-[#1f1f23] border border-white/[0.06] text-[#a1a1aa] text-xs px-2.5 py-1 rounded-full"
+                    className="inline-flex items-center gap-1 bg-tray border border-hair-soft text-ink-muted text-xs px-2.5 py-1 rounded-full"
                   >
                     {guest}
                     <button
@@ -265,7 +269,7 @@ export default function BookMeetingPage() {
                         const guests = meetingGuests.split(',').filter((_, j) => j !== i);
                         setMeetingGuests(guests.join(','));
                       }}
-                      className="text-[#52525b] hover:text-[#fafafa] transition-all"
+                      className="text-ink-dim hover:text-ink transition-all"
                     >
                       <X size={10} />
                     </button>
@@ -278,29 +282,29 @@ export default function BookMeetingPage() {
           {/* Date, Time, Duration */}
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="text-[#52525b] text-xs font-medium block mb-1.5">Date</label>
+              <label className="text-ink-dim text-xs font-medium block mb-1.5">Date</label>
               <input
                 type="date"
                 value={meetingDate}
                 onChange={(e) => setMeetingDate(e.target.value)}
-                className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all [color-scheme:dark]"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:dark]"
               />
             </div>
             <div>
-              <label className="text-[#52525b] text-xs font-medium block mb-1.5">Time</label>
+              <label className="text-ink-dim text-xs font-medium block mb-1.5">Time</label>
               <input
                 type="time"
                 value={meetingTime}
                 onChange={(e) => setMeetingTime(e.target.value)}
-                className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all [color-scheme:dark]"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:dark]"
               />
             </div>
             <div>
-              <label className="text-[#52525b] text-xs font-medium block mb-1.5">Duration</label>
+              <label className="text-ink-dim text-xs font-medium block mb-1.5">Duration</label>
               <select
                 value={meetingDuration}
                 onChange={(e) => setMeetingDuration(e.target.value)}
-                className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
               >
                 <option value="15">15 min</option>
                 <option value="30">30 min</option>
@@ -313,11 +317,11 @@ export default function BookMeetingPage() {
 
           {/* Timezone */}
           <div>
-            <label className="text-[#52525b] text-xs font-medium block mb-1.5">Timezone</label>
+            <label className="text-ink-dim text-xs font-medium block mb-1.5">Timezone</label>
             <select
               value={meetingTimezone}
               onChange={(e) => setMeetingTimezone(e.target.value)}
-              className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+              className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
             >
               <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
               <option value="Australia/Melbourne">Melbourne (AEST/AEDT)</option>
@@ -331,20 +335,20 @@ export default function BookMeetingPage() {
 
           {/* Calendar events for selected day */}
           {meetingDate && calendarAuthenticated && (
-            <div className="bg-[#1f1f23] border border-white/[0.06] rounded-lg p-3">
+            <div className="bg-tray border border-hair-soft rounded-lg p-3">
               <div className="flex items-center gap-2 mb-2">
-                <Calendar size={12} className="text-[#52525b]" />
-                <span className="text-[#52525b] text-xs font-medium uppercase tracking-wider">
+                <Calendar size={12} className="text-ink-dim" />
+                <span className="text-ink-dim text-xs font-medium uppercase tracking-wider">
                   Your schedule for {meetingDate}
                 </span>
               </div>
               {loadingEvents ? (
-                <div className="flex items-center gap-2 text-[#52525b] text-xs py-1">
+                <div className="flex items-center gap-2 text-ink-dim text-xs py-1">
                   <Loader2 size={12} className="animate-spin" />
                   Loading events...
                 </div>
               ) : dayEvents.length === 0 ? (
-                <p className="text-[#52525b] text-xs py-1">No events scheduled</p>
+                <p className="text-ink-dim text-xs py-1">No events scheduled</p>
               ) : (
                 <div className="space-y-1">
                   {dayEvents.map((event, i) => {
@@ -355,8 +359,8 @@ export default function BookMeetingPage() {
                       ? new Date(event.endTime).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false })
                       : '';
                     return (
-                      <div key={i} className="text-xs text-[#a1a1aa] flex items-center gap-2">
-                        <span className="text-[#52525b] font-mono min-w-[90px]">
+                      <div key={i} className="text-xs text-ink-muted flex items-center gap-2">
+                        <span className="text-ink-dim font-mono min-w-[90px]">
                           {startTime} - {endTime}
                         </span>
                         <span className="truncate">{event.summary}</span>
@@ -370,14 +374,14 @@ export default function BookMeetingPage() {
 
           {/* Meeting type toggle */}
           <div>
-            <label className="text-[#52525b] text-xs font-medium block mb-2">Meeting Type</label>
+            <label className="text-ink-dim text-xs font-medium block mb-2">Meeting Type</label>
             <div className="flex gap-3">
               <button
                 onClick={() => setMeetingType('google_meet')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-all ${
                   meetingType === 'google_meet'
-                    ? 'bg-[rgba(52,211,153,0.1)] border-[rgba(52,211,153,0.3)] text-[#34d399]'
-                    : 'bg-[#1f1f23] border-white/[0.06] text-[#52525b] hover:text-[#a1a1aa]'
+                    ? 'bg-[rgba(10,156,212,0.1)] border-[rgba(10,156,212,0.3)] text-sky-ink'
+                    : 'bg-tray border-hair-soft text-ink-dim hover:text-ink-muted'
                 }`}
               >
                 <Video size={14} />
@@ -387,8 +391,8 @@ export default function BookMeetingPage() {
                 onClick={() => setMeetingType('in_person')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-all ${
                   meetingType === 'in_person'
-                    ? 'bg-[rgba(52,211,153,0.1)] border-[rgba(52,211,153,0.3)] text-[#34d399]'
-                    : 'bg-[#1f1f23] border-white/[0.06] text-[#52525b] hover:text-[#a1a1aa]'
+                    ? 'bg-[rgba(10,156,212,0.1)] border-[rgba(10,156,212,0.3)] text-sky-ink'
+                    : 'bg-tray border-hair-soft text-ink-dim hover:text-ink-muted'
                 }`}
               >
                 <MapPin size={14} />
@@ -400,26 +404,26 @@ export default function BookMeetingPage() {
           {/* Location (in-person only) */}
           {meetingType === 'in_person' && (
             <div>
-              <label className="text-[#52525b] text-xs font-medium block mb-1.5">Location / Address</label>
+              <label className="text-ink-dim text-xs font-medium block mb-1.5">Location / Address</label>
               <input
                 type="text"
                 value={meetingLocation}
                 onChange={(e) => setMeetingLocation(e.target.value)}
                 placeholder="e.g. 123 Collins St, Melbourne VIC 3000"
-                className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
               />
             </div>
           )}
 
           {/* Meeting notes */}
           <div>
-            <label className="text-[#52525b] text-xs font-medium block mb-1.5">Meeting Notes</label>
+            <label className="text-ink-dim text-xs font-medium block mb-1.5">Meeting Notes</label>
             <textarea
               value={meetingNotes}
               onChange={(e) => setMeetingNotes(e.target.value)}
               placeholder="What's the meeting about..."
               rows={2}
-              className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all resize-none"
+              className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all resize-none"
             />
           </div>
 
@@ -433,17 +437,17 @@ export default function BookMeetingPage() {
 
           {/* Booking success */}
           {bookingSuccess && (
-            <div className="bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] rounded-lg p-4">
+            <div className="bg-[rgba(10,156,212,0.1)] border border-[rgba(10,156,212,0.2)] rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
-                <CheckCircle size={16} className="text-[#34d399]" />
-                <span className="text-[#34d399] text-sm font-medium">Meeting booked</span>
+                <CheckCircle size={16} className="text-sky-ink" />
+                <span className="text-sky-ink text-sm font-medium">Meeting booked</span>
               </div>
               <div className="flex flex-col gap-1.5">
                 <a
                   href={bookingSuccess.htmlLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#a1a1aa] text-xs hover:text-[#fafafa] flex items-center gap-1 transition-all"
+                  className="text-ink-muted text-xs hover:text-ink flex items-center gap-1 transition-all"
                 >
                   <ExternalLink size={10} />
                   View in Google Calendar
@@ -453,7 +457,7 @@ export default function BookMeetingPage() {
                     href={bookingSuccess.meetLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#a1a1aa] text-xs hover:text-[#fafafa] flex items-center gap-1 transition-all"
+                    className="text-ink-muted text-xs hover:text-ink flex items-center gap-1 transition-all"
                   >
                     <Video size={10} />
                     Google Meet link
@@ -475,7 +479,7 @@ export default function BookMeetingPage() {
               !!bookingSuccess
             }
             onClick={handleBookMeeting}
-            className="w-full bg-[#34d399] text-[#09090b] font-bold rounded-lg px-5 py-3 text-sm hover:bg-[#34d399]/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-ink text-white font-bold rounded-lg px-5 py-3 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {bookingMeeting ? (
               <Loader2 size={14} className="animate-spin" />

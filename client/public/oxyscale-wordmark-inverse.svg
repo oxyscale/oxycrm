@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 48">
+  <text
+    x="0" y="36"
+    font-family="Geist, Inter, 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
+    font-weight="600"
+    font-size="40"
+    letter-spacing="-0.035em"
+  >
+    <tspan fill="#ffffff">Oxy</tspan><tspan fill="#5ec5e6">Scale</tspan>
+  </text>
+</svg>

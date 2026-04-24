@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { Home, Users, Phone, Kanban, FolderKanban, Brain, BarChart3, HelpCircle, Settings } from 'lucide-react';
-import Logo from './Logo';
 import SearchBar from './SearchBar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -63,15 +62,22 @@ export default function Layout() {
   useKeyboardShortcuts(shortcuts);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-cream">
       {/* Sidebar */}
-      <aside className="w-16 flex-shrink-0 bg-[#18181b] border-r border-white/[0.06] flex flex-col items-center py-6 gap-8">
-        {/* Logo */}
+      <aside className="w-16 flex-shrink-0 bg-paper border-r border-hair-soft flex flex-col items-center py-6 gap-8">
+        {/* OxyScale favicon */}
         <button
           onClick={() => navigate('/')}
-          className="transition-all duration-200 hover:opacity-80"
+          className="transition-all duration-200 hover:scale-105"
+          title="OxyScale"
         >
-          <Logo variant="stacked" className="text-[10px]" />
+          <img
+            src="/favicon.svg"
+            alt="OxyScale"
+            width={28}
+            height={28}
+            className="block"
+          />
         </button>
 
         {/* Navigation */}
@@ -89,12 +95,12 @@ export default function Layout() {
                 title={label}
                 className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200 ${
                   isActive
-                    ? 'bg-[rgba(52,211,153,0.15)] text-[#34d399]'
-                    : 'text-[#52525b] hover:text-[#a1a1aa] hover:bg-white/[0.03]'
+                    ? 'bg-sky-wash text-sky-ink'
+                    : 'text-sky-ink hover:bg-sky-wash/60'
                 }`}
               >
                 {isActive && (
-                  <div className="absolute left-[-13px] top-1/2 -translate-y-1/2 w-[3px] h-5 bg-[#34d399] rounded-r" />
+                  <div className="absolute left-[-13px] top-1/2 -translate-y-1/2 w-[3px] h-5 bg-sky-ink rounded-r" />
                 )}
                 <Icon size={20} />
               </button>
@@ -109,14 +115,14 @@ export default function Layout() {
         <button
           onClick={openShortcuts}
           title="Keyboard shortcuts"
-          className="w-10 h-10 flex items-center justify-center rounded-lg text-[#52525b] hover:text-[#a1a1aa] hover:bg-white/[0.03] transition-all duration-200 mb-2"
+          className="w-10 h-10 flex items-center justify-center rounded-lg text-sky-ink hover:bg-sky-wash/60 transition-all duration-200 mb-2"
         >
           <HelpCircle size={18} />
         </button>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto bg-cream">
         <Outlet />
       </main>
 

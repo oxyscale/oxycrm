@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!--
+    OxyScale favicon.
+    Black "O" (ink #0b0d0e) with a blue "S" (sky-ink #0c8dbf) nested on top.
+    The S is sized smaller than the O so its curves sit cleanly inside the
+    O's silhouette — no terminals protruding into whitespace, no sliver of
+    O-black poking out above or below the S's horizontal strokes. The size
+    delta leaves a visible black rim of the O all the way around the S so
+    the O still reads as a distinct letter.
+  -->
+  <text
+    x="50%" y="52%"
+    text-anchor="middle"
+    dominant-baseline="central"
+    font-family="Geist, Inter, 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
+    font-weight="700"
+    font-size="480"
+    letter-spacing="-0.035em"
+    fill="#0b0d0e"
+  >O</text>
+  <text
+    x="50%" y="52%"
+    text-anchor="middle"
+    dominant-baseline="central"
+    font-family="Geist, Inter, 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
+    font-weight="700"
+    font-size="420"
+    letter-spacing="-0.035em"
+    fill="#0c8dbf"
+  >S</text>
+</svg>

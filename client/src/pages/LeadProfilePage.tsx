@@ -24,6 +24,8 @@ import {
   MicOff,
 } from 'lucide-react';
 import * as api from '../services/api';
+import EyebrowLabel from '../components/ui/EyebrowLabel';
+import PillButton from '../components/ui/PillButton';
 import type {
   Lead,
   CallLog,
@@ -95,19 +97,19 @@ function dispositionLabel(disposition: string) {
 
 function dispositionBadgeStyle(disposition: string) {
   const styles: Record<string, string> = {
-    interested: 'bg-[rgba(52,211,153,0.15)] text-[#34d399]',
+    interested: 'bg-[rgba(10,156,212,0.15)] text-sky-ink',
     not_interested: 'bg-red-500/15 text-red-400',
     no_answer: 'bg-amber-500/15 text-amber-400',
     voicemail: 'bg-blue-500/15 text-blue-400',
-    wrong_number: 'bg-[#1f1f23] text-[#a1a1aa]',
+    wrong_number: 'bg-tray text-ink-muted',
   };
-  return styles[disposition] || 'bg-[#1f1f23] text-[#a1a1aa]';
+  return styles[disposition] || 'bg-tray text-ink-muted';
 }
 
 function activityIcon(type: ActivityType) {
   switch (type) {
     case 'call':
-      return <Phone size={14} className="text-[#34d399]" />;
+      return <Phone size={14} className="text-sky-ink" />;
     case 'note':
       return <FileText size={14} className="text-blue-400" />;
     case 'email':
@@ -115,23 +117,23 @@ function activityIcon(type: ActivityType) {
     case 'stage_change':
       return <ArrowRightLeft size={14} className="text-purple-400" />;
     case 'meeting':
-      return <CalendarDays size={14} className="text-[#34d399]" />;
+      return <CalendarDays size={14} className="text-sky-ink" />;
     case 'temperature_change':
       return <Thermometer size={14} className="text-orange-400" />;
     default:
-      return <Clock size={14} className="text-[#52525b]" />;
+      return <Clock size={14} className="text-ink-dim" />;
   }
 }
 
 function activityColorBar(type: ActivityType) {
   switch (type) {
-    case 'call': return 'border-l-[#34d399]';
+    case 'call': return 'border-l-sky-ink';
     case 'note': return 'border-l-blue-400';
     case 'email': return 'border-l-amber-400';
     case 'stage_change': return 'border-l-purple-400';
-    case 'meeting': return 'border-l-[#34d399]';
+    case 'meeting': return 'border-l-sky-ink';
     case 'temperature_change': return 'border-l-orange-400';
-    default: return 'border-l-[#52525b]';
+    default: return 'border-l-ink-dim';
   }
 }
 
@@ -140,7 +142,7 @@ function temperatureColor(temp: Temperature | null) {
     case 'hot': return 'bg-red-500/15 text-red-400 border-red-500/30';
     case 'warm': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
     case 'cold': return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
-    default: return 'bg-[#1f1f23] text-[#52525b] border-white/[0.06]';
+    default: return 'bg-tray text-ink-dim border-hair-soft';
   }
 }
 
@@ -209,7 +211,7 @@ function InlineEdit({
             if (e.key === 'Escape') cancel();
           }}
           onBlur={commit}
-          className={`bg-[#1f1f23] border border-[rgba(52,211,153,0.4)] rounded px-2 py-0.5 text-[#fafafa] focus:outline-none ${className}`}
+          className={`bg-tray border border-[rgba(10,156,212,0.4)] rounded px-2 py-0.5 text-ink focus:outline-none ${className}`}
           placeholder={placeholder}
         />
       </div>
@@ -219,13 +221,13 @@ function InlineEdit({
   return (
     <button
       onClick={() => setEditing(true)}
-      className={`group flex items-center gap-1.5 hover:text-[#fafafa] transition-all rounded px-1 -mx-1 hover:bg-white/[0.03] ${className}`}
+      className={`group flex items-center gap-1.5 hover:text-ink transition-all rounded px-1 -mx-1 hover:bg-[rgba(11,13,14,0.03)] ${className}`}
       title="Click to edit"
     >
-      <span className={value ? '' : 'text-[#52525b] italic'}>
+      <span className={value ? '' : 'text-ink-dim italic'}>
         {value || placeholder || 'Add...'}
       </span>
-      <Pencil size={11} className="text-[#52525b] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+      <Pencil size={11} className="text-ink-dim opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
     </button>
   );
 }
@@ -495,22 +497,24 @@ export default function LeadProfilePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Loader2 size={24} className="animate-spin text-[#52525b]" />
+        <Loader2 size={24} className="animate-spin text-ink-dim" />
       </div>
     );
   }
 
   if (error || !lead) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full bg-cream">
         <div className="text-center">
-          <p className="text-[#a1a1aa] mb-4">{error || 'Lead not found'}</p>
-          <button
+          <p className="text-ink-muted mb-4">{error || 'Lead not found'}</p>
+          <PillButton
+            variant="primary"
+            size="md"
+            trailing="none"
             onClick={() => navigate(-1)}
-            className="bg-[#34d399] text-[#09090b] font-bold rounded-lg px-6 py-3 hover:bg-[#34d399]/90 transition-all"
           >
-            Go Back
-          </button>
+            Go back
+          </PillButton>
         </div>
       </div>
     );
@@ -532,25 +536,28 @@ export default function LeadProfilePage() {
   ];
 
   return (
-    <div className="p-8 max-w-[1400px] mx-auto">
+    <div className="p-10 max-w-[1400px] mx-auto bg-cream min-h-full">
       {/* ── Back button ─────────────────────────────────────── */}
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-[#52525b] hover:text-[#a1a1aa] transition-all text-sm mb-6"
+        className="flex items-center gap-2 text-ink-dim hover:text-sky-ink transition-all text-sm mb-6"
       >
         <ArrowLeft size={16} />
         Back
       </button>
 
       {/* ── Header section ──────────────────────────────────── */}
-      <div className="mb-6">
+      <div className="mb-8">
+        <EyebrowLabel variant="pill" className="mb-4">
+          LEAD · PROFILE
+        </EyebrowLabel>
         {/* Name */}
         <div className="mb-1">
           <InlineEdit
             value={lead.name}
             onSave={(val) => handleUpdateField('name', val)}
             placeholder="Lead name"
-            className="text-[#fafafa] text-2xl font-bold tracking-tight"
+            className="text-sky-ink text-[34px] font-semibold tracking-section"
           />
         </div>
 
@@ -560,48 +567,48 @@ export default function LeadProfilePage() {
             value={lead.company || ''}
             onSave={(val) => handleUpdateField('company', val)}
             placeholder="Add company"
-            className="text-[#a1a1aa] text-sm"
+            className="text-ink-muted text-sm"
           />
         </div>
 
         {/* Contact info row */}
         <div className="flex items-center gap-5 flex-wrap">
-          <div className="flex items-center gap-1.5 text-[#a1a1aa] text-sm">
-            <Phone size={13} className="text-[#52525b] flex-shrink-0" />
+          <div className="flex items-center gap-1.5 text-ink-muted text-sm">
+            <Phone size={13} className="text-ink-dim flex-shrink-0" />
             <InlineEdit
               value={lead.phone}
               onSave={(val) => handleUpdateField('phone', val)}
               placeholder="Phone number"
-              className="text-sm text-[#a1a1aa]"
+              className="text-sm text-ink-muted"
             />
           </div>
-          <div className="flex items-center gap-1.5 text-[#a1a1aa] text-sm">
-            <Mail size={13} className="text-[#52525b] flex-shrink-0" />
+          <div className="flex items-center gap-1.5 text-ink-muted text-sm">
+            <Mail size={13} className="text-ink-dim flex-shrink-0" />
             <InlineEdit
               value={lead.email || ''}
               onSave={(val) => handleUpdateField('email', val)}
               placeholder="Add email"
-              className="text-sm text-[#a1a1aa]"
+              className="text-sm text-ink-muted"
             />
           </div>
-          <div className="flex items-center gap-1.5 text-[#a1a1aa] text-sm">
-            <Globe size={13} className="text-[#52525b] flex-shrink-0" />
+          <div className="flex items-center gap-1.5 text-ink-muted text-sm">
+            <Globe size={13} className="text-ink-dim flex-shrink-0" />
             <InlineEdit
               value={lead.website || ''}
               onSave={(val) => handleUpdateField('website', val)}
               placeholder="Add website"
-              className="text-sm text-[#a1a1aa]"
+              className="text-sm text-ink-muted"
             />
           </div>
         </div>
       </div>
 
       {/* ── Quick actions bar ───────────────────────────────── */}
-      <div className="flex items-center gap-3 flex-wrap mb-8 pb-6 border-b border-white/[0.06]">
+      <div className="flex items-center gap-3 flex-wrap mb-8 pb-6 border-b border-hair-soft">
         {/* Call button */}
         <button
           onClick={() => navigate('/dialler', { state: { loadLeadId: lead.id } })}
-          className="flex items-center gap-2 bg-[#34d399] text-[#09090b] font-bold rounded-lg px-4 py-2.5 text-sm hover:bg-[#34d399]/90 transition-all"
+          className="flex items-center gap-2 bg-ink text-white font-bold rounded-lg px-4 py-2.5 text-sm hover:bg-ink/90 transition-all"
         >
           <Phone size={15} />
           Call
@@ -610,7 +617,7 @@ export default function LeadProfilePage() {
         {/* Email button */}
         <button
           onClick={() => navigate(`/compose/${lead.id}`)}
-          className="flex items-center gap-2 bg-transparent text-[#a1a1aa] border border-white/[0.06] rounded-lg px-4 py-2.5 text-sm hover:bg-white/[0.03] hover:text-[#fafafa] transition-all"
+          className="flex items-center gap-2 bg-transparent text-ink-muted border border-hair-soft rounded-lg px-4 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all"
         >
           <Mail size={15} />
           Email
@@ -619,7 +626,7 @@ export default function LeadProfilePage() {
         {/* Book Meeting button */}
         <button
           onClick={() => navigate(`/book-meeting/${lead.id}`)}
-          className="flex items-center gap-2 bg-transparent text-[#a1a1aa] border border-white/[0.06] rounded-lg px-4 py-2.5 text-sm hover:bg-white/[0.03] hover:text-[#fafafa] transition-all"
+          className="flex items-center gap-2 bg-transparent text-ink-muted border border-hair-soft rounded-lg px-4 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all"
         >
           <CalendarDays size={15} />
           Book Meeting
@@ -634,7 +641,7 @@ export default function LeadProfilePage() {
               document.getElementById('new-note-input')?.focus();
             }, 100);
           }}
-          className="flex items-center gap-2 bg-transparent text-[#a1a1aa] border border-white/[0.06] rounded-lg px-4 py-2.5 text-sm hover:bg-white/[0.03] hover:text-[#fafafa] transition-all"
+          className="flex items-center gap-2 bg-transparent text-ink-muted border border-hair-soft rounded-lg px-4 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all"
         >
           <Plus size={15} />
           Add Note
@@ -648,15 +655,15 @@ export default function LeadProfilePage() {
           <button
             onClick={() => setShowStageDropdown(!showStageDropdown)}
             disabled={updatingStage}
-            className="flex items-center gap-2 bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-2.5 text-sm text-[#a1a1aa] hover:bg-white/[0.03] hover:text-[#fafafa] transition-all disabled:opacity-50"
+            className="flex items-center gap-2 bg-paper border border-hair-soft rounded-lg px-4 py-2.5 text-sm text-ink-muted hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all disabled:opacity-50"
           >
             {updatingStage ? (
               <Loader2 size={13} className="animate-spin" />
             ) : (
-              <ArrowRightLeft size={13} className="text-[#52525b]" />
+              <ArrowRightLeft size={13} className="text-ink-dim" />
             )}
             {stageLabel(lead.pipelineStage)}
-            <ChevronDown size={13} className="text-[#52525b]" />
+            <ChevronDown size={13} className="text-ink-dim" />
           </button>
           {showStageDropdown && (
             <>
@@ -664,15 +671,15 @@ export default function LeadProfilePage() {
                 className="fixed inset-0 z-10"
                 onClick={() => setShowStageDropdown(false)}
               />
-              <div className="absolute right-0 top-full mt-1 z-20 bg-[#18181b] border border-white/[0.06] rounded-xl shadow-xl overflow-hidden min-w-[180px]">
+              <div className="absolute right-0 top-full mt-1 z-20 bg-paper border border-hair-soft rounded-xl shadow-xl overflow-hidden min-w-[180px]">
                 {PIPELINE_STAGES.map((s) => (
                   <button
                     key={s.value}
                     onClick={() => handleStageChange(s.value)}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/[0.04] transition-all flex items-center gap-2 ${
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] transition-all flex items-center gap-2 ${
                       lead.pipelineStage === s.value
-                        ? 'text-[#34d399]'
-                        : 'text-[#a1a1aa]'
+                        ? 'text-sky-ink'
+                        : 'text-ink-muted'
                     }`}
                   >
                     {lead.pipelineStage === s.value && <Check size={13} />}
@@ -687,8 +694,8 @@ export default function LeadProfilePage() {
         </div>
 
         {/* Follow-up date */}
-        <div className="flex items-center gap-2 bg-[#18181b] border border-white/[0.06] rounded-lg px-3 py-1.5">
-          <CalendarDays size={13} className="text-[#52525b] flex-shrink-0" />
+        <div className="flex items-center gap-2 bg-paper border border-hair-soft rounded-lg px-3 py-1.5">
+          <CalendarDays size={13} className="text-ink-dim flex-shrink-0" />
           <input
             type="date"
             value={lead.followUpDate || ''}
@@ -705,7 +712,7 @@ export default function LeadProfilePage() {
                 console.error('Failed to update follow-up date:', err);
               }
             }}
-            className="bg-transparent text-[#a1a1aa] text-xs focus:outline-none [color-scheme:dark] cursor-pointer"
+            className="bg-transparent text-ink-muted text-xs focus:outline-none [color-scheme:dark] cursor-pointer"
             title="Follow-up date"
           />
           {lead.followUpDate && (() => {
@@ -728,7 +735,7 @@ export default function LeadProfilePage() {
                   console.error('Failed to clear follow-up date:', err);
                 }
               }}
-              className="text-[#52525b] hover:text-[#a1a1aa] transition-colors"
+              className="text-ink-dim hover:text-ink-muted transition-colors"
               title="Clear follow-up date"
             >
               <X size={12} />
@@ -737,7 +744,7 @@ export default function LeadProfilePage() {
         </div>
 
         {/* Temperature toggle */}
-        <div className="flex items-center gap-1 bg-[#18181b] border border-white/[0.06] rounded-lg p-1">
+        <div className="flex items-center gap-1 bg-paper border border-hair-soft rounded-lg p-1">
           {TEMPERATURES.map((temp) => (
             <button
               key={temp}
@@ -746,7 +753,7 @@ export default function LeadProfilePage() {
               className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-all border ${
                 lead.temperature === temp
                   ? temperatureActiveStyle(temp)
-                  : 'border-transparent text-[#52525b] hover:text-[#a1a1aa]'
+                  : 'border-transparent text-ink-dim hover:text-ink-muted'
               } disabled:opacity-50`}
             >
               {temp}
@@ -760,15 +767,15 @@ export default function LeadProfilePage() {
         {/* ── Left: tabbed content ──────────────────────────── */}
         <div className="flex-1 min-w-0">
           {/* Tab bar */}
-          <div className="flex items-center gap-1 mb-6 bg-[#18181b] border border-white/[0.06] rounded-lg p-1 w-fit">
+          <div className="flex items-center gap-1 mb-6 bg-paper border border-hair-soft rounded-lg p-1 w-fit">
             {tabs.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
                   tab === t.key
-                    ? 'bg-[rgba(52,211,153,0.15)] text-[#34d399]'
-                    : 'text-[#52525b] hover:text-[#a1a1aa]'
+                    ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink'
+                    : 'text-ink-dim hover:text-ink-muted'
                 }`}
               >
                 {t.label}
@@ -781,34 +788,34 @@ export default function LeadProfilePage() {
             <>
               {loadingActivities && activities.length === 0 ? (
                 <div className="flex items-center justify-center py-16">
-                  <Loader2 size={24} className="animate-spin text-[#52525b]" />
+                  <Loader2 size={24} className="animate-spin text-ink-dim" />
                 </div>
               ) : activities.length === 0 ? (
                 <div className="text-center py-16">
-                  <Clock size={32} className="text-[#52525b] mx-auto mb-3" />
-                  <p className="text-[#a1a1aa] text-sm mb-1">No activity yet</p>
-                  <p className="text-[#52525b] text-xs">Calls, notes, emails, and stage changes will appear here.</p>
+                  <Clock size={32} className="text-ink-dim mx-auto mb-3" />
+                  <p className="text-ink-muted text-sm mb-1">No activity yet</p>
+                  <p className="text-ink-dim text-xs">Calls, notes, emails, and stage changes will appear here.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {activities.map((act) => (
                     <div
                       key={act.id}
-                      className={`bg-[#18181b] border border-white/[0.06] border-l-2 ${activityColorBar(act.type)} rounded-xl px-5 py-4`}
+                      className={`bg-paper border border-hair-soft border-l-2 ${activityColorBar(act.type)} rounded-xl px-5 py-4`}
                     >
                       <div className="flex items-start gap-3">
                         <div className="mt-0.5 flex-shrink-0">
                           {activityIcon(act.type)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[#fafafa] text-sm font-medium">{act.title}</p>
+                          <p className="text-ink text-sm font-medium">{act.title}</p>
                           {act.description && (
-                            <p className="text-[#a1a1aa] text-sm mt-1 leading-relaxed">
+                            <p className="text-ink-muted text-sm mt-1 leading-relaxed">
                               {act.description}
                             </p>
                           )}
                         </div>
-                        <span className="text-[#52525b] text-xs flex-shrink-0 mt-0.5">
+                        <span className="text-ink-dim text-xs flex-shrink-0 mt-0.5">
                           {formatDate(act.createdAt)}
                         </span>
                       </div>
@@ -821,7 +828,7 @@ export default function LeadProfilePage() {
                       <button
                         onClick={() => loadActivities(activities.length)}
                         disabled={loadingActivities}
-                        className="text-[#a1a1aa] text-sm hover:text-[#fafafa] transition-all flex items-center gap-2 mx-auto disabled:opacity-50"
+                        className="text-ink-muted text-sm hover:text-ink transition-all flex items-center gap-2 mx-auto disabled:opacity-50"
                       >
                         {loadingActivities ? (
                           <Loader2 size={14} className="animate-spin" />
@@ -840,16 +847,16 @@ export default function LeadProfilePage() {
             <>
               {loadingCalls ? (
                 <div className="flex items-center justify-center py-16">
-                  <Loader2 size={24} className="animate-spin text-[#52525b]" />
+                  <Loader2 size={24} className="animate-spin text-ink-dim" />
                 </div>
               ) : callLogs.length === 0 ? (
                 <div className="text-center py-16">
-                  <Phone size={32} className="text-[#52525b] mx-auto mb-3" />
-                  <p className="text-[#a1a1aa] text-sm mb-1">No calls recorded</p>
-                  <p className="text-[#52525b] text-xs mb-4">Call this lead from the dialler to see call history here.</p>
+                  <Phone size={32} className="text-ink-dim mx-auto mb-3" />
+                  <p className="text-ink-muted text-sm mb-1">No calls recorded</p>
+                  <p className="text-ink-dim text-xs mb-4">Call this lead from the dialler to see call history here.</p>
                   <button
                     onClick={() => navigate('/dialler', { state: { loadLeadId: lead.id } })}
-                    className="bg-[#34d399] text-[#09090b] font-bold rounded-lg px-5 py-2.5 text-sm hover:bg-[#34d399]/90 transition-all inline-flex items-center gap-2"
+                    className="bg-ink text-white font-bold rounded-lg px-5 py-2.5 text-sm hover:bg-ink/90 transition-all inline-flex items-center gap-2"
                   >
                     <Phone size={14} />
                     Call Lead
@@ -862,24 +869,24 @@ export default function LeadProfilePage() {
                     return (
                       <div
                         key={call.id}
-                        className="bg-[#18181b] border border-white/[0.06] rounded-xl overflow-hidden"
+                        className="bg-paper border border-hair-soft rounded-xl overflow-hidden"
                       >
                         <button
                           onClick={() => setExpandedCallId(isExpanded ? null : call.id)}
-                          className="w-full px-5 py-4 flex items-center gap-4 hover:bg-white/[0.02] transition-all text-left"
+                          className="w-full px-5 py-4 flex items-center gap-4 hover:bg-[rgba(10,156,212,0.04)] transition-all text-left"
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-1">
-                              <span className="text-[#fafafa] text-sm font-medium">
+                              <span className="text-ink text-sm font-medium">
                                 {formatDate(call.createdAt)}
                               </span>
-                              <span className="text-[#52525b] text-xs flex items-center gap-1">
+                              <span className="text-ink-dim text-xs flex items-center gap-1">
                                 <Clock size={10} />
                                 {formatDuration(call.duration)}
                               </span>
                             </div>
                             {call.summary && (
-                              <p className="text-[#a1a1aa] text-sm truncate">
+                              <p className="text-ink-muted text-sm truncate">
                                 {call.summary}
                               </p>
                             )}
@@ -888,21 +895,21 @@ export default function LeadProfilePage() {
                             {dispositionLabel(call.disposition)}
                           </span>
                           {isExpanded ? (
-                            <ChevronUp size={14} className="text-[#52525b] flex-shrink-0" />
+                            <ChevronUp size={14} className="text-ink-dim flex-shrink-0" />
                           ) : (
-                            <ChevronDown size={14} className="text-[#52525b] flex-shrink-0" />
+                            <ChevronDown size={14} className="text-ink-dim flex-shrink-0" />
                           )}
                         </button>
 
                         {isExpanded && (
-                          <div className="px-5 pb-5 border-t border-white/[0.06]">
+                          <div className="px-5 pb-5 border-t border-hair-soft">
                             {/* Summary */}
                             {call.summary && (
                               <div className="mt-4 mb-4">
-                                <h4 className="text-[#52525b] text-xs font-medium uppercase tracking-wider mb-1.5">
+                                <h4 className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1.5">
                                   Summary
                                 </h4>
-                                <p className="text-[#a1a1aa] text-sm leading-relaxed">
+                                <p className="text-ink-muted text-sm leading-relaxed">
                                   {call.summary}
                                 </p>
                               </div>
@@ -911,14 +918,14 @@ export default function LeadProfilePage() {
                             {/* Key topics */}
                             {call.keyTopics && call.keyTopics.length > 0 && (
                               <div className="mb-4">
-                                <h4 className="text-[#52525b] text-xs font-medium uppercase tracking-wider mb-1.5">
+                                <h4 className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1.5">
                                   Key Topics
                                 </h4>
                                 <div className="flex flex-wrap gap-1.5">
                                   {call.keyTopics.map((topic, i) => (
                                     <span
                                       key={i}
-                                      className="bg-[#1f1f23] text-[#a1a1aa] text-xs px-2.5 py-0.5 rounded-full"
+                                      className="bg-tray text-ink-muted text-xs px-2.5 py-0.5 rounded-full"
                                     >
                                       {topic}
                                     </span>
@@ -930,13 +937,13 @@ export default function LeadProfilePage() {
                             {/* Action items */}
                             {call.actionItems && call.actionItems.length > 0 && (
                               <div className="mb-4">
-                                <h4 className="text-[#52525b] text-xs font-medium uppercase tracking-wider mb-1.5">
+                                <h4 className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1.5">
                                   Action Items
                                 </h4>
                                 <ul className="space-y-1">
                                   {call.actionItems.map((item, i) => (
-                                    <li key={i} className="text-[#a1a1aa] text-sm flex items-start gap-2">
-                                      <span className="text-[#34d399] mt-0.5 flex-shrink-0">-</span>
+                                    <li key={i} className="text-ink-muted text-sm flex items-start gap-2">
+                                      <span className="text-sky-ink mt-0.5 flex-shrink-0">-</span>
                                       {item}
                                     </li>
                                   ))}
@@ -947,11 +954,11 @@ export default function LeadProfilePage() {
                             {/* Full transcript */}
                             {call.transcript && (
                               <div className="mt-3">
-                                <h4 className="text-[#52525b] text-xs font-medium uppercase tracking-wider mb-1.5">
+                                <h4 className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1.5">
                                   Full Transcript
                                 </h4>
-                                <div className="bg-[#1f1f23] rounded-lg p-4 max-h-60 overflow-y-auto">
-                                  <p className="text-[#a1a1aa] text-sm whitespace-pre-wrap leading-relaxed font-mono">
+                                <div className="bg-tray rounded-lg p-4 max-h-60 overflow-y-auto">
+                                  <p className="text-ink-muted text-sm whitespace-pre-wrap leading-relaxed font-mono">
                                     {call.transcript}
                                   </p>
                                 </div>
@@ -971,7 +978,7 @@ export default function LeadProfilePage() {
           {tab === 'notes' && (
             <>
               {/* Add note form */}
-              <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-5 mb-6">
+              <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-6">
                 <textarea
                   id="new-note-input"
                   value={newNote}
@@ -983,7 +990,7 @@ export default function LeadProfilePage() {
                   }}
                   placeholder="Add a note... (Cmd+Enter to save)"
                   rows={3}
-                  className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-3 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all resize-none leading-relaxed mb-3"
+                  className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all resize-none leading-relaxed mb-3"
                 />
                 <div className="flex justify-between items-center">
                   <button
@@ -991,7 +998,7 @@ export default function LeadProfilePage() {
                     className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
                       isDictating
                         ? 'bg-red-500/15 text-red-400 border border-red-500/30 animate-pulse'
-                        : 'bg-[#1f1f23] text-[#a1a1aa] border border-white/[0.06] hover:text-[#fafafa] hover:bg-white/[0.03]'
+                        : 'bg-tray text-ink-muted border border-hair-soft hover:text-ink hover:bg-[rgba(11,13,14,0.03)]'
                     }`}
                   >
                     {isDictating ? <MicOff size={14} /> : <Mic size={14} />}
@@ -1000,7 +1007,7 @@ export default function LeadProfilePage() {
                   <button
                     onClick={handleCreateNote}
                     disabled={!newNote.trim() || savingNote}
-                    className="bg-[#34d399] text-[#09090b] font-bold rounded-lg px-5 py-2 text-sm hover:bg-[#34d399]/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="bg-ink text-white font-bold rounded-lg px-5 py-2 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {savingNote ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -1015,13 +1022,13 @@ export default function LeadProfilePage() {
               {/* Notes list */}
               {loadingNotes ? (
                 <div className="flex items-center justify-center py-16">
-                  <Loader2 size={24} className="animate-spin text-[#52525b]" />
+                  <Loader2 size={24} className="animate-spin text-ink-dim" />
                 </div>
               ) : notes.length === 0 ? (
                 <div className="text-center py-12">
-                  <FileText size={32} className="text-[#52525b] mx-auto mb-3" />
-                  <p className="text-[#a1a1aa] text-sm mb-1">No notes yet</p>
-                  <p className="text-[#52525b] text-xs">Use the form above to add your first note.</p>
+                  <FileText size={32} className="text-ink-dim mx-auto mb-3" />
+                  <p className="text-ink-muted text-sm mb-1">No notes yet</p>
+                  <p className="text-ink-dim text-xs">Use the form above to add your first note.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1030,7 +1037,7 @@ export default function LeadProfilePage() {
                     return (
                       <div
                         key={note.id}
-                        className="bg-[#18181b] border border-white/[0.06] rounded-xl px-5 py-4"
+                        className="bg-paper border border-hair-soft rounded-xl px-5 py-4"
                       >
                         {isEditing ? (
                           <>
@@ -1038,7 +1045,7 @@ export default function LeadProfilePage() {
                               value={editingNoteContent}
                               onChange={(e) => setEditingNoteContent(e.target.value)}
                               rows={3}
-                              className="w-full bg-[#1f1f23] border border-[rgba(52,211,153,0.4)] rounded-lg px-4 py-3 text-[#fafafa] text-sm focus:outline-none transition-all resize-none leading-relaxed mb-3"
+                              className="w-full bg-tray border border-[rgba(10,156,212,0.4)] rounded-lg px-4 py-3 text-ink text-sm focus:outline-none transition-all resize-none leading-relaxed mb-3"
                               autoFocus
                             />
                             <div className="flex items-center gap-2 justify-end">
@@ -1047,14 +1054,14 @@ export default function LeadProfilePage() {
                                   setEditingNoteId(null);
                                   setEditingNoteContent('');
                                 }}
-                                className="text-[#52525b] hover:text-[#a1a1aa] text-sm transition-all flex items-center gap-1"
+                                className="text-ink-dim hover:text-ink-muted text-sm transition-all flex items-center gap-1"
                               >
                                 <X size={13} />
                                 Cancel
                               </button>
                               <button
                                 onClick={() => handleUpdateNote(note.id)}
-                                className="bg-[#34d399] text-[#09090b] font-bold rounded-lg px-4 py-1.5 text-sm hover:bg-[#34d399]/90 transition-all flex items-center gap-1"
+                                className="bg-ink text-white font-bold rounded-lg px-4 py-1.5 text-sm hover:bg-ink/90 transition-all flex items-center gap-1"
                               >
                                 <Check size={13} />
                                 Save
@@ -1064,10 +1071,10 @@ export default function LeadProfilePage() {
                         ) : (
                           <div className="flex items-start gap-3">
                             <div className="flex-1 min-w-0">
-                              <p className="text-[#a1a1aa] text-sm leading-relaxed whitespace-pre-wrap">
+                              <p className="text-ink-muted text-sm leading-relaxed whitespace-pre-wrap">
                                 {note.content}
                               </p>
-                              <p className="text-[#52525b] text-xs mt-2">
+                              <p className="text-ink-dim text-xs mt-2">
                                 {formatDate(note.createdAt)}
                               </p>
                             </div>
@@ -1077,14 +1084,14 @@ export default function LeadProfilePage() {
                                   setEditingNoteId(note.id);
                                   setEditingNoteContent(note.content);
                                 }}
-                                className="text-[#52525b] hover:text-[#a1a1aa] p-1.5 rounded-md hover:bg-white/[0.04] transition-all"
+                                className="text-ink-dim hover:text-ink-muted p-1.5 rounded-md hover:bg-[rgba(11,13,14,0.03)] transition-all"
                                 title="Edit note"
                               >
                                 <Pencil size={13} />
                               </button>
                               <button
                                 onClick={() => handleDeleteNote(note.id)}
-                                className="text-[#52525b] hover:text-red-400 p-1.5 rounded-md hover:bg-white/[0.04] transition-all"
+                                className="text-ink-dim hover:text-red-400 p-1.5 rounded-md hover:bg-[rgba(11,13,14,0.03)] transition-all"
                                 title="Delete note"
                               >
                                 <Trash2 size={13} />
@@ -1105,16 +1112,16 @@ export default function LeadProfilePage() {
             <>
               {loadingEmails ? (
                 <div className="flex items-center justify-center py-16">
-                  <Loader2 size={24} className="animate-spin text-[#52525b]" />
+                  <Loader2 size={24} className="animate-spin text-ink-dim" />
                 </div>
               ) : emails.length === 0 ? (
                 <div className="text-center py-16">
-                  <Mail size={32} className="text-[#52525b] mx-auto mb-3" />
-                  <p className="text-[#a1a1aa] text-sm mb-1">No emails yet</p>
-                  <p className="text-[#52525b] text-xs mb-4">Sent and received emails with this lead will appear here as a conversation.</p>
+                  <Mail size={32} className="text-ink-dim mx-auto mb-3" />
+                  <p className="text-ink-muted text-sm mb-1">No emails yet</p>
+                  <p className="text-ink-dim text-xs mb-4">Sent and received emails with this lead will appear here as a conversation.</p>
                   <button
                     onClick={() => navigate(`/compose/${lead.id}`)}
-                    className="bg-transparent text-[#a1a1aa] border border-white/[0.06] rounded-lg px-5 py-2.5 text-sm hover:bg-white/[0.03] hover:text-[#fafafa] transition-all inline-flex items-center gap-2"
+                    className="bg-transparent text-ink-muted border border-hair-soft rounded-lg px-5 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all inline-flex items-center gap-2"
                   >
                     <Mail size={14} />
                     Send Email
@@ -1151,13 +1158,13 @@ export default function LeadProfilePage() {
                         a.createdAt.localeCompare(b.createdAt)
                       );
                       return (
-                      <div key={threadKey} className="bg-[#18181b] border border-white/[0.06] rounded-xl overflow-hidden">
+                      <div key={threadKey} className="bg-paper border border-hair-soft rounded-xl overflow-hidden">
                         {/* Thread subject header */}
-                        <div className="px-5 py-3 border-b border-white/[0.04]">
-                          <p className="text-[#fafafa] text-sm font-medium">
+                        <div className="px-5 py-3 border-b border-hair-soft">
+                          <p className="text-ink text-sm font-medium">
                             {chronological[0].subject.replace(/^(re:|fwd?:|fw:)\s*/gi, '').trim() || '(No subject)'}
                           </p>
-                          <p className="text-[#52525b] text-xs mt-0.5">
+                          <p className="text-ink-dim text-xs mt-0.5">
                             {chronological.length} message{chronological.length !== 1 ? 's' : ''}
                           </p>
                         </div>
@@ -1192,20 +1199,20 @@ export default function LeadProfilePage() {
                                     isLong ? 'cursor-pointer' : ''
                                   } ${
                                     isSent
-                                      ? 'bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.15)]'
-                                      : 'bg-[#1f1f23] border border-white/[0.06]'
+                                      ? 'bg-[rgba(10,156,212,0.1)] border border-[rgba(10,156,212,0.15)]'
+                                      : 'bg-tray border border-hair-soft'
                                   }`}
                                 >
                                   {/* Sender / direction label */}
                                   <div className="flex items-center gap-2 mb-1.5">
-                                    <span className={`text-xs font-medium ${isSent ? 'text-[#34d399]' : 'text-[#a1a1aa]'}`}>
+                                    <span className={`text-xs font-medium ${isSent ? 'text-sky-ink' : 'text-ink-muted'}`}>
                                       {isSent ? 'You' : lead.name.split(' ')[0]}
                                     </span>
-                                    <span className="text-[#52525b] text-[10px]">
+                                    <span className="text-ink-dim text-[10px]">
                                       {formatDate(email.createdAt)}
                                     </span>
                                     {email.source === 'dialler' && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[rgba(52,211,153,0.15)] text-[#34d399]">
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[rgba(10,156,212,0.15)] text-sky-ink">
                                         Dialler
                                       </span>
                                     )}
@@ -1215,18 +1222,18 @@ export default function LeadProfilePage() {
                                   {displayText ? (
                                     <>
                                       <p className={`text-sm leading-relaxed whitespace-pre-line ${
-                                        isSent ? 'text-[#d1fae5]' : 'text-[#a1a1aa]'
+                                        isSent ? 'text-[#d1fae5]' : 'text-ink-muted'
                                       }`}>
                                         {displayText}
                                       </p>
                                       {isLong && (
-                                        <p className="text-[#52525b] text-xs mt-2">
+                                        <p className="text-ink-dim text-xs mt-2">
                                           {isExpanded ? 'Click to collapse' : 'Click to read full email'}
                                         </p>
                                       )}
                                     </>
                                   ) : (
-                                    <p className="text-[#52525b] text-sm italic">No preview available</p>
+                                    <p className="text-ink-dim text-sm italic">No preview available</p>
                                   )}
                                 </div>
                               </div>
@@ -1241,7 +1248,7 @@ export default function LeadProfilePage() {
                   <div className="flex justify-center pt-2">
                     <button
                       onClick={() => navigate(`/compose/${lead.id}`)}
-                      className="bg-transparent text-[#a1a1aa] border border-white/[0.06] rounded-lg px-5 py-2.5 text-sm hover:bg-white/[0.03] hover:text-[#fafafa] transition-all inline-flex items-center gap-2"
+                      className="bg-transparent text-ink-muted border border-hair-soft rounded-lg px-5 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all inline-flex items-center gap-2"
                     >
                       <Send size={14} />
                       Send Email
@@ -1256,36 +1263,36 @@ export default function LeadProfilePage() {
         {/* ── Right sidebar ─────────────────────────────────── */}
         <div className="w-[280px] flex-shrink-0">
           {/* Lead details card */}
-          <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-5 mb-4">
-            <h3 className="text-[#52525b] text-xs font-medium uppercase tracking-wider mb-4">
+          <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-4">
+            <h3 className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-4">
               Lead Details
             </h3>
 
             <div className="space-y-3">
               {/* Category */}
               <div>
-                <p className="text-[#52525b] text-[11px] uppercase tracking-wider mb-0.5">Category</p>
-                <p className="text-[#a1a1aa] text-sm">
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Category</p>
+                <p className="text-ink-muted text-sm">
                   {lead.category || (
-                    <span className="text-[#52525b] italic">None</span>
+                    <span className="text-ink-dim italic">None</span>
                   )}
                 </p>
               </div>
 
               {/* Lead type */}
               <div>
-                <p className="text-[#52525b] text-[11px] uppercase tracking-wider mb-0.5">Lead Type</p>
-                <p className="text-[#a1a1aa] text-sm capitalize">{lead.leadType}</p>
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Lead Type</p>
+                <p className="text-ink-muted text-sm capitalize">{lead.leadType}</p>
               </div>
 
               {/* Status */}
               <div>
-                <p className="text-[#52525b] text-[11px] uppercase tracking-wider mb-0.5">Status</p>
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Status</p>
                 <span
                   className={`inline-block text-xs px-2 py-0.5 rounded-full ${
                     lead.status === 'called'
-                      ? 'bg-[rgba(52,211,153,0.15)] text-[#34d399]'
-                      : 'bg-[#1f1f23] text-[#a1a1aa]'
+                      ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink'
+                      : 'bg-tray text-ink-muted'
                   }`}
                 >
                   {lead.status === 'called' ? 'Called' : 'Not Called'}
@@ -1294,26 +1301,26 @@ export default function LeadProfilePage() {
 
               {/* Pipeline stage */}
               <div>
-                <p className="text-[#52525b] text-[11px] uppercase tracking-wider mb-0.5">Pipeline Stage</p>
-                <p className="text-[#a1a1aa] text-sm">{stageLabel(lead.pipelineStage)}</p>
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Pipeline Stage</p>
+                <p className="text-ink-muted text-sm">{stageLabel(lead.pipelineStage)}</p>
               </div>
 
               {/* Temperature */}
               <div>
-                <p className="text-[#52525b] text-[11px] uppercase tracking-wider mb-0.5">Temperature</p>
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Temperature</p>
                 {lead.temperature ? (
                   <span className={`inline-block text-xs px-2 py-0.5 rounded-full border capitalize ${temperatureColor(lead.temperature)}`}>
                     {lead.temperature}
                   </span>
                 ) : (
-                  <span className="text-[#52525b] text-sm italic">Not set</span>
+                  <span className="text-ink-dim text-sm italic">Not set</span>
                 )}
               </div>
 
               {/* Unanswered calls */}
               {lead.unansweredCalls > 0 && (
                 <div>
-                  <p className="text-[#52525b] text-[11px] uppercase tracking-wider mb-0.5">Unanswered Calls</p>
+                  <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Unanswered Calls</p>
                   <p className="text-amber-400 text-sm">{lead.unansweredCalls}</p>
                 </div>
               )}
@@ -1321,7 +1328,7 @@ export default function LeadProfilePage() {
               {/* Voicemail left */}
               {lead.voicemailLeft && (
                 <div>
-                  <p className="text-[#52525b] text-[11px] uppercase tracking-wider mb-0.5">Voicemail Left</p>
+                  <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Voicemail Left</p>
                   <p className="text-blue-400 text-sm">
                     {lead.voicemailDate ? formatShortDate(lead.voicemailDate) : 'Yes'}
                   </p>
@@ -1331,56 +1338,56 @@ export default function LeadProfilePage() {
               {/* Last called */}
               {lead.lastCalledAt && (
                 <div>
-                  <p className="text-[#52525b] text-[11px] uppercase tracking-wider mb-0.5">Last Called</p>
-                  <p className="text-[#a1a1aa] text-sm">{formatShortDate(lead.lastCalledAt)}</p>
+                  <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Last Called</p>
+                  <p className="text-ink-muted text-sm">{formatShortDate(lead.lastCalledAt)}</p>
                 </div>
               )}
 
               {/* Created */}
               <div>
-                <p className="text-[#52525b] text-[11px] uppercase tracking-wider mb-0.5">Created</p>
-                <p className="text-[#a1a1aa] text-sm">{formatShortDate(lead.createdAt)}</p>
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Created</p>
+                <p className="text-ink-muted text-sm">{formatShortDate(lead.createdAt)}</p>
               </div>
             </div>
           </div>
 
           {/* Stats card */}
-          <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-5 mb-4">
-            <h3 className="text-[#52525b] text-xs font-medium uppercase tracking-wider mb-4">
+          <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-4">
+            <h3 className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-4">
               Activity Stats
             </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Phone size={13} className="text-[#34d399]" />
-                  <span className="text-[#a1a1aa] text-sm">Total Calls</span>
+                  <Phone size={13} className="text-sky-ink" />
+                  <span className="text-ink-muted text-sm">Total Calls</span>
                 </div>
-                <span className="text-[#fafafa] text-sm font-bold">{totalCallsCount}</span>
+                <span className="text-ink text-sm font-bold">{totalCallsCount}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <FileText size={13} className="text-blue-400" />
-                  <span className="text-[#a1a1aa] text-sm">Notes</span>
+                  <span className="text-ink-muted text-sm">Notes</span>
                 </div>
-                <span className="text-[#fafafa] text-sm font-bold">{totalNotesCount}</span>
+                <span className="text-ink text-sm font-bold">{totalNotesCount}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Mail size={13} className="text-amber-400" />
-                  <span className="text-[#a1a1aa] text-sm">Emails Sent</span>
+                  <span className="text-ink-muted text-sm">Emails Sent</span>
                 </div>
-                <span className="text-[#fafafa] text-sm font-bold">{totalEmailsCount}</span>
+                <span className="text-ink text-sm font-bold">{totalEmailsCount}</span>
               </div>
             </div>
           </div>
 
           {/* Consolidated summary */}
           {lead.consolidatedSummary && (
-            <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-5 mb-4">
-              <h3 className="text-[#52525b] text-xs font-medium uppercase tracking-wider mb-3">
+            <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-4">
+              <h3 className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-3">
                 Consolidated Summary
               </h3>
-              <p className="text-[#a1a1aa] text-sm leading-relaxed">
+              <p className="text-ink-muted text-sm leading-relaxed">
                 {lead.consolidatedSummary}
               </p>
             </div>
@@ -1388,13 +1395,13 @@ export default function LeadProfilePage() {
 
           {/* Converted to project link */}
           {lead.convertedToProject && (
-            <div className="bg-[rgba(52,211,153,0.08)] border border-[rgba(52,211,153,0.15)] rounded-xl p-5">
-              <h3 className="text-[#34d399] text-xs font-medium uppercase tracking-wider mb-2">
+            <div className="bg-[rgba(10,156,212,0.08)] border border-[rgba(10,156,212,0.15)] rounded-xl p-5">
+              <h3 className="text-sky-ink text-xs font-medium uppercase tracking-wider mb-2">
                 Converted to Project
               </h3>
               <button
                 onClick={() => navigate('/projects')}
-                className="text-[#a1a1aa] text-sm hover:text-[#fafafa] transition-all flex items-center gap-1.5"
+                className="text-ink-muted text-sm hover:text-ink transition-all flex items-center gap-1.5"
               >
                 <ExternalLink size={13} />
                 View Project

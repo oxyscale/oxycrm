@@ -23,6 +23,7 @@ import {
   Snowflake,
 } from 'lucide-react';
 import { useDialler } from '../hooks/useDiallerSession';
+import EyebrowLabel from '../components/ui/EyebrowLabel';
 import { createCalendarEvent, getGoogleAuthStatus, getCalendarEvents, updateLeadTemperature, draftVoicemailEmail, sendEmail } from '../services/api';
 import { getContactFirstName } from '../utils/names';
 import type { Disposition } from '../types';
@@ -230,10 +231,10 @@ export default function DispositionPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <p className="text-[#a1a1aa] mb-4">No call to dispose.</p>
+          <p className="text-ink-muted mb-4">No call to dispose.</p>
           <button
             onClick={() => navigate('/dialler')}
-            className="bg-[#34d399] text-[#09090b] font-bold rounded-lg px-6 py-3 hover:bg-[#34d399]/90 transition-all"
+            className="bg-ink text-white font-bold rounded-lg px-6 py-3 hover:bg-ink/90 transition-all"
           >
             Back to Dialler
           </button>
@@ -281,23 +282,26 @@ export default function DispositionPage() {
   ];
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <div className="p-10 max-w-2xl mx-auto min-h-full bg-cream">
       {/* Call summary header */}
       <div className="mb-8">
-        <h1 className="text-[#fafafa] text-2xl font-bold tracking-tight mb-1">
+        <EyebrowLabel variant="pill" className="mb-4">
+          CALL · DISPOSITION
+        </EyebrowLabel>
+        <h1 className="text-sky-ink text-[34px] font-semibold tracking-section mb-1">
           Call with {currentLead.name}
         </h1>
-        <p className="text-[#a1a1aa] mb-3">
+        <p className="text-ink-muted mb-3">
           {currentLead.company || 'No company'}
         </p>
-        <span className="inline-block bg-[#18181b] border border-white/[0.06] text-[#a1a1aa] text-sm px-4 py-1.5 rounded-full">
+        <span className="inline-block bg-paper border border-hair-soft text-ink-muted text-sm px-4 py-1.5 rounded-full">
           Duration: {formatDuration(callDuration)}
         </span>
       </div>
 
       {/* Call Notes */}
       <div className="mb-6">
-        <label className="text-[#52525b] text-xs font-medium uppercase tracking-wider block mb-2">
+        <label className="text-ink-dim text-xs font-medium uppercase tracking-wider block mb-2">
           Call Notes
         </label>
         <textarea
@@ -305,18 +309,18 @@ export default function DispositionPage() {
           onChange={(e) => setQuickNote(e.target.value)}
           placeholder="Jot down any notes from the call. The full transcript will be generated automatically from the recording."
           rows={4}
-          className="w-full bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-3 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all resize-none leading-relaxed"
+          className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all resize-none leading-relaxed"
         />
-        <p className="text-[#52525b] text-xs mt-1.5">
+        <p className="text-ink-dim text-xs mt-1.5">
           Full transcript will appear on the lead profile once the recording is processed.
         </p>
       </div>
 
       {/* Preparing email overlay */}
       {preparingEmail && (
-        <div className="mb-8 flex items-center justify-center gap-3 bg-[#18181b] border border-[rgba(52,211,153,0.3)] rounded-xl p-6">
-          <Loader2 size={20} className="animate-spin text-[#34d399]" />
-          <span className="text-[#fafafa] text-sm font-medium">
+        <div className="mb-8 flex items-center justify-center gap-3 bg-paper border border-[rgba(10,156,212,0.3)] rounded-xl p-6">
+          <Loader2 size={20} className="animate-spin text-sky-ink" />
+          <span className="text-ink text-sm font-medium">
             Generating email draft...
           </span>
         </div>
@@ -324,7 +328,7 @@ export default function DispositionPage() {
 
       {/* Temperature selector */}
       <div className="mb-6">
-        <label className="text-[#52525b] text-xs font-medium uppercase tracking-wider block mb-2">
+        <label className="text-ink-dim text-xs font-medium uppercase tracking-wider block mb-2">
           Lead Temperature
         </label>
         <div className="flex gap-3">
@@ -341,7 +345,7 @@ export default function DispositionPage() {
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-all ${
                   isActive
                     ? `${bg} ${border} ${color}`
-                    : 'bg-[#18181b] border-white/[0.06] text-[#52525b] hover:text-[#a1a1aa]'
+                    : 'bg-paper border-hair-soft text-ink-dim hover:text-ink-muted'
                 }`}
               >
                 <Icon size={14} />
@@ -354,7 +358,7 @@ export default function DispositionPage() {
 
       {/* Schedule Follow-Up */}
       <div className="mb-6">
-        <label className="text-[#52525b] text-xs font-medium uppercase tracking-wider block mb-2">
+        <label className="text-ink-dim text-xs font-medium uppercase tracking-wider block mb-2">
           Schedule Follow-Up
         </label>
         <div className="flex items-center gap-3">
@@ -363,17 +367,17 @@ export default function DispositionPage() {
             value={followUpDate}
             onChange={(e) => setFollowUpDate(e.target.value)}
             min={new Date().toISOString().split('T')[0]}
-            className="bg-[#18181b] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all [color-scheme:dark]"
+            className="bg-paper border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:dark]"
           />
           {followUpDate && (
             <button
               onClick={() => setFollowUpDate('')}
-              className="text-[#52525b] hover:text-[#a1a1aa] transition-colors"
+              className="text-ink-dim hover:text-ink-muted transition-colors"
             >
               <X size={16} />
             </button>
           )}
-          <span className="text-[#52525b] text-xs">
+          <span className="text-ink-dim text-xs">
             {followUpDate ? 'Lead will be moved to Follow Up queue' : 'Optional — set a date to follow up'}
           </span>
         </div>
@@ -391,8 +395,8 @@ export default function DispositionPage() {
                 disabled={disposing !== null}
                 className={`h-[120px] rounded-xl border flex flex-col items-center justify-center gap-3 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                   accent
-                    ? 'bg-[#34d399] text-[#09090b] border-[#34d399] hover:bg-[#34d399]/90 font-bold'
-                    : 'bg-[#18181b] text-[#a1a1aa] border-white/[0.06] hover:bg-white/[0.03] hover:text-[#fafafa]'
+                    ? 'bg-ink text-white border-sky-ink hover:bg-ink/90 font-bold'
+                    : 'bg-paper text-ink-muted border-hair-soft hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
                 }`}
               >
                 {isLoading ? (
@@ -415,8 +419,8 @@ export default function DispositionPage() {
               disabled={disposing !== null}
               className={`w-full h-[56px] rounded-xl border flex items-center justify-center gap-3 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                 accent
-                  ? 'bg-[#34d399] text-[#09090b] border-[#34d399] hover:bg-[#34d399]/90 font-bold'
-                  : 'bg-[#18181b] text-[#a1a1aa] border-white/[0.06] hover:bg-white/[0.03] hover:text-[#fafafa]'
+                  ? 'bg-ink text-white border-sky-ink hover:bg-ink/90 font-bold'
+                  : 'bg-paper text-ink-muted border-hair-soft hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
               }`}
             >
               {isLoading ? (
@@ -431,27 +435,27 @@ export default function DispositionPage() {
       </div>
 
       {/* Book Meeting section */}
-      <div className="bg-[#18181b] border border-white/[0.06] rounded-xl overflow-hidden">
+      <div className="bg-paper border border-hair-soft rounded-xl overflow-hidden">
         <button
           onClick={() => setShowBookMeeting(!showBookMeeting)}
-          className="w-full px-6 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-all"
+          className="w-full px-6 py-4 flex items-center justify-between hover:bg-[rgba(10,156,212,0.04)] transition-all"
         >
-          <h3 className="text-[#fafafa] text-sm font-bold flex items-center gap-2">
-            <CalendarPlus size={16} className="text-[#34d399]" />
+          <h3 className="text-ink text-sm font-bold flex items-center gap-2">
+            <CalendarPlus size={16} className="text-sky-ink" />
             Book a Meeting
           </h3>
           {showBookMeeting ? (
-            <ChevronUp size={16} className="text-[#52525b]" />
+            <ChevronUp size={16} className="text-ink-dim" />
           ) : (
-            <ChevronDown size={16} className="text-[#52525b]" />
+            <ChevronDown size={16} className="text-ink-dim" />
           )}
         </button>
 
         {showBookMeeting && (
-          <div className="px-6 pb-6 border-t border-white/[0.06] pt-4">
+          <div className="px-6 pb-6 border-t border-hair-soft pt-4">
             {/* Their email */}
             <div className="mb-4">
-              <label className="text-[#52525b] text-xs font-medium block mb-1.5">
+              <label className="text-ink-dim text-xs font-medium block mb-1.5">
                 Their Email
               </label>
               <input
@@ -459,13 +463,13 @@ export default function DispositionPage() {
                 value={meetingEmail}
                 onChange={(e) => setMeetingEmail(e.target.value)}
                 placeholder="client@example.com"
-                className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
               />
             </div>
 
             {/* Additional guests */}
             <div className="mb-4">
-              <label className="text-[#52525b] text-xs font-medium block mb-1.5 flex items-center gap-1">
+              <label className="text-ink-dim text-xs font-medium block mb-1.5 flex items-center gap-1">
                 <UserPlus size={12} />
                 Additional Guests
               </label>
@@ -483,7 +487,7 @@ export default function DispositionPage() {
                       }
                     }
                   }}
-                  className="flex-1 bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+                  className="flex-1 bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
                 />
                 <button
                   type="button"
@@ -497,7 +501,7 @@ export default function DispositionPage() {
                       }
                     }
                   }}
-                  className="bg-[#1f1f23] border border-white/[0.06] rounded-lg px-3 py-2.5 text-[#52525b] hover:text-[#a1a1aa] transition-all text-sm"
+                  className="bg-tray border border-hair-soft rounded-lg px-3 py-2.5 text-ink-dim hover:text-ink-muted transition-all text-sm"
                 >
                   Add
                 </button>
@@ -507,7 +511,7 @@ export default function DispositionPage() {
                   {meetingGuests.split(',').map((guest, i) => (
                     <span
                       key={i}
-                      className="inline-flex items-center gap-1 bg-[#1f1f23] border border-white/[0.06] text-[#a1a1aa] text-xs px-2.5 py-1 rounded-full"
+                      className="inline-flex items-center gap-1 bg-tray border border-hair-soft text-ink-muted text-xs px-2.5 py-1 rounded-full"
                     >
                       {guest}
                       <button
@@ -515,7 +519,7 @@ export default function DispositionPage() {
                           const guests = meetingGuests.split(',').filter((_, j) => j !== i);
                           setMeetingGuests(guests.join(','));
                         }}
-                        className="text-[#52525b] hover:text-[#fafafa] transition-all"
+                        className="text-ink-dim hover:text-ink transition-all"
                       >
                         <X size={10} />
                       </button>
@@ -528,35 +532,35 @@ export default function DispositionPage() {
             {/* Date, Time, Duration */}
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div>
-                <label className="text-[#52525b] text-xs font-medium block mb-1.5">
+                <label className="text-ink-dim text-xs font-medium block mb-1.5">
                   Date
                 </label>
                 <input
                   type="date"
                   value={meetingDate}
                   onChange={(e) => setMeetingDate(e.target.value)}
-                  className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all [color-scheme:dark]"
+                  className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:dark]"
                 />
               </div>
               <div>
-                <label className="text-[#52525b] text-xs font-medium block mb-1.5">
+                <label className="text-ink-dim text-xs font-medium block mb-1.5">
                   Time
                 </label>
                 <input
                   type="time"
                   value={meetingTime}
                   onChange={(e) => setMeetingTime(e.target.value)}
-                  className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all [color-scheme:dark]"
+                  className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:dark]"
                 />
               </div>
               <div>
-                <label className="text-[#52525b] text-xs font-medium block mb-1.5">
+                <label className="text-ink-dim text-xs font-medium block mb-1.5">
                   Duration
                 </label>
                 <select
                   value={meetingDuration}
                   onChange={(e) => setMeetingDuration(e.target.value)}
-                  className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+                  className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
                 >
                   <option value="15">15 min</option>
                   <option value="30">30 min</option>
@@ -569,13 +573,13 @@ export default function DispositionPage() {
 
             {/* Timezone selector */}
             <div className="mb-4">
-              <label className="text-[#52525b] text-xs font-medium block mb-1.5">
+              <label className="text-ink-dim text-xs font-medium block mb-1.5">
                 Timezone
               </label>
               <select
                 value={meetingTimezone}
                 onChange={(e) => setMeetingTimezone(e.target.value)}
-                className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
               >
                 <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
                 <option value="Australia/Melbourne">Melbourne (AEST/AEDT)</option>
@@ -589,20 +593,20 @@ export default function DispositionPage() {
 
             {/* Calendar events for selected day */}
             {meetingDate && calendarAuthenticated && (
-              <div className="mb-4 bg-[#1f1f23] border border-white/[0.06] rounded-lg p-3">
+              <div className="mb-4 bg-tray border border-hair-soft rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <Calendar size={12} className="text-[#52525b]" />
-                  <span className="text-[#52525b] text-xs font-medium uppercase tracking-wider">
+                  <Calendar size={12} className="text-ink-dim" />
+                  <span className="text-ink-dim text-xs font-medium uppercase tracking-wider">
                     Your schedule for {meetingDate}
                   </span>
                 </div>
                 {loadingEvents ? (
-                  <div className="flex items-center gap-2 text-[#52525b] text-xs py-1">
+                  <div className="flex items-center gap-2 text-ink-dim text-xs py-1">
                     <Loader2 size={12} className="animate-spin" />
                     Loading events...
                   </div>
                 ) : dayEvents.length === 0 ? (
-                  <p className="text-[#52525b] text-xs py-1">No events scheduled</p>
+                  <p className="text-ink-dim text-xs py-1">No events scheduled</p>
                 ) : (
                   <div className="space-y-1">
                     {dayEvents.map((event, i) => {
@@ -613,8 +617,8 @@ export default function DispositionPage() {
                         ? new Date(event.endTime).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false })
                         : '';
                       return (
-                        <div key={i} className="text-xs text-[#a1a1aa] flex items-center gap-2">
-                          <span className="text-[#52525b] font-mono min-w-[90px]">
+                        <div key={i} className="text-xs text-ink-muted flex items-center gap-2">
+                          <span className="text-ink-dim font-mono min-w-[90px]">
                             {startTime} - {endTime}
                           </span>
                           <span className="truncate">{event.summary}</span>
@@ -628,7 +632,7 @@ export default function DispositionPage() {
 
             {/* Meeting type toggle */}
             <div className="mb-4">
-              <label className="text-[#52525b] text-xs font-medium block mb-2">
+              <label className="text-ink-dim text-xs font-medium block mb-2">
                 Meeting Type
               </label>
               <div className="flex gap-3">
@@ -636,8 +640,8 @@ export default function DispositionPage() {
                   onClick={() => setMeetingType('google_meet')}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-all ${
                     meetingType === 'google_meet'
-                      ? 'bg-[rgba(52,211,153,0.1)] border-[rgba(52,211,153,0.3)] text-[#34d399]'
-                      : 'bg-[#1f1f23] border-white/[0.06] text-[#52525b] hover:text-[#a1a1aa]'
+                      ? 'bg-[rgba(10,156,212,0.1)] border-[rgba(10,156,212,0.3)] text-sky-ink'
+                      : 'bg-tray border-hair-soft text-ink-dim hover:text-ink-muted'
                   }`}
                 >
                   <Video size={14} />
@@ -647,8 +651,8 @@ export default function DispositionPage() {
                   onClick={() => setMeetingType('in_person')}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-all ${
                     meetingType === 'in_person'
-                      ? 'bg-[rgba(52,211,153,0.1)] border-[rgba(52,211,153,0.3)] text-[#34d399]'
-                      : 'bg-[#1f1f23] border-white/[0.06] text-[#52525b] hover:text-[#a1a1aa]'
+                      ? 'bg-[rgba(10,156,212,0.1)] border-[rgba(10,156,212,0.3)] text-sky-ink'
+                      : 'bg-tray border-hair-soft text-ink-dim hover:text-ink-muted'
                   }`}
                 >
                   <MapPin size={14} />
@@ -660,7 +664,7 @@ export default function DispositionPage() {
             {/* Location (only for in-person) */}
             {meetingType === 'in_person' && (
               <div className="mb-4">
-                <label className="text-[#52525b] text-xs font-medium block mb-1.5">
+                <label className="text-ink-dim text-xs font-medium block mb-1.5">
                   Location / Address
                 </label>
                 <input
@@ -668,14 +672,14 @@ export default function DispositionPage() {
                   value={meetingLocation}
                   onChange={(e) => setMeetingLocation(e.target.value)}
                   placeholder="e.g. 123 Collins St, Melbourne VIC 3000"
-                  className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all"
+                  className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
                 />
               </div>
             )}
 
             {/* Meeting notes */}
             <div className="mb-4">
-              <label className="text-[#52525b] text-xs font-medium block mb-1.5">
+              <label className="text-ink-dim text-xs font-medium block mb-1.5">
                 Meeting Notes
               </label>
               <textarea
@@ -683,13 +687,13 @@ export default function DispositionPage() {
                 onChange={(e) => setMeetingNotes(e.target.value)}
                 placeholder="What's the meeting about..."
                 rows={2}
-                className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.4)] transition-all resize-none"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all resize-none"
               />
             </div>
 
             {/* Google Calendar auth check */}
             {checkingAuth && (
-              <div className="flex items-center gap-2 text-[#a1a1aa] text-sm mb-4">
+              <div className="flex items-center gap-2 text-ink-muted text-sm mb-4">
                 <Loader2 size={14} className="animate-spin" />
                 Checking Google Calendar connection...
               </div>
@@ -698,7 +702,7 @@ export default function DispositionPage() {
             {calendarAuthenticated === false && !checkingAuth && (
               <button
                 onClick={handleConnectGoogle}
-                className="w-full bg-[#1f1f23] border border-white/[0.06] text-[#a1a1aa] rounded-lg px-5 py-3 text-sm hover:bg-white/[0.03] hover:text-[#fafafa] transition-all flex items-center justify-center gap-2 mb-4"
+                className="w-full bg-tray border border-hair-soft text-ink-muted rounded-lg px-5 py-3 text-sm hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all flex items-center justify-center gap-2 mb-4"
               >
                 <ExternalLink size={14} />
                 Connect Google Calendar
@@ -715,17 +719,17 @@ export default function DispositionPage() {
 
             {/* Booking success */}
             {bookingSuccess && (
-              <div className="bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.2)] rounded-lg p-4 mb-4">
+              <div className="bg-[rgba(10,156,212,0.1)] border border-[rgba(10,156,212,0.2)] rounded-lg p-4 mb-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle size={16} className="text-[#34d399]" />
-                  <span className="text-[#34d399] text-sm font-medium">Meeting booked</span>
+                  <CheckCircle size={16} className="text-sky-ink" />
+                  <span className="text-sky-ink text-sm font-medium">Meeting booked</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <a
                     href={bookingSuccess.htmlLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#a1a1aa] text-xs hover:text-[#fafafa] flex items-center gap-1 transition-all"
+                    className="text-ink-muted text-xs hover:text-ink flex items-center gap-1 transition-all"
                   >
                     <ExternalLink size={10} />
                     View in Google Calendar
@@ -735,7 +739,7 @@ export default function DispositionPage() {
                       href={bookingSuccess.meetLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[#a1a1aa] text-xs hover:text-[#fafafa] flex items-center gap-1 transition-all"
+                      className="text-ink-muted text-xs hover:text-ink flex items-center gap-1 transition-all"
                     >
                       <Video size={10} />
                       Google Meet link
@@ -757,7 +761,7 @@ export default function DispositionPage() {
                 !!bookingSuccess
               }
               onClick={handleBookMeeting}
-              className="w-full bg-[#34d399] text-[#09090b] font-bold rounded-lg px-5 py-3 text-sm hover:bg-[#34d399]/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-ink text-white font-bold rounded-lg px-5 py-3 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {bookingMeeting ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -773,17 +777,17 @@ export default function DispositionPage() {
       {/* Voicemail follow-up email overlay */}
       {showVoicemailEmail && currentLead && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#18181b] border border-white/[0.06] rounded-2xl w-full max-w-lg shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+          <div className="bg-paper border border-hair-soft rounded-2xl w-full max-w-lg shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-hair-soft">
               <div>
-                <h3 className="text-[#fafafa] font-bold">Send voicemail follow-up?</h3>
-                <p className="text-[#52525b] text-xs mt-0.5">
+                <h3 className="text-ink font-bold">Send voicemail follow-up?</h3>
+                <p className="text-ink-dim text-xs mt-0.5">
                   {currentLead.name} &middot; {currentLead.email}
                 </p>
               </div>
               <button
                 onClick={() => { setShowVoicemailEmail(false); setCurrentLead(null); navigate('/dialler'); }}
-                className="text-[#52525b] hover:text-[#a1a1aa] transition-colors"
+                className="text-ink-dim hover:text-ink-muted transition-colors"
               >
                 <X size={18} />
               </button>
@@ -791,58 +795,58 @@ export default function DispositionPage() {
 
             {vmSent ? (
               <div className="p-8 text-center">
-                <CheckCircle size={32} className="text-[#34d399] mx-auto mb-3" />
-                <p className="text-[#fafafa] font-medium">Email sent</p>
-                <p className="text-[#52525b] text-xs mt-1">Returning to dialler...</p>
+                <CheckCircle size={32} className="text-sky-ink mx-auto mb-3" />
+                <p className="text-ink font-medium">Email sent</p>
+                <p className="text-ink-dim text-xs mt-1">Returning to dialler...</p>
               </div>
             ) : (
               <div className="p-6 space-y-4">
                 {vmEmailLoading ? (
                   <div className="flex items-center gap-3 py-8 justify-center">
-                    <Loader2 size={18} className="animate-spin text-[#34d399]" />
-                    <span className="text-[#a1a1aa] text-sm">Drafting email...</span>
+                    <Loader2 size={18} className="animate-spin text-sky-ink" />
+                    <span className="text-ink-muted text-sm">Drafting email...</span>
                   </div>
                 ) : (
                   <>
                     <div className="flex gap-3">
                       <div className="flex-1">
-                        <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1 block">Subject</label>
+                        <label className="text-ink-dim text-xs uppercase tracking-wider mb-1 block">Subject</label>
                         <input
                           type="text"
                           value={vmEmailSubject}
                           onChange={(e) => setVmEmailSubject(e.target.value)}
-                          className="w-full bg-[#09090b] border border-white/[0.06] rounded-lg px-3 py-2.5 text-sm text-[#fafafa] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                          className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
                         />
                       </div>
                       <div className="w-32">
-                        <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1 block">Greeting</label>
+                        <label className="text-ink-dim text-xs uppercase tracking-wider mb-1 block">Greeting</label>
                         <input
                           type="text"
                           value={vmGreetingName}
                           onChange={(e) => setVmGreetingName(e.target.value)}
-                          className="w-full bg-[#09090b] border border-white/[0.06] rounded-lg px-3 py-2.5 text-sm text-[#fafafa] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+                          className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="text-[#52525b] text-xs uppercase tracking-wider mb-1 block">Email body</label>
+                      <label className="text-ink-dim text-xs uppercase tracking-wider mb-1 block">Email body</label>
                       <textarea
                         value={vmEmailBody}
                         onChange={(e) => setVmEmailBody(e.target.value)}
                         rows={6}
-                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-lg px-3 py-2.5 text-sm text-[#fafafa] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all resize-none leading-relaxed"
+                        className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
                       />
                     </div>
 
-                    <p className="text-[#52525b] text-xs">
+                    <p className="text-ink-dim text-xs">
                       Preview: "Hi {vmGreetingName || 'there'}, {vmEmailBody.slice(0, 60)}..."
                     </p>
 
                     <div className="flex gap-3 pt-2">
                       <button
                         onClick={() => { setShowVoicemailEmail(false); setCurrentLead(null); navigate('/dialler'); }}
-                        className="flex-1 bg-transparent text-[#a1a1aa] border border-white/[0.06] rounded-lg py-2.5 text-sm hover:bg-white/[0.03] transition-all"
+                        className="flex-1 bg-transparent text-ink-muted border border-hair-soft rounded-lg py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] transition-all"
                       >
                         Skip
                       </button>
@@ -867,7 +871,7 @@ export default function DispositionPage() {
                           }
                         }}
                         disabled={vmSending || !vmEmailSubject || !vmEmailBody}
-                        className="flex-1 bg-[#34d399] text-[#09090b] font-bold rounded-lg py-2.5 text-sm hover:bg-[#34d399]/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="flex-1 bg-ink text-white font-bold rounded-lg py-2.5 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         {vmSending ? (
                           <Loader2 size={14} className="animate-spin" />

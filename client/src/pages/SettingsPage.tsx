@@ -11,6 +11,8 @@ import {
   Pen,
 } from 'lucide-react';
 import * as api from '../services/api';
+import EyebrowLabel from '../components/ui/EyebrowLabel';
+import SectionHeading from '../components/ui/SectionHeading';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -174,22 +176,25 @@ export default function SettingsPage() {
   if (loadingSettings) {
     return (
       <div className="p-8 flex items-center justify-center h-full">
-        <Loader2 size={24} className="animate-spin text-[#52525b]" />
+        <Loader2 size={24} className="animate-spin text-ink-dim" />
       </div>
     );
   }
 
   return (
-    <div className="p-8 max-w-[1000px] mx-auto">
-      <div className="mb-6">
-        <h1 className="text-[#fafafa] text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-[#a1a1aa] text-sm mt-1">
+    <div className="p-10 max-w-[1000px] mx-auto min-h-full bg-cream">
+      <div className="mb-8">
+        <EyebrowLabel variant="pill" className="mb-4">
+          WORKSPACE · SETTINGS
+        </EyebrowLabel>
+        <SectionHeading size="section">Settings.</SectionHeading>
+        <p className="text-ink-muted text-sm mt-3">
           Configure your category prompts, company profile, and email preferences.
         </p>
       </div>
 
       {/* Tab bar */}
-      <div className="flex items-center gap-1 mb-8 bg-[#18181b] border border-white/[0.06] rounded-lg p-1 w-fit">
+      <div className="flex items-center gap-1 mb-8 bg-paper border border-hair-soft rounded-lg p-1 w-fit">
         {tabs.map((t) => {
           const Icon = t.icon;
           return (
@@ -198,8 +203,8 @@ export default function SettingsPage() {
               onClick={() => setTab(t.key)}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
                 tab === t.key
-                  ? 'bg-[rgba(52,211,153,0.15)] text-[#34d399]'
-                  : 'text-[#52525b] hover:text-[#a1a1aa]'
+                  ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink'
+                  : 'text-ink-dim hover:text-ink-muted'
               }`}
             >
               <Icon size={14} />
@@ -214,13 +219,13 @@ export default function SettingsPage() {
         <div className="flex gap-6">
           {/* Category list */}
           <div className="w-[220px] flex-shrink-0">
-            <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-4">
-              <h3 className="text-[#52525b] text-xs font-medium uppercase tracking-wider mb-3">
+            <div className="bg-paper border border-hair-soft rounded-xl p-4">
+              <h3 className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-3">
                 Categories
               </h3>
 
               {loadingPrompts ? (
-                <Loader2 size={16} className="animate-spin text-[#52525b] mx-auto" />
+                <Loader2 size={16} className="animate-spin text-ink-dim mx-auto" />
               ) : (
                 <div className="space-y-1">
                   {/* Categories with prompts */}
@@ -230,15 +235,15 @@ export default function SettingsPage() {
                         onClick={() => selectCategory(cat)}
                         className={`flex-1 text-left px-3 py-2 rounded-lg text-sm transition-all ${
                           activeCategory === cat
-                            ? 'bg-[rgba(52,211,153,0.15)] text-[#34d399]'
-                            : 'text-[#a1a1aa] hover:bg-white/[0.03] hover:text-[#fafafa]'
+                            ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink'
+                            : 'text-ink-muted hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
                         }`}
                       >
                         {cat}
                       </button>
                       <button
                         onClick={() => handleDeletePrompt(cat)}
-                        className="text-[#52525b] hover:text-red-400 p-1 rounded transition-all"
+                        className="text-ink-dim hover:text-red-400 p-1 rounded transition-all"
                         title="Delete prompt"
                       >
                         <Trash2 size={12} />
@@ -253,8 +258,8 @@ export default function SettingsPage() {
                       onClick={() => selectCategory(cat)}
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
                         activeCategory === cat
-                          ? 'bg-[rgba(52,211,153,0.15)] text-[#34d399]'
-                          : 'text-[#52525b] hover:bg-white/[0.03] hover:text-[#a1a1aa]'
+                          ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink'
+                          : 'text-ink-dim hover:bg-[rgba(11,13,14,0.03)] hover:text-ink-muted'
                       }`}
                     >
                       {cat}
@@ -274,13 +279,13 @@ export default function SettingsPage() {
                         }}
                         placeholder="Category name"
                         autoFocus
-                        className="flex-1 bg-[#1f1f23] border border-white/[0.06] rounded px-2 py-1.5 text-sm text-[#fafafa] placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)]"
+                        className="flex-1 bg-tray border border-hair-soft rounded px-2 py-1.5 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)]"
                       />
                     </div>
                   ) : (
                     <button
                       onClick={() => setShowNewCategory(true)}
-                      className="w-full text-left px-3 py-2 rounded-lg text-sm text-[#52525b] hover:text-[#a1a1aa] transition-all flex items-center gap-1.5 mt-1"
+                      className="w-full text-left px-3 py-2 rounded-lg text-sm text-ink-dim hover:text-ink-muted transition-all flex items-center gap-1.5 mt-1"
                     >
                       <Plus size={12} />
                       Add category
@@ -294,13 +299,13 @@ export default function SettingsPage() {
           {/* Prompt editor */}
           <div className="flex-1">
             {activeCategory ? (
-              <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6">
+              <div className="bg-paper border border-hair-soft rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-[#fafafa] text-lg font-bold">{activeCategory}</h2>
+                  <h2 className="text-ink text-lg font-bold">{activeCategory}</h2>
                   <button
                     onClick={handleSavePrompt}
                     disabled={savingPrompt}
-                    className="bg-[#34d399] text-[#09090b] font-bold rounded-lg px-5 py-2 text-sm hover:bg-[#34d399]/90 transition-all disabled:opacity-40 flex items-center gap-2"
+                    className="bg-ink text-white font-bold rounded-lg px-5 py-2 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 flex items-center gap-2"
                   >
                     {savingPrompt ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -314,10 +319,10 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="text-[#a1a1aa] text-sm font-medium block mb-2">
+                  <label className="text-ink-muted text-sm font-medium block mb-2">
                     AI Prompt
                   </label>
-                  <p className="text-[#52525b] text-xs mb-3">
+                  <p className="text-ink-dim text-xs mb-3">
                     Write context about this industry for the AI. When drafting emails for leads in this category, the AI will combine your prompt with the call transcript to write relevant, specific emails. Just write naturally — dot points, sentences, whatever works.
                   </p>
                   <textarea
@@ -325,15 +330,15 @@ export default function SettingsPage() {
                     onChange={(e) => { setPromptDraft(e.target.value); setSavedPrompt(false); }}
                     placeholder={"e.g. Property styling businesses deal with tight turnarounds between listings. They often have 5-10 jobs running at once and rely on manual scheduling. We can automate their booking pipeline, auto-generate styled room mockups with AI, and build dashboards that show job status across all active listings. We've helped similar businesses cut admin time by 60%."}
                     rows={12}
-                    className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-3 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all resize-none leading-relaxed"
+                    className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
                   />
                 </div>
               </div>
             ) : (
-              <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-12 text-center">
-                <MessageSquareText size={32} className="text-[#52525b] mx-auto mb-3" />
-                <p className="text-[#a1a1aa] text-sm mb-1">Select a category to write its prompt</p>
-                <p className="text-[#52525b] text-xs">
+              <div className="bg-paper border border-hair-soft rounded-xl p-12 text-center">
+                <MessageSquareText size={32} className="text-ink-dim mx-auto mb-3" />
+                <p className="text-ink-muted text-sm mb-1">Select a category to write its prompt</p>
+                <p className="text-ink-dim text-xs">
                   The AI combines your prompt with the call transcript to write industry-specific emails. One prompt per category — keep it simple.
                 </p>
               </div>
@@ -344,13 +349,13 @@ export default function SettingsPage() {
 
       {/* ── Company Profile tab ────────────────────────────── */}
       {tab === 'company' && (
-        <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6">
+        <div className="bg-paper border border-hair-soft rounded-xl p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-[#fafafa] text-lg font-bold">Company Profile</h2>
+            <h2 className="text-ink text-lg font-bold">Company Profile</h2>
             <button
               onClick={handleSaveSettings}
               disabled={saving}
-              className="bg-[#34d399] text-[#09090b] font-bold rounded-lg px-5 py-2 text-sm hover:bg-[#34d399]/90 transition-all disabled:opacity-40 flex items-center gap-2"
+              className="bg-ink text-white font-bold rounded-lg px-5 py-2 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 flex items-center gap-2"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
               {saved ? 'Saved' : 'Save'}
@@ -364,13 +369,13 @@ export default function SettingsPage() {
               onChange={(v) => updateSetting('company_name', v)}
             />
             <div>
-              <label className="text-[#a1a1aa] text-sm font-medium block mb-2">Company Description</label>
-              <p className="text-[#52525b] text-xs mb-2">What does OxyScale do? This is used in email drafts when introducing the company.</p>
+              <label className="text-ink-muted text-sm font-medium block mb-2">Company Description</label>
+              <p className="text-ink-dim text-xs mb-2">What does OxyScale do? This is used in email drafts when introducing the company.</p>
               <textarea
                 value={settings.company_description || ''}
                 onChange={(e) => updateSetting('company_description', e.target.value)}
                 rows={3}
-                className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-3 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all resize-none leading-relaxed"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
               />
             </div>
             <SettingsField
@@ -401,13 +406,13 @@ export default function SettingsPage() {
 
       {/* ── Email Preferences tab ──────────────────────────── */}
       {tab === 'email' && (
-        <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6">
+        <div className="bg-paper border border-hair-soft rounded-xl p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-[#fafafa] text-lg font-bold">Email Preferences</h2>
+            <h2 className="text-ink text-lg font-bold">Email Preferences</h2>
             <button
               onClick={handleSaveSettings}
               disabled={saving}
-              className="bg-[#34d399] text-[#09090b] font-bold rounded-lg px-5 py-2 text-sm hover:bg-[#34d399]/90 transition-all disabled:opacity-40 flex items-center gap-2"
+              className="bg-ink text-white font-bold rounded-lg px-5 py-2 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 flex items-center gap-2"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
               {saved ? 'Saved' : 'Save'}
@@ -422,24 +427,24 @@ export default function SettingsPage() {
               description="How you close emails. e.g. 'Cheers', 'Kind regards', 'Talk soon'"
             />
             <div>
-              <label className="text-[#a1a1aa] text-sm font-medium block mb-2">Phrases to Avoid</label>
-              <p className="text-[#52525b] text-xs mb-2">Words or phrases the AI should never use in emails. One per line.</p>
+              <label className="text-ink-muted text-sm font-medium block mb-2">Phrases to Avoid</label>
+              <p className="text-ink-dim text-xs mb-2">Words or phrases the AI should never use in emails. One per line.</p>
               <textarea
                 value={settings.email_avoid_phrases || ''}
                 onChange={(e) => updateSetting('email_avoid_phrases', e.target.value)}
                 placeholder={"leverage\nsynergy\nstreamline\nI hope this finds you well"}
                 rows={4}
-                className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-3 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all resize-none leading-relaxed"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
               />
             </div>
             <div>
-              <label className="text-[#a1a1aa] text-sm font-medium block mb-2">Additional Email Instructions</label>
-              <p className="text-[#52525b] text-xs mb-2">Any other rules for how the AI should write emails. e.g. "Always mention we're based in Melbourne"</p>
+              <label className="text-ink-muted text-sm font-medium block mb-2">Additional Email Instructions</label>
+              <p className="text-ink-dim text-xs mb-2">Any other rules for how the AI should write emails. e.g. "Always mention we're based in Melbourne"</p>
               <textarea
                 value={settings.email_extra_instructions || ''}
                 onChange={(e) => updateSetting('email_extra_instructions', e.target.value)}
                 rows={3}
-                className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-3 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all resize-none leading-relaxed"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
               />
             </div>
           </div>
@@ -449,13 +454,13 @@ export default function SettingsPage() {
       {/* ── Email Signature tab ──────────────────────────────── */}
       {tab === 'signature' && (
         <div className="space-y-6">
-          <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6">
+          <div className="bg-paper border border-hair-soft rounded-xl p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-[#fafafa] text-lg font-bold">Email Signature</h2>
+              <h2 className="text-ink text-lg font-bold">Email Signature</h2>
               <button
                 onClick={handleSaveSettings}
                 disabled={saving}
-                className="bg-[#34d399] text-[#09090b] font-bold rounded-lg px-5 py-2 text-sm hover:bg-[#34d399]/90 transition-all disabled:opacity-40 flex items-center gap-2"
+                className="bg-ink text-white font-bold rounded-lg px-5 py-2 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 flex items-center gap-2"
               >
                 {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <Check size={14} /> : <Save size={14} />}
                 {saved ? 'Saved' : 'Save'}
@@ -479,9 +484,9 @@ export default function SettingsPage() {
           </div>
 
           {/* Live preview */}
-          <div className="bg-[#18181b] border border-white/[0.06] rounded-xl p-6">
-            <h3 className="text-[#a1a1aa] text-sm font-medium mb-4">Signature Preview</h3>
-            <div className="bg-[#fafafa] rounded-lg p-6">
+          <div className="bg-paper border border-hair-soft rounded-xl p-6">
+            <h3 className="text-ink-muted text-sm font-medium mb-4">Signature Preview</h3>
+            <div className="bg-cream rounded-lg p-6">
               <SignaturePreview
                 senderName={settings.sender_name || 'Jordan Bell'}
                 senderTitle={settings.sender_title || 'Co-Founder'}
@@ -521,7 +526,7 @@ function SignaturePreview({
         <td style="padding: 0 0 16px 0;">
           <table cellpadding="0" cellspacing="0" style="border-collapse: collapse; width: 100%;">
             <tr>
-              <td style="width: 60px; height: 2px; background-color: #34d399; font-size: 0; line-height: 0;"></td>
+              <td style="width: 60px; height: 2px; background-color: #0a9cd4; font-size: 0; line-height: 0;"></td>
               <td style="height: 2px; font-size: 0; line-height: 0;"></td>
             </tr>
           </table>
@@ -529,37 +534,37 @@ function SignaturePreview({
       </tr>
       <tr>
         <td style="padding: 0 0 2px 0;">
-          <span style="color: #18181b; font-size: 14px; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">${senderName}</span>
+          <span style="color: #0b0d0e; font-size: 14px; font-weight: 600; font-family: Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">${senderName}</span>
         </td>
       </tr>
       <tr>
         <td style="padding: 0 0 10px 0;">
-          <span style="color: #71717a; font-size: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">${senderTitle}</span>
+          <span style="color: #8a95a0; font-size: 12px; font-family: Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">${senderTitle}</span>
         </td>
       </tr>
       <tr>
         <td style="padding: 0 0 8px 0;">
-          <a href="${websiteUrl}" style="text-decoration: none; font-family: 'Outfit', -apple-system, sans-serif; font-weight: 800; font-size: 15px; letter-spacing: -0.03em;">
-            <span style="color: #18181b;">Oxy</span><span style="color: #34d399;">Scale</span>
+          <a href="${websiteUrl}" style="text-decoration: none; font-family: Geist, -apple-system, sans-serif; font-weight: 600; font-size: 15px; letter-spacing: -0.035em;">
+            <span style="color: #0b0d0e;">Oxy</span><span style="color: #0a9cd4;">Scale</span>
           </a>
         </td>
       </tr>
       <tr>
         <td style="padding: 0 0 4px 0;">
-          <span style="color: #71717a; font-size: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">${senderPhone}</span>
+          <span style="color: #8a95a0; font-size: 12px; font-family: Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">${senderPhone}</span>
         </td>
       </tr>
       <tr>
         <td style="padding: 0 0 12px 0;">
-          <a href="${websiteUrl}" style="color: #34d399; font-size: 12px; text-decoration: none; font-weight: 500; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">${cleanUrl}</a>
+          <a href="${websiteUrl}" style="color: #0a9cd4; font-size: 12px; text-decoration: none; font-weight: 500; font-family: Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">${cleanUrl}</a>
         </td>
       </tr>
       <tr>
         <td style="padding: 0;">
           <table cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
             <tr>
-              <td style="background-color: #34d399; border-radius: 6px; padding: 8px 16px;">
-                <a href="${calendlyLink}" style="color: #09090b; font-size: 12px; font-weight: 700; text-decoration: none; display: block; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">Book a call</a>
+              <td style="background-color: #0b0d0e; border-radius: 999px; padding: 8px 18px;">
+                <a href="${calendlyLink}" style="color: #ffffff; font-size: 12px; font-weight: 600; text-decoration: none; display: block; font-family: Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">Book a call</a>
               </td>
             </tr>
           </table>
@@ -590,13 +595,13 @@ function SettingsField({
 }) {
   return (
     <div>
-      <label className="text-[#a1a1aa] text-sm font-medium block mb-1.5">{label}</label>
-      {description && <p className="text-[#52525b] text-xs mb-2">{description}</p>}
+      <label className="text-ink-muted text-sm font-medium block mb-1.5">{label}</label>
+      {description && <p className="text-ink-dim text-xs mb-2">{description}</p>}
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-[#1f1f23] border border-white/[0.06] rounded-lg px-4 py-2.5 text-[#fafafa] text-sm placeholder-[#52525b] focus:outline-none focus:border-[rgba(52,211,153,0.3)] transition-all"
+        className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
       />
     </div>
   );

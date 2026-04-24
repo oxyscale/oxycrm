@@ -17,7 +17,7 @@ Both of them use Claude Code. Assume neither wants to read a wall of code unless
 
 ## Project stack (non-negotiable — do not swap)
 
-- **Frontend:** React + Vite + TypeScript + Tailwind (dark mode only)
+- **Frontend:** React + Vite + TypeScript + Tailwind (light editorial theme — see Brand rules below)
 - **Backend:** Node.js + Express + TypeScript
 - **Database:** SQLite via `better-sqlite3` — source of truth for all CRM data
 - **Telephony:** Twilio Voice SDK (browser-based calling)
@@ -64,16 +64,98 @@ oxycrm/
 
 ## Brand rules — STRICT, never break
 
-- **Dark mode only.** No light theme, ever.
-- **Backgrounds:** `#09090b` (page), `#18181b` (cards), `#1f1f23` (subtle differentiation)
-- **Accent:** Emerald `#34d399` — CTAs, emphasis, icons. Used sparingly.
-- **Text:** `#fafafa` (headlines), `#a1a1aa` (body), `#52525b` (labels)
-- **Borders:** `rgba(255, 255, 255, 0.06)`
-- **Fonts:** Geist, Satoshi, or Cabinet Grotesk for UI. Outfit ExtraBold (800) for the logo. **Never use Inter.**
-- **Logo:** "Oxy" in white, "Scale" in emerald. Letter-spacing `-0.03em`.
-- **Never use:** pure black `#000000`, pure white `#ffffff`, purple/blue AI gradients, emojis in UI, pink/magenta accents.
-- **CTA buttons:** emerald bg `#34d399`, dark text `#09090b`
-- **Secondary buttons:** transparent bg, `#a1a1aa` text, subtle border
+The canonical brand reference lives at `/Users/georgeharrad/oxyscale/internal/brand/BRAND-GUIDELINES.md`. The rules below are the Dialler-specific application of that system. If the two ever disagree, the brand guidelines file wins — update this section.
+
+### Theme
+
+- **Light editorial theme.** Warm Cream page background, White paper cards, Ink black text, Sky blue accent. No dark mode. No black page backgrounds.
+- Previous "dark mode only" rule is SUPERSEDED (April 2026 rebrand).
+
+### Colours (use Tailwind tokens — never hard-code)
+
+| Token | Hex | Usage |
+|---|---|---|
+| `ink` | `#0b0d0e` | Primary text, headings, primary CTA bg |
+| `ink-muted` | `#55606a` | Body text, secondary copy |
+| `ink-dim` | `#8a95a0` | Tertiary text, labels, captions |
+| `ink-faint` | `#b8bfc6` | Placeholder, disabled |
+| `sky` | `#5ec5e6` | Primary accent — icons, highlights, glyphs |
+| `sky-ink` | `#0a9cd4` | Accent text on light bg, italic editorial words, links |
+| `sky-wash` | `rgba(94,197,230,0.12)` | Accent backgrounds, pill highlights |
+| `sky-hair` | `rgba(94,197,230,0.24)` | Accent borders, dividers |
+| `cream` | `#faf9f5` | Page background |
+| `paper` | `#ffffff` | Card/paper surfaces |
+| `tray` | `#f2f0e8` | Bezel trays, recessed containers |
+| `hair` | `rgba(11,13,14,0.08)` | Standard dividers |
+| `hair-soft` | `rgba(11,13,14,0.05)` | Subtle card borders |
+| `hair-strong` | `rgba(11,13,14,0.14)` | Prominent dividers |
+
+### Semantic (use sparingly)
+
+- `ok` `#10b981` — success
+- `warn` `#f59e0b` — warnings, medium priority (e.g. "due today" follow-ups)
+- `risk` `#ef4444` — errors, high priority (e.g. "overdue" follow-ups)
+
+### Typography
+
+- **Sans (UI):** Geist — weights 400, 500, 600.
+- **Mono (labels, tags, data):** Geist Mono — weight 400.
+- **Editorial accent (italic words in headings):** Fraunces italic, weight 400, colour `sky-ink`. Use for 1–3 key words in a headline, e.g. *"Intelligence your team will actually use."* Reserve for marketing-style surfaces; use judgement for internal CRM headings.
+- Fallback stack: Inter, SF Pro Display, -apple-system, BlinkMacSystemFont, system-ui, sans-serif.
+
+Type hierarchy: Hero 72–80px / 500 / -0.04em · Section 32–40px / 500 / -0.03em · Card 16–22px / 500 / -0.02em · Body 15px · Small 13–14px · Mono label 10–11px / 600 / 0.18–0.22em tracking.
+
+### Surfaces & elevation
+
+Layered card system:
+
+1. **Page** — Cream `#faf9f5`
+2. **Tray** — `#f2f0e8`, inset highlight `inset 0 1px 0 rgba(255,255,255,0.9)`
+3. **Card** — White, `1px hair-soft` border, subtle shadow
+4. **Elevated** — White, `1px sky-hair` border, `0 12px 28px -18px rgba(12,141,191,0.35)`
+
+Prefer the **double-bezel** card pattern for primary surfaces: outer tray with `rounded-2xl` + inset highlight, inner white card with `rounded-[calc(2rem-0.375rem)]` and hair-soft border.
+
+### Buttons
+
+- **Primary (dark):** Ink `#0b0d0e` bg, White text, `rounded-full` pill. Optional trailing icon in `bg-white/15` circle. Hover `#1a1d1f`. Active `scale(0.98)`.
+- **Outline:** Hair border, Ink text, transparent bg. Hover: subtle sky-wash.
+- **Ghost:** No border, no bg, Ink Muted text. Hover: `bg-[rgba(11,13,14,0.03)]`.
+
+### Logo
+
+- **Wordmark (default, light bg):** "Oxy" in Ink `#0b0d0e`, "Scale" in Sky Ink `#0a9cd4`. Geist 600, tracking `-0.035em`.
+- **Inverse (dark bg only, rare):** "Oxy" White, "Scale" Sky `#5ec5e6`.
+- SVGs live at `/Users/georgeharrad/oxyscale/internal/brand/logos/`. Copy — never redraw.
+- Favicon: Black "O" with blue "S" centred. File at `/Users/georgeharrad/oxyscale/internal/brand/icons/favicon.svg`.
+
+### Icons
+
+Phosphor Icons (regular for UI, bold for small sizes, fill for emphasis). Sky Ink for accent, Ink Dim for secondary. 11–16px. Lucide is already present in the codebase — migrate incrementally, don't mix styles within one screen.
+
+### Never use
+
+- Pure black `#000000` (use Ink `#0b0d0e`).
+- Dark page backgrounds (`#09090b`, `#18181b` etc — legacy).
+- Emerald `#34d399` (legacy accent — replaced by Sky).
+- Inter as primary UI font (Geist now).
+- Purple/blue AI gradients, pink/magenta accents, drop shadows on the logo.
+- Emojis in UI, code, or commit messages (unless the user explicitly asks).
+
+### Animation
+
+- Springs over easing curves (stiffness 150–180, damping 20–26).
+- Opacity 0.4–0.55s. Scale entrance 0.95 → 1.0. Y entrance 16–30px up.
+- No bounce, no overshoot. Respect `prefers-reduced-motion`.
+
+### Emails
+
+- Header: White bg, wordmark top-left.
+- Accent: Sky Ink `#0a9cd4` for headings, links.
+- Body: Ink on white/cream. Dividers: `1px rgba(11,13,14,0.08)`.
+- CTA: Ink bg, white text, `rounded-full`.
+- Footer: Cream `#faf9f5` bg, Ink Dim text.
+- Every send: Resend with both `text` and `html`. Always include the signature.
 
 ---
 
@@ -158,8 +240,9 @@ npx tsc --noEmit --project server/tsconfig.json
 
 - Creating new files when editing existing ones would do.
 - Adding an emoji to UI or commit messages "for clarity". Don't.
-- Using Inter or Arial fonts (brand rule violation).
-- Using pure black or pure white (brand rule violation).
+- Using Inter or Arial as primary UI fonts (Geist is the brand sans).
+- Using pure black `#000000` (use Ink `#0b0d0e`) or re-introducing dark page backgrounds.
+- Re-introducing the old emerald `#34d399` accent — Sky blue has replaced it everywhere.
 - Forgetting to add a new pipeline stage to all 5 locations listed above.
 - Writing a long-winded summary — Jordan and George read code in bursts.
 - Changing the `DispositionPayload` shape without updating both `shared/types.ts` AND `shared/types.d.ts`.

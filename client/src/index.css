@@ -3,40 +3,37 @@
 @tailwind utilities;
 
 body {
-  background-color: #09090b;
-  color: #fafafa;
-  font-family: 'Geist', sans-serif;
+  background-color: #faf9f5;
+  color: #0b0d0e;
+  font-family: 'Geist', 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar — dark themed */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
-  border-radius: 3px;
+  background: rgba(11, 13, 14, 0.12);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: rgba(11, 13, 14, 0.22);
 }
 
-/* Selection color */
 ::selection {
-  background-color: rgba(52, 211, 153, 0.3);
-  color: #fafafa;
+  background-color: rgba(94, 197, 230, 0.35);
+  color: #0b0d0e;
 }
 
-/* Focus ring utility */
 *:focus-visible {
-  outline: 2px solid rgba(52, 211, 153, 0.5);
+  outline: 2px solid rgba(12, 141, 191, 0.55);
   outline-offset: 2px;
 }
