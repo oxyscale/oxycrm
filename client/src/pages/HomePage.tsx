@@ -20,6 +20,7 @@ import {
   Mail,
   MessageSquare,
   Activity as ActivityIcon,
+  X,
 } from 'lucide-react';
 import Glyph from '../components/ui/Glyph';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
@@ -82,6 +83,8 @@ export default function HomePage() {
   } | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [followUpQueue, setFollowUpQueue] = useState<(Lead & { isOverdue: boolean })[]>([]);
+  const [queueFilter, setQueueFilter] = useState<'all' | 'overdue' | 'due_today' | 'upcoming'>('all');
+  const [removingLeadId, setRemovingLeadId] = useState<number | null>(null);
 
   const [showImport, setShowImport] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -178,6 +181,18 @@ export default function HomePage() {
       setImportError(err instanceof Error ? err.message : 'Failed to import leads');
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleRemoveFollowUp = async (leadId: number) => {
+    setRemovingLeadId(leadId);
+    try {
+      await api.updateLead(leadId, { followUpDate: null });
+      setFollowUpQueue((prev) => prev.filter((l) => l.id !== leadId));
+    } catch (err) {
+      console.error('Failed to remove from follow-up queue:', err);
+    } finally {
+      setRemovingLeadId(null);
     }
   };
 
@@ -723,33 +738,79 @@ export default function HomePage() {
                   </button>
                 }
               >
-                {/* Summary chips */}
+                {/* Summary chips — clickable to filter. Click active chip again to clear. */}
                 <div className="flex flex-wrap items-center gap-2 mb-4">
                   {overdueLeads.length > 0 && (
-                    <span className="inline-flex items-center gap-1.5 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.22)] rounded-full px-3 py-1 font-mono text-[10.5px] font-semibold tracking-[0.18em] uppercase text-risk">
-                      <span className="w-1.5 h-1.5 rounded-full bg-risk" />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQueueFilter((curr) => (curr === 'overdue' ? 'all' : 'overdue'))
+                      }
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[10.5px] font-semibold tracking-[0.18em] uppercase transition-all border ${
+                        queueFilter === 'overdue'
+                          ? 'bg-risk text-white border-risk shadow-btn-hover'
+                          : 'bg-[rgba(239,68,68,0.08)] border-[rgba(239,68,68,0.22)] text-risk hover:bg-[rgba(239,68,68,0.14)]'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${queueFilter === 'overdue' ? 'bg-white' : 'bg-risk'}`} />
                       {overdueLeads.length} overdue
-                    </span>
+                    </button>
                   )}
                   {dueTodayLeads.length > 0 && (
-                    <span className="inline-flex items-center gap-1.5 bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.24)] rounded-full px-3 py-1 font-mono text-[10.5px] font-semibold tracking-[0.18em] uppercase text-warn">
-                      <span className="w-1.5 h-1.5 rounded-full bg-warn" />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQueueFilter((curr) => (curr === 'due_today' ? 'all' : 'due_today'))
+                      }
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[10.5px] font-semibold tracking-[0.18em] uppercase transition-all border ${
+                        queueFilter === 'due_today'
+                          ? 'bg-warn text-white border-warn shadow-btn-hover'
+                          : 'bg-[rgba(245,158,11,0.08)] border-[rgba(245,158,11,0.24)] text-warn hover:bg-[rgba(245,158,11,0.14)]'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${queueFilter === 'due_today' ? 'bg-white' : 'bg-warn'}`} />
                       {dueTodayLeads.length} due today
-                    </span>
+                    </button>
                   )}
                   {upcomingLeads.length > 0 && (
-                    <span className="inline-flex items-center gap-1.5 bg-sky-wash border border-sky-hair rounded-full px-3 py-1 font-mono text-[10.5px] font-semibold tracking-[0.18em] uppercase text-sky-ink">
-                      <span className="w-1.5 h-1.5 rounded-full bg-sky-ink" />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQueueFilter((curr) => (curr === 'upcoming' ? 'all' : 'upcoming'))
+                      }
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[10.5px] font-semibold tracking-[0.18em] uppercase transition-all border ${
+                        queueFilter === 'upcoming'
+                          ? 'bg-sky-ink text-white border-sky-ink shadow-btn-hover'
+                          : 'bg-sky-wash border-sky-hair text-sky-ink hover:bg-[rgba(94,197,230,0.22)]'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${queueFilter === 'upcoming' ? 'bg-white' : 'bg-sky-ink'}`} />
                       {upcomingLeads.length} upcoming
-                    </span>
+                    </button>
+                  )}
+                  {queueFilter !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => setQueueFilter('all')}
+                      className="inline-flex items-center gap-1 rounded-full px-3 py-1 font-mono text-[10.5px] font-semibold tracking-[0.18em] uppercase text-ink-dim hover:text-ink border border-hair-soft hover:border-hair transition-all"
+                    >
+                      <X size={10} />
+                      Clear
+                    </button>
                   )}
                 </div>
 
                 <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
                   {[
-                    ...overdueLeads.map((l) => ({ lead: l, tone: 'risk' as const })),
-                    ...dueTodayLeads.map((l) => ({ lead: l, tone: 'warn' as const })),
-                    ...upcomingLeads.map((l) => ({ lead: l, tone: 'sky' as const })),
+                    ...(queueFilter === 'all' || queueFilter === 'overdue'
+                      ? overdueLeads.map((l) => ({ lead: l, tone: 'risk' as const }))
+                      : []),
+                    ...(queueFilter === 'all' || queueFilter === 'due_today'
+                      ? dueTodayLeads.map((l) => ({ lead: l, tone: 'warn' as const }))
+                      : []),
+                    ...(queueFilter === 'all' || queueFilter === 'upcoming'
+                      ? upcomingLeads.map((l) => ({ lead: l, tone: 'sky' as const }))
+                      : []),
                   ].map(({ lead, tone }) => {
                     const daysOverdue = lead.followUpDate
                       ? Math.floor(
@@ -798,18 +859,33 @@ export default function HomePage() {
                             <span className="font-mono text-[11px] text-ink-dim tracking-wide">
                               {dateFmt}
                             </span>
-                            <PillButton
-                              variant="primary"
-                              size="sm"
-                              trailing="none"
-                              icon={<Phone size={13} />}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate('/dialler', { state: { loadLeadId: lead.id } });
-                              }}
-                            >
-                              Call
-                            </PillButton>
+                            <div className="flex flex-col items-stretch gap-1.5">
+                              <PillButton
+                                variant="primary"
+                                size="sm"
+                                trailing="none"
+                                icon={<Phone size={13} />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate('/dialler', { state: { loadLeadId: lead.id } });
+                                }}
+                              >
+                                Call
+                              </PillButton>
+                              <PillButton
+                                variant="outline"
+                                size="sm"
+                                trailing="none"
+                                icon={<X size={12} />}
+                                disabled={removingLeadId === lead.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveFollowUp(lead.id);
+                                }}
+                              >
+                                {removingLeadId === lead.id ? 'Removing…' : 'Remove'}
+                              </PillButton>
+                            </div>
                           </>
                         }
                       />
