@@ -124,14 +124,33 @@ export async function updateLead(
 
 export async function disposeLead(
   payload: DispositionPayload
-): Promise<{ success: boolean }> {
-  return request<{ success: boolean }>(
+): Promise<(Lead & { callLogId: number | null }) | { deleted: true; id: number }> {
+  return request<(Lead & { callLogId: number | null }) | { deleted: true; id: number }>(
     `/leads/${payload.leadId}/disposition`,
     {
       method: 'POST',
       body: JSON.stringify(payload),
     }
   );
+}
+
+/**
+ * Persists AI-generated summary fields onto an existing call log.
+ * Called after the client receives a summary from Claude for a just-dispositioned call.
+ */
+export async function updateCallSummary(
+  callLogId: number,
+  data: {
+    summary?: string;
+    keyTopics?: string[];
+    actionItems?: string[];
+    sentiment?: string;
+  }
+): Promise<CallLog> {
+  return request<CallLog>(`/calls/${callLogId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
 }
 
 export async function searchLeadByPhone(phone: string): Promise<(Lead & { lastCallLog: CallLog | null })[]> {

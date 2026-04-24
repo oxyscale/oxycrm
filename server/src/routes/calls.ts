@@ -314,4 +314,67 @@ router.patch('/:id/disposition', async (req, res, next) => {
   }
 });
 
+/**
+ * PATCH /api/calls/:id
+ * Persists AI-generated summary fields onto a call_log row.
+ * Called by the client after Claude returns a summary for a freshly-dispositioned call.
+ * All fields are optional so partial updates work.
+ */
+const updateCallSummarySchema = z.object({
+  summary: z.string().optional(),
+  keyTopics: z.array(z.string()).optional(),
+  actionItems: z.array(z.string()).optional(),
+  sentiment: z.string().optional(),
+});
+
+router.patch('/:id', (req, res, next) => {
+  try {
+    const db = getDb();
+    const callId = parseInt(req.params.id, 10);
+    if (isNaN(callId)) {
+      throw new ApiError(400, 'Invalid call log ID');
+    }
+
+    const updates = updateCallSummarySchema.parse(req.body);
+
+    const setClauses: string[] = [];
+    const params: Record<string, unknown> = { id: callId };
+
+    if (updates.summary !== undefined) {
+      setClauses.push('summary = @summary');
+      params.summary = updates.summary;
+    }
+    if (updates.keyTopics !== undefined) {
+      setClauses.push('key_topics = @keyTopics');
+      params.keyTopics = JSON.stringify(updates.keyTopics);
+    }
+    if (updates.actionItems !== undefined) {
+      setClauses.push('action_items = @actionItems');
+      params.actionItems = JSON.stringify(updates.actionItems);
+    }
+    if (updates.sentiment !== undefined) {
+      setClauses.push('sentiment = @sentiment');
+      params.sentiment = updates.sentiment;
+    }
+
+    if (setClauses.length === 0) {
+      throw new ApiError(400, 'No summary fields provided');
+    }
+
+    const result = db.prepare(
+      `UPDATE call_logs SET ${setClauses.join(', ')} WHERE id = @id`
+    ).run(params);
+
+    if (result.changes === 0) {
+      throw new ApiError(404, 'Call log not found');
+    }
+
+    const updatedRow = db.prepare('SELECT * FROM call_logs WHERE id = ?').get(callId) as CallLogRow;
+    logger.info({ callId, fields: Object.keys(updates) }, 'Call log summary persisted');
+    res.json(mapCallLogRow(updatedRow));
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

@@ -561,7 +561,10 @@ router.post('/:id/disposition', (req, res, next) => {
     const now = new Date().toISOString();
 
     // Run disposition logic in a transaction to keep data consistent
-    // All reads and writes happen inside the transaction to prevent race conditions
+    // All reads and writes happen inside the transaction to prevent race conditions.
+    // Captures the inserted call_log id so the client can PATCH the AI summary back
+    // onto this specific call row once Claude returns.
+    let createdCallLogId: number | null = null;
     const processDisposition = db.transaction(() => {
       // Re-fetch lead inside transaction for data consistency
       const leadRow = db.prepare('SELECT * FROM leads WHERE id = ?').get(id) as LeadRow | undefined;
@@ -605,10 +608,11 @@ router.post('/:id/disposition', (req, res, next) => {
         }
       }
 
-      db.prepare(`
+      const insertResult = db.prepare(`
         INSERT INTO call_logs (lead_id, duration, transcript, disposition, twilio_call_sid, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(id, payload.callDuration, transcript, payload.disposition, callSid, now);
+      createdCallLogId = Number(insertResult.lastInsertRowid);
 
       // Update last_called_at timestamp
       db.prepare('UPDATE leads SET last_called_at = ?, updated_at = ? WHERE id = ?')
@@ -708,12 +712,13 @@ router.post('/:id/disposition', (req, res, next) => {
       return;
     }
 
-    // Return the updated lead
+    // Return the updated lead + the id of the call_log we just created so the
+    // client can PATCH the AI summary back onto this call after Claude returns.
     const updatedRow = db.prepare('SELECT * FROM leads WHERE id = ?').get(id) as LeadRow;
     const updatedLead = mapLeadRow(updatedRow);
 
-    logger.info({ leadId: id, disposition: payload.disposition }, 'Disposition processed');
-    res.json(updatedLead);
+    logger.info({ leadId: id, disposition: payload.disposition, callLogId: createdCallLogId }, 'Disposition processed');
+    res.json({ ...updatedLead, callLogId: createdCallLogId });
   } catch (err) {
     next(err);
   }

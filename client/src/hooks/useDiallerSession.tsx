@@ -158,7 +158,7 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
       const leadSnapshot = { ...currentLead };
 
       try {
-        await api.disposeLead({
+        const disposeResult = await api.disposeLead({
           leadId: currentLead.id,
           disposition,
           callDuration,
@@ -168,6 +168,9 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
           callbackNotes,
           followUpDate,
         });
+        // wrong_number returns { deleted: true, id } — no callLogId in that case.
+        const callLogId =
+          'callLogId' in disposeResult ? disposeResult.callLogId : null;
 
         // Trigger recording download + Whisper transcription in the background.
         // This polls Twilio's API directly for the recording (more reliable than webhooks).
@@ -210,6 +213,27 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
             });
 
             setAiSummary(summaryResult.summary);
+
+            // Step 1b: PERSIST the summary so it isn't lost on page reload.
+            // - Per-call fields go on this specific call_log row.
+            // - The rolling consolidated_summary on the lead is what gets fed back to
+            //   Claude as `previousNotes` on the next call — this is what makes call #2,
+            //   #3, #10 aware of everything that's been discussed so far.
+            if (callLogId) {
+              api.updateCallSummary(callLogId, {
+                summary: summaryResult.summary,
+                keyTopics: summaryResult.keyTopics,
+                actionItems: summaryResult.actionItems,
+                sentiment: summaryResult.sentiment,
+              }).catch((err) => {
+                console.error('Failed to persist call summary (non-blocking):', err);
+              });
+            }
+            api.updateLead(leadSnapshot.id, {
+              consolidatedSummary: summaryResult.summary,
+            }).catch((err) => {
+              console.error('Failed to persist consolidated summary (non-blocking):', err);
+            });
 
             // Step 2: For "interested" — also draft a follow-up email
             if (disposition === 'interested') {
