@@ -1,15 +1,17 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { Home, Users, Phone, Kanban, FolderKanban, Brain, BarChart3, HelpCircle, Settings } from 'lucide-react';
+import { Home, Users, Phone, Kanban, FolderKanban, Brain, BarChart3, HelpCircle, Settings, Inbox } from 'lucide-react';
 import SearchBar from './SearchBar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import * as api from '../services/api';
 
 const navItems = [
   { path: '/', icon: Home, label: 'Home' },
   { path: '/pipeline', icon: Kanban, label: 'Pipeline' },
   { path: '/leads', icon: Users, label: 'Leads' },
   { path: '/dialler', icon: Phone, label: 'Dialler' },
+  { path: '/email-bank', icon: Inbox, label: 'Email Bank' },
   { path: '/projects', icon: FolderKanban, label: 'Projects' },
   { path: '/intelligence', icon: Brain, label: 'Call Intelligence' },
   { path: '/dashboard', icon: BarChart3, label: 'Stats' },
@@ -24,19 +26,40 @@ const shortcutEntries = [
   { label: '2', description: 'Go to Pipeline' },
   { label: '3', description: 'Go to Leads' },
   { label: '4', description: 'Go to Dialler' },
-  { label: '5', description: 'Go to Projects' },
-  { label: '6', description: 'Go to Intelligence' },
-  { label: '7', description: 'Go to Stats' },
-  { label: '8', description: 'Go to Settings' },
+  { label: '5', description: 'Go to Email Bank' },
+  { label: '6', description: 'Go to Projects' },
+  { label: '7', description: 'Go to Intelligence' },
+  { label: '8', description: 'Go to Stats' },
+  { label: '9', description: 'Go to Settings' },
 ];
 
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [emailBankReadyCount, setEmailBankReadyCount] = useState(0);
 
   const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
   const closeShortcuts = useCallback(() => setShortcutsOpen(false), []);
+
+  // Poll email-bank ready-count every 30s for the sidebar badge.
+  useEffect(() => {
+    let cancelled = false;
+    const pull = async () => {
+      try {
+        const res = await api.getEmailDrafts('ready');
+        if (!cancelled) setEmailBankReadyCount(res.stats.ready || 0);
+      } catch {
+        // silent — badge just won't update
+      }
+    };
+    pull();
+    const id = window.setInterval(pull, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
 
   // Register global keyboard shortcuts
   const shortcuts = useMemo(
@@ -51,10 +74,11 @@ export default function Layout() {
       { key: '2', handler: () => navigate('/pipeline'), description: 'Go to Pipeline' },
       { key: '3', handler: () => navigate('/leads'), description: 'Go to Leads' },
       { key: '4', handler: () => navigate('/dialler'), description: 'Go to Dialler' },
-      { key: '5', handler: () => navigate('/projects'), description: 'Go to Projects' },
-      { key: '6', handler: () => navigate('/intelligence'), description: 'Go to Intelligence' },
-      { key: '7', handler: () => navigate('/dashboard'), description: 'Go to Stats' },
-      { key: '8', handler: () => navigate('/settings'), description: 'Go to Settings' },
+      { key: '5', handler: () => navigate('/email-bank'), description: 'Go to Email Bank' },
+      { key: '6', handler: () => navigate('/projects'), description: 'Go to Projects' },
+      { key: '7', handler: () => navigate('/intelligence'), description: 'Go to Intelligence' },
+      { key: '8', handler: () => navigate('/dashboard'), description: 'Go to Stats' },
+      { key: '9', handler: () => navigate('/settings'), description: 'Go to Settings' },
     ],
     [navigate]
   );
@@ -88,6 +112,7 @@ export default function Layout() {
                 ? location.pathname === '/'
                 : location.pathname.startsWith(path);
 
+            const showBadge = path === '/email-bank' && emailBankReadyCount > 0;
             return (
               <button
                 key={path}
@@ -103,6 +128,14 @@ export default function Layout() {
                   <div className="absolute left-[-13px] top-1/2 -translate-y-1/2 w-[3px] h-5 bg-sky-ink rounded-r" />
                 )}
                 <Icon size={20} />
+                {showBadge && (
+                  <span
+                    aria-label={`${emailBankReadyCount} drafts ready`}
+                    className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-sky-ink text-white text-[10px] font-bold flex items-center justify-center leading-none shadow-btn-hover"
+                  >
+                    {emailBankReadyCount > 99 ? '99+' : emailBankReadyCount}
+                  </span>
+                )}
               </button>
             );
           })}

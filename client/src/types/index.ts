@@ -24,4 +24,7 @@ export type {
   Activity,
   ActivityType,
   EmailSent,
+  EmailDraft,
+  EmailDraftStatus,
+  EmailDraftWithLead,
 } from '@shared/types';

@@ -277,5 +277,36 @@ export function initializeDatabase(db: Database.Database): void {
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
+
+    -- ============================================================
+    -- Email Bank — AI-generated follow-up email drafts
+    -- Populated server-side after a call is dispositioned (interested/voicemail)
+    -- and its Whisper transcript is ready. Jordan reviews + sends at his own pace.
+    -- ============================================================
+    CREATE TABLE IF NOT EXISTS email_drafts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lead_id INTEGER NOT NULL,
+      call_log_id INTEGER UNIQUE,             -- One draft per call. UNIQUE prevents double-generation.
+      disposition TEXT NOT NULL,              -- 'interested' | 'voicemail'
+      to_email TEXT,
+      cc_email TEXT,
+      subject TEXT,
+      body TEXT,
+      suggested_stage TEXT DEFAULT 'follow_up', -- 'follow_up' | 'call_booked'
+      status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'ready' | 'sent' | 'discarded' | 'failed'
+      generated_at TEXT,                      -- when AI finished writing
+      sent_at TEXT,
+      error_message TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+      FOREIGN KEY (call_log_id) REFERENCES call_logs(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_email_drafts_status
+      ON email_drafts(status, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_email_drafts_lead
+      ON email_drafts(lead_id);
   `);
 }

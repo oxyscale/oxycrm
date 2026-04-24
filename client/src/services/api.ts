@@ -14,6 +14,8 @@ import type {
   ProjectTask,
   Activity,
   EmailSent,
+  EmailDraft,
+  EmailDraftWithLead,
 } from '../types';
 
 const BASE_URL = '/api';
@@ -595,6 +597,63 @@ export async function saveCategoryPrompt(category: string, prompt: string): Prom
 
 export async function deleteCategoryPrompt(category: string): Promise<void> {
   return request<void>(`/settings/prompts/${encodeURIComponent(category)}`, {
+    method: 'DELETE',
+  });
+}
+
+// ── Email Bank ───────────────────────────────────────────────
+
+export interface EmailBankResponse {
+  drafts: EmailDraftWithLead[];
+  stats: {
+    ready: number;
+    pending: number;
+    failed: number;
+    sentLast24h: number;
+  };
+}
+
+export async function getEmailDrafts(status?: string): Promise<EmailBankResponse> {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+  return request<EmailBankResponse>(`/email-drafts${qs}`);
+}
+
+export async function getEmailDraft(id: number): Promise<EmailDraftWithLead> {
+  return request<EmailDraftWithLead>(`/email-drafts/${id}`);
+}
+
+export async function updateEmailDraft(
+  id: number,
+  data: {
+    toEmail?: string | null;
+    ccEmail?: string | null;
+    subject?: string;
+    body?: string;
+    suggestedStage?: 'follow_up' | 'call_booked';
+  },
+): Promise<EmailDraft> {
+  return request<EmailDraft>(`/email-drafts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function sendEmailDraft(id: number): Promise<{ success: true; messageId: string | null }> {
+  return request<{ success: true; messageId: string | null }>(`/email-drafts/${id}/send`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function retryEmailDraft(id: number): Promise<{ success: true }> {
+  return request<{ success: true }>(`/email-drafts/${id}/retry`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function discardEmailDraft(id: number): Promise<{ success: true }> {
+  return request<{ success: true }>(`/email-drafts/${id}`, {
     method: 'DELETE',
   });
 }

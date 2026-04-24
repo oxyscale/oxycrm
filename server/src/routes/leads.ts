@@ -11,7 +11,7 @@ import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import type { Lead, CallLog, ImportResult, DispositionPayload, DuplicateLead, PipelineStage, Temperature } from '../../../shared/types.js';
 import pino from 'pino';
-import { summariseAndPersistCall } from '../services/ai-summary.js';
+import { summariseAndPersistCall, draftAndStoreEmailForCall } from '../services/ai-summary.js';
 
 const logger = pino({ name: 'leads-routes' });
 const router = Router();
@@ -618,6 +618,25 @@ router.post('/:id/disposition', (req, res, next) => {
       `).run(id, payload.callDuration, transcript, payload.disposition, callSid, now);
       createdCallLogId = Number(insertResult.lastInsertRowid);
 
+      // Email Bank: for dispositions that warrant a follow-up email, insert a
+      // pending draft row. The actual email content is filled in later by the
+      // post-Whisper chain (draftAndStoreEmailForCall) once the real transcript
+      // is available. Jordan never has to wait.
+      if (payload.disposition === 'interested' || payload.disposition === 'voicemail') {
+        try {
+          db.prepare(`
+            INSERT INTO email_drafts (lead_id, call_log_id, disposition, to_email, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?)
+          `).run(id, createdCallLogId, payload.disposition, leadRow.email, now, now);
+        } catch (draftErr) {
+          // UNIQUE(call_log_id) collision or other — log but don't fail the disposition.
+          logger.warn(
+            { leadId: id, callLogId: createdCallLogId, error: draftErr instanceof Error ? draftErr.message : String(draftErr) },
+            'Failed to create email_drafts row (non-blocking)',
+          );
+        }
+      }
+
       // Update last_called_at timestamp
       db.prepare('UPDATE leads SET last_called_at = ?, updated_at = ? WHERE id = ?')
         .run(now, now, id);
@@ -717,10 +736,13 @@ router.post('/:id/disposition', (req, res, next) => {
     }
 
     // If Whisper beat us to it (pending_transcripts path), the call_log already
-    // has a real transcript. Fire server-side summarisation now — same helper
-    // that the Whisper webhook uses when it arrives late. Non-blocking.
+    // has a real transcript. Fire the post-transcript chain now — summarise
+    // THEN draft the email bank entry. Non-blocking.
     if (usedPendingTranscript && createdCallLogId) {
-      summariseAndPersistCall(createdCallLogId, id).catch(() => {});
+      (async () => {
+        await summariseAndPersistCall(createdCallLogId!, id);
+        await draftAndStoreEmailForCall(createdCallLogId!, id);
+      })().catch(() => {});
     }
 
     // Return the updated lead + the id of the call_log we just created so the

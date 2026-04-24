@@ -555,3 +555,101 @@ export async function summariseAndPersistCall(callLogId: number, leadId: number)
     );
   }
 }
+
+// ── Email Bank: draft + store a follow-up email ────────────────
+//
+// Runs after summariseAndPersistCall once the real transcript is on the
+// call_log row. Looks up the pending email_drafts row for this call,
+// generates the appropriate email (follow-up or voicemail) based on the
+// row's disposition, and flips status to 'ready' so the draft appears
+// in Jordan's Email Bank.
+//
+// Idempotent — if the draft already reached 'ready' or 'sent', skip.
+// Never throws; all errors are captured to error_message on the draft.
+export async function draftAndStoreEmailForCall(callLogId: number, leadId: number): Promise<void> {
+  const db = getDb();
+
+  // Find the pending draft for this call. If none, nothing to do —
+  // the dispositions we care about (interested / voicemail) always
+  // create a pending draft row at disposition time.
+  const draft = db
+    .prepare('SELECT id, disposition, status FROM email_drafts WHERE call_log_id = ?')
+    .get(callLogId) as { id: number; disposition: string; status: string } | undefined;
+
+  if (!draft) {
+    logger.info({ callLogId }, 'No email_draft row for this call — skipping email bank draft');
+    return;
+  }
+
+  // Idempotency: never overwrite a ready/sent/discarded draft.
+  if (draft.status !== 'pending' && draft.status !== 'failed') {
+    logger.info({ callLogId, draftId: draft.id, status: draft.status }, 'Email draft already resolved — skipping');
+    return;
+  }
+
+  try {
+    // Fetch lead + call_log + recent style-matching emails.
+    const lead = db
+      .prepare('SELECT name, company, email, category FROM leads WHERE id = ?')
+      .get(leadId) as { name: string; company: string | null; email: string | null; category: string | null } | undefined;
+
+    if (!lead) {
+      throw new Error('Lead not found');
+    }
+
+    const callLog = db
+      .prepare('SELECT transcript, summary FROM call_logs WHERE id = ?')
+      .get(callLogId) as { transcript: string | null; summary: string | null } | undefined;
+
+    const transcript = callLog?.transcript?.trim() || '';
+    const summary = callLog?.summary || '';
+
+    if (transcript.length < 20 && draft.disposition === 'interested') {
+      // Interested disposition but no meaningful transcript yet — don't fabricate.
+      // Mark as failed with a retry-able reason.
+      throw new Error('Transcript unavailable — cannot draft from empty call audio');
+    }
+
+    const recentEmailsRows = db
+      .prepare(
+        `SELECT subject, body_snippet FROM emails_sent
+         WHERE direction = 'sent' AND body_snippet IS NOT NULL
+         ORDER BY created_at DESC LIMIT 5`,
+      )
+      .all() as Array<{ subject: string; body_snippet: string }>;
+
+    const previousEmails = recentEmailsRows.length > 0
+      ? recentEmailsRows.map((e) => `Subject: ${e.subject}\n${e.body_snippet}`).join('\n---\n')
+      : undefined;
+
+    let result: EmailDraftResult;
+    if (draft.disposition === 'voicemail') {
+      result = await draftVoicemailEmail(lead.name, lead.company, lead.category, previousEmails);
+    } else {
+      result = await draftFollowUpEmail(
+        transcript,
+        summary,
+        lead.name,
+        lead.company,
+        undefined,
+        previousEmails,
+        lead.category,
+      );
+    }
+
+    db.prepare(
+      `UPDATE email_drafts
+       SET subject = ?, body = ?, to_email = COALESCE(to_email, ?),
+           status = 'ready', generated_at = ?, error_message = NULL, updated_at = ?
+       WHERE id = ?`,
+    ).run(result.subject, result.body, lead.email, new Date().toISOString(), new Date().toISOString(), draft.id);
+
+    logger.info({ callLogId, leadId, draftId: draft.id }, 'Email draft generated and stored in Email Bank');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error({ callLogId, leadId, draftId: draft.id, error: message }, 'Email draft generation failed');
+    db.prepare(
+      `UPDATE email_drafts SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?`,
+    ).run(message, new Date().toISOString(), draft.id);
+  }
+}

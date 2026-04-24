@@ -24,27 +24,17 @@ import {
 } from 'lucide-react';
 import { useDialler } from '../hooks/useDiallerSession';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
-import { createCalendarEvent, getGoogleAuthStatus, getCalendarEvents, updateLeadTemperature, draftVoicemailEmail, sendEmail } from '../services/api';
-import { getContactFirstName } from '../utils/names';
+import { createCalendarEvent, getGoogleAuthStatus, getCalendarEvents, updateLeadTemperature } from '../services/api';
 import type { Disposition } from '../types';
-import { buildEmailText } from '../utils/emailTemplate';
 
 export default function DispositionPage() {
   const navigate = useNavigate();
-  const { currentLead, callDuration, transcript, disposeLead, setCurrentLead } = useDialler();
+  const { currentLead, callDuration, transcript, disposeLead } = useDialler();
 
   const [selectedTemperature, setSelectedTemperature] = useState<'hot' | 'warm' | 'cold' | null>(null);
   const [disposing, setDisposing] = useState<Disposition | null>(null);
   const [preparingEmail, setPreparingEmail] = useState(false);
 
-  // Voicemail email state
-  const [showVoicemailEmail, setShowVoicemailEmail] = useState(false);
-  const [vmEmailLoading, setVmEmailLoading] = useState(false);
-  const [vmEmailSubject, setVmEmailSubject] = useState('');
-  const [vmEmailBody, setVmEmailBody] = useState('');
-  const [vmGreetingName, setVmGreetingName] = useState('');
-  const [vmSending, setVmSending] = useState(false);
-  const [vmSent, setVmSent] = useState(false);
   const [quickNote, setQuickNote] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
 
@@ -190,35 +180,11 @@ export default function DispositionPage() {
         followUpDate || undefined
       );
 
-      if (disposition === 'interested') {
-        // Show a brief "generating email" state, then navigate.
-        // The email page will handle loading if the draft isn't ready yet.
-        setPreparingEmail(true);
-        setTimeout(() => navigate('/email'), 800);
-      } else if (disposition === 'voicemail' && currentLead?.email) {
-        // Offer to send a voicemail follow-up email
-        setVmGreetingName(getContactFirstName(currentLead.name));
-        setShowVoicemailEmail(true);
-        setVmEmailLoading(true);
-        // Draft the email in the background
-        try {
-          const draft = await draftVoicemailEmail({
-            leadName: currentLead.name,
-            leadCompany: currentLead.company,
-            leadCategory: currentLead.category,
-          });
-          setVmEmailSubject(draft.subject);
-          setVmEmailBody(draft.body);
-        } catch {
-          setVmEmailSubject('Just tried giving you a call');
-          setVmEmailBody('I just tried calling and left you a quick voicemail. Would love to chat when you get a chance.\n\nWe work with businesses in your industry to build AI and automation systems that save time on the repetitive stuff.\n\nHappy to jump on a call whenever suits.');
-        } finally {
-          setVmEmailLoading(false);
-          setDisposing(null);
-        }
-      } else {
-        navigate('/dialler');
-      }
+      // Email Bank flow: Interested + Voicemail dispositions no longer send Jordan
+      // to a compose page mid-rhythm. A draft row is created server-side by the
+      // disposition handler and filled in post-Whisper. Jordan reviews whenever
+      // he wants via the Email Bank sidebar tab.
+      navigate('/dialler');
     } catch (err) {
       console.error('Disposition failed:', err);
       setDisposing(null);
@@ -774,119 +740,7 @@ export default function DispositionPage() {
         )}
       </div>
 
-      {/* Voicemail follow-up email overlay */}
-      {showVoicemailEmail && currentLead && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-paper border border-hair-soft rounded-2xl w-full max-w-lg shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-hair-soft">
-              <div>
-                <h3 className="text-ink font-bold">Send voicemail follow-up?</h3>
-                <p className="text-ink-dim text-xs mt-0.5">
-                  {currentLead.name} &middot; {currentLead.email}
-                </p>
-              </div>
-              <button
-                onClick={() => { setShowVoicemailEmail(false); setCurrentLead(null); navigate('/dialler'); }}
-                className="text-ink-dim hover:text-ink-muted transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {vmSent ? (
-              <div className="p-8 text-center">
-                <CheckCircle size={32} className="text-sky-ink mx-auto mb-3" />
-                <p className="text-ink font-medium">Email sent</p>
-                <p className="text-ink-dim text-xs mt-1">Returning to dialler...</p>
-              </div>
-            ) : (
-              <div className="p-6 space-y-4">
-                {vmEmailLoading ? (
-                  <div className="flex items-center gap-3 py-8 justify-center">
-                    <Loader2 size={18} className="animate-spin text-sky-ink" />
-                    <span className="text-ink-muted text-sm">Drafting email...</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex gap-3">
-                      <div className="flex-1">
-                        <label className="text-ink-dim text-xs uppercase tracking-wider mb-1 block">Subject</label>
-                        <input
-                          type="text"
-                          value={vmEmailSubject}
-                          onChange={(e) => setVmEmailSubject(e.target.value)}
-                          className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
-                        />
-                      </div>
-                      <div className="w-32">
-                        <label className="text-ink-dim text-xs uppercase tracking-wider mb-1 block">Greeting</label>
-                        <input
-                          type="text"
-                          value={vmGreetingName}
-                          onChange={(e) => setVmGreetingName(e.target.value)}
-                          className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-ink-dim text-xs uppercase tracking-wider mb-1 block">Email body</label>
-                      <textarea
-                        value={vmEmailBody}
-                        onChange={(e) => setVmEmailBody(e.target.value)}
-                        rows={6}
-                        className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
-                      />
-                    </div>
-
-                    <p className="text-ink-dim text-xs">
-                      Preview: "Hi {vmGreetingName || 'there'}, {vmEmailBody.slice(0, 60)}..."
-                    </p>
-
-                    <div className="flex gap-3 pt-2">
-                      <button
-                        onClick={() => { setShowVoicemailEmail(false); setCurrentLead(null); navigate('/dialler'); }}
-                        className="flex-1 bg-transparent text-ink-muted border border-hair-soft rounded-lg py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] transition-all"
-                      >
-                        Skip
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (!currentLead.email) return;
-                          setVmSending(true);
-                          try {
-                            await sendEmail({
-                              leadId: currentLead.id,
-                              to: currentLead.email,
-                              subject: vmEmailSubject,
-                              body: buildEmailText(vmEmailBody, vmGreetingName || 'there'),
-                              pipelineStage: 'follow_up',
-                            });
-                            setVmSent(true);
-                            setTimeout(() => { setCurrentLead(null); navigate('/dialler'); }, 1500);
-                          } catch (err) {
-                            console.error('Failed to send voicemail email:', err);
-                            setVmSending(false);
-                            alert('Failed to send voicemail email. Please try again.');
-                          }
-                        }}
-                        disabled={vmSending || !vmEmailSubject || !vmEmailBody}
-                        className="flex-1 bg-ink text-white font-bold rounded-lg py-2.5 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {vmSending ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <>Send Email</>
-                        )}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Voicemail modal removed — voicemail drafts now go to the Email Bank */}
     </div>
   );
 }

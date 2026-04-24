@@ -175,4 +175,28 @@ export interface Activity {
     metadata: string | null;
     createdAt: string;
 }
+export type EmailDraftStatus = 'pending' | 'ready' | 'sent' | 'discarded' | 'failed';
+export interface EmailDraft {
+    id: number;
+    leadId: number;
+    callLogId: number | null;
+    disposition: 'interested' | 'voicemail';
+    toEmail: string | null;
+    ccEmail: string | null;
+    subject: string | null;
+    body: string | null;
+    suggestedStage: 'follow_up' | 'call_booked';
+    status: EmailDraftStatus;
+    generatedAt: string | null;
+    sentAt: string | null;
+    errorMessage: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+export interface EmailDraftWithLead extends EmailDraft {
+    leadName: string;
+    leadCompany: string | null;
+    leadPhone: string;
+    leadCategory: string | null;
+}
 //# sourceMappingURL=types.d.ts.map
