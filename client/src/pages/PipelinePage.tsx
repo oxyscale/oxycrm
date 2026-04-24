@@ -39,6 +39,7 @@ const STAGES: StageColumn[] = [
   { key: 'won', label: 'Won', color: 'bg-ink', bgTint: 'bg-[rgba(10,156,212,0.06)]' },
   { key: 'lost', label: 'Lost', color: 'bg-red-400', bgTint: 'bg-[rgba(248,113,113,0.06)]' },
   { key: 'not_interested', label: 'Not Interested', color: 'bg-zinc-400', bgTint: 'bg-[rgba(161,161,170,0.06)]' },
+  { key: 'five_strikes', label: 'Five Strikes', color: 'bg-ink-faint', bgTint: 'bg-[rgba(184,191,198,0.08)]' },
 ];
 
 const TEMPERATURE_CYCLE: (Temperature | null)[] = ['hot', 'warm', 'cold', null];

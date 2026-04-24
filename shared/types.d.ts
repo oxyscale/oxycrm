@@ -1,4 +1,4 @@
-export type PipelineStage = 'new_lead' | 'follow_up' | 'call_booked' | 'negotiation' | 'won' | 'lost' | 'not_interested';
+export type PipelineStage = 'new_lead' | 'follow_up' | 'call_booked' | 'negotiation' | 'won' | 'lost' | 'not_interested' | 'five_strikes';
 export type Temperature = 'hot' | 'warm' | 'cold';
 export interface Lead {
     id: number;

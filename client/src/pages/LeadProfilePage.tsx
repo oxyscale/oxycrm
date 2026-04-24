@@ -47,6 +47,7 @@ const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
   { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
   { value: 'not_interested', label: 'Not Interested' },
+  { value: 'five_strikes', label: 'Five Strikes' },
 ];
 
 const TEMPERATURES: Temperature[] = ['hot', 'warm', 'cold'];

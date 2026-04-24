@@ -76,7 +76,7 @@ function mapLeadRow(row: LeadRow): Lead {
 // ============================================================
 
 const PIPELINE_STAGES: [PipelineStage, ...PipelineStage[]] = [
-  'new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested',
+  'new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested', 'five_strikes',
 ];
 
 const TEMPERATURES: [Temperature, ...Temperature[]] = ['hot', 'warm', 'cold'];
@@ -101,6 +101,7 @@ const stageLabels: Record<PipelineStage, string> = {
   won: 'Won',
   lost: 'Lost',
   not_interested: 'Not Interested',
+  five_strikes: 'Five Strikes',
 };
 
 // ============================================================

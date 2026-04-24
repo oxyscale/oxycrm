@@ -142,7 +142,7 @@ const createLeadSchema = z.object({
   website: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
-  pipelineStage: z.enum(['new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested']).optional(),
+  pipelineStage: z.enum(['new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested', 'five_strikes']).optional(),
 });
 
 const updateLeadSchema = z.object({
@@ -155,7 +155,7 @@ const updateLeadSchema = z.object({
   category: z.string().nullable().optional(),
   consolidatedSummary: z.string().nullable().optional(),
   companyInfo: z.string().nullable().optional(),
-  pipelineStage: z.enum(['new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested']).optional(),
+  pipelineStage: z.enum(['new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested', 'five_strikes']).optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   followUpDate: z.string().nullable().optional(),
 });
@@ -554,7 +554,10 @@ router.post('/:id/disposition', (req, res, next) => {
     // Validate the request body
     const payload = dispositionSchema.parse(req.body) as DispositionPayload;
 
-    const threshold = parseInt(process.env.UNANSWERED_CALL_THRESHOLD || '3', 10);
+    // Consecutive-no-answer threshold before a never-answered lead is retired to the "five_strikes" pipeline stage.
+    // Leads that have EVER had an answered call (interested / not_interested disposition) are immune to this rule
+    // and stay in the cycler indefinitely — a long-term relationship missing a few calls must not be retired.
+    const threshold = parseInt(process.env.UNANSWERED_CALL_THRESHOLD || '5', 10);
     const now = new Date().toISOString();
 
     // Run disposition logic in a transaction to keep data consistent
@@ -611,15 +614,30 @@ router.post('/:id/disposition', (req, res, next) => {
       db.prepare('UPDATE leads SET last_called_at = ?, updated_at = ? WHERE id = ?')
         .run(now, now, id);
 
+      // A lead is considered "active" once they've ever picked up and been dispositioned
+      // interested or not_interested. Active leads are never retired by the strike system —
+      // a long-term relationship that misses a few calls must stay in the cycler.
+      // Only leads who have never had an answered conversation can hit "five_strikes".
+      const answeredRow = db.prepare(`
+        SELECT COUNT(*) as c FROM call_logs
+        WHERE lead_id = ? AND disposition IN ('interested', 'not_interested')
+      `).get(id) as { c: number };
+      const hasEverAnswered = answeredRow.c > 0;
+
       switch (payload.disposition) {
         case 'no_answer': {
           const newCount = leadRow.unanswered_calls + 1;
-          if (newCount >= threshold) {
-            db.prepare('UPDATE leads SET unanswered_calls = ?, status = ?, updated_at = ? WHERE id = ?')
-              .run(newCount, 'called', now, id);
-            logger.info({ leadId: id, unansweredCalls: newCount }, 'Lead marked called after exceeding unanswered threshold');
+          if (!hasEverAnswered && newCount >= threshold) {
+            // Never-answered lead hit the strike limit — retire to five_strikes stage.
+            db.prepare(
+              `UPDATE leads
+               SET unanswered_calls = ?, status = ?, pipeline_stage = ?, updated_at = ?
+               WHERE id = ?`
+            ).run(newCount, 'called', 'five_strikes', now, id);
+            logger.info({ leadId: id, unansweredCalls: newCount, threshold }, 'Lead retired to five_strikes after hitting unanswered threshold');
           } else {
-            // Get max position inside transaction to prevent duplicate positions
+            // Either the lead has picked up before (immune to strikes) or they haven't hit the limit yet.
+            // Cycle them to the back of the queue so the rest of the list gets attention first.
             const maxPos = (db.prepare('SELECT COALESCE(MAX(queue_position), 0) as max_pos FROM leads').get() as { max_pos: number }).max_pos;
             db.prepare('UPDATE leads SET unanswered_calls = ?, status = ?, queue_position = ?, updated_at = ? WHERE id = ?')
               .run(newCount, 'not_called', maxPos + 1, now, id);
@@ -629,14 +647,20 @@ router.post('/:id/disposition', (req, res, next) => {
 
         case 'voicemail': {
           const newCount = leadRow.unanswered_calls + 1;
-          if (newCount >= threshold) {
-            db.prepare('UPDATE leads SET unanswered_calls = ?, voicemail_left = 1, voicemail_date = ?, status = ?, updated_at = ? WHERE id = ?')
-              .run(newCount, now, 'called', now, id);
-            logger.info({ leadId: id, unansweredCalls: newCount }, 'Lead marked called (voicemail) after exceeding unanswered threshold');
+          if (!hasEverAnswered && newCount >= threshold) {
+            db.prepare(
+              `UPDATE leads
+               SET unanswered_calls = ?, voicemail_left = 1, voicemail_date = ?, status = ?, pipeline_stage = ?, updated_at = ?
+               WHERE id = ?`
+            ).run(newCount, now, 'called', 'five_strikes', now, id);
+            logger.info({ leadId: id, unansweredCalls: newCount, threshold }, 'Lead retired to five_strikes after hitting voicemail threshold');
           } else {
             const maxPos = (db.prepare('SELECT COALESCE(MAX(queue_position), 0) as max_pos FROM leads').get() as { max_pos: number }).max_pos;
-            db.prepare('UPDATE leads SET unanswered_calls = ?, voicemail_left = 1, voicemail_date = ?, status = ?, queue_position = ?, updated_at = ? WHERE id = ?')
-              .run(newCount, now, 'not_called', maxPos + 1, now, id);
+            db.prepare(
+              `UPDATE leads
+               SET unanswered_calls = ?, voicemail_left = 1, voicemail_date = ?, status = ?, queue_position = ?, updated_at = ?
+               WHERE id = ?`
+            ).run(newCount, now, 'not_called', maxPos + 1, now, id);
           }
           break;
         }

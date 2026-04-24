@@ -41,6 +41,7 @@ const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
   won: { label: 'Won', color: '#10b981' },
   lost: { label: 'Lost', color: '#ef4444' },
   not_interested: { label: 'Not Interested', color: '#8a95a0' },
+  five_strikes: { label: 'Five Strikes', color: '#b8bfc6' },
 };
 
 const ACTIVITY_ICONS: Record<string, typeof Phone> = {
