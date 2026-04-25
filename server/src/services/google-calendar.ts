@@ -150,8 +150,13 @@ export async function isAuthenticatedAndValid(opts?: { force?: boolean }): Promi
       const merged = { ...tokens, ...newTokens };
       saveTokens(merged);
     });
-    const oauth2 = google.oauth2({ version: 'v2', auth: client });
-    await oauth2.userinfo.get();
+    // Validate using a scope we actually have (calendar.events).
+    // userinfo.get() needs userinfo.profile which we never requested,
+    // so it would 401 even when tokens are perfectly fine for our use.
+    // Listing one calendar entry is the cheapest call that exercises
+    // the access token + refresh path end-to-end.
+    const calendar = google.calendar({ version: 'v3', auth: client });
+    await calendar.calendarList.list({ maxResults: 1 });
     validityCache = { value: true, checkedAt: Date.now() };
     return true;
   } catch (err) {

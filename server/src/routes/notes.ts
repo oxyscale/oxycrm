@@ -99,10 +99,14 @@ router.post('/', (req, res, next) => {
 
     const createNote = db.transaction(() => {
       // Insert the note
+      // created_by is the logged-in user's full display name so the
+      // lead profile can attribute notes correctly when George and
+      // Jordan are both active.
+      const author = req.user?.name || 'unknown';
       const result = db.prepare(`
         INSERT INTO notes (lead_id, content, created_by, created_at, updated_at)
-        VALUES (?, ?, 'jordan', ?, ?)
-      `).run(payload.leadId, payload.content, now, now);
+        VALUES (?, ?, ?, ?, ?)
+      `).run(payload.leadId, payload.content, author, now, now);
 
       // Create an activity record
       const snippet = payload.content.length > 80

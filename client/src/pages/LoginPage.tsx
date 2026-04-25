@@ -72,7 +72,7 @@ export default function LoginPage() {
             <p className="text-ink-muted text-sm leading-relaxed mb-8">
               {forgotMode
                 ? 'Enter your email and we will send you a link to choose a new one.'
-                : 'Sign in to the OxyScale dashboard.'}
+                : 'Sign in to the OxyScale hub.'}
             </p>
 
             <form onSubmit={forgotMode ? handleForgot : handleLogin} className="space-y-4">
