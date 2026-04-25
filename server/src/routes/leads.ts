@@ -563,6 +563,12 @@ router.post('/:id/disposition', (req, res, next) => {
     // Validate the request body
     const payload = dispositionSchema.parse(req.body) as DispositionPayload;
 
+    // wrong_number deletes the lead, so a follow-up date would be
+    // discarded silently. Reject up-front so the client knows.
+    if (payload.disposition === 'wrong_number' && payload.followUpDate) {
+      throw new ApiError(400, 'wrong_number deletes the lead — a follow-up date cannot be set');
+    }
+
     // Consecutive-no-answer threshold before a never-answered lead is retired to the "five_strikes" pipeline stage.
     // Leads that have EVER had an answered call (interested / not_interested disposition) are immune to this rule
     // and stay in the cycler indefinitely — a long-term relationship missing a few calls must not be retired.
