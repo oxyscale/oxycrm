@@ -617,10 +617,15 @@ router.post('/:id/disposition', (req, res, next) => {
         }
       }
 
+      // Tag the call (and the pending draft) with whoever's logged in.
+      // The post-Whisper draftAndStoreEmailForCall later reads this to
+      // decide whose voice and signature the email should be in.
+      const userId = req.user?.id ?? null;
+
       const insertResult = db.prepare(`
-        INSERT INTO call_logs (lead_id, duration, transcript, disposition, twilio_call_sid, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, payload.callDuration, transcript, payload.disposition, callSid, now);
+        INSERT INTO call_logs (lead_id, user_id, duration, transcript, disposition, twilio_call_sid, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, userId, payload.callDuration, transcript, payload.disposition, callSid, now);
       createdCallLogId = Number(insertResult.lastInsertRowid);
 
       // Email Bank: for dispositions that warrant a follow-up email, insert a
@@ -630,9 +635,9 @@ router.post('/:id/disposition', (req, res, next) => {
       if (payload.disposition === 'interested' || payload.disposition === 'voicemail') {
         try {
           db.prepare(`
-            INSERT INTO email_drafts (lead_id, call_log_id, disposition, to_email, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?)
-          `).run(id, createdCallLogId, payload.disposition, leadRow.email, now, now);
+            INSERT INTO email_drafts (lead_id, call_log_id, user_id, disposition, to_email, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+          `).run(id, createdCallLogId, userId, payload.disposition, leadRow.email, now, now);
         } catch (draftErr) {
           // UNIQUE(call_log_id) collision or other — log but don't fail the disposition.
           logger.warn(

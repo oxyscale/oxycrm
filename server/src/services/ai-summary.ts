@@ -246,23 +246,24 @@ export async function draftFollowUpEmail(
   leadCompany: string | null,
   callContext?: string,
   previousEmails?: string,
-  leadCategory?: string | null
+  leadCategory?: string | null,
+  senderName: string = 'Jordan Bell'
 ): Promise<EmailDraftResult> {
   const startTime = Date.now();
 
   logger.info(
-    { leadName, leadCompany, leadCategory, hasCallContext: !!callContext, hasPreviousEmails: !!previousEmails },
+    { leadName, leadCompany, leadCategory, senderName, hasCallContext: !!callContext, hasPreviousEmails: !!previousEmails },
     'Starting email draft generation'
   );
 
   const previousEmailsSection = previousEmails
-    ? `\n## Jordan's previously sent emails (match this style and tone closely)\n${previousEmails}\n`
+    ? `\n## ${senderName.split(' ')[0]}'s previously sent emails (match this style and tone closely)\n${previousEmails}\n`
     : '';
 
   const playbookSection = getCategoryPrompt(leadCategory || null);
   const ctx = getSettingsContext();
 
-  const prompt = `You are writing a follow-up email for Jordan Bell from OxyScale (${ctx.companyDescription}) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
+  const prompt = `You are writing a follow-up email for ${senderName} from OxyScale (${ctx.companyDescription}) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
 
 A sales call just happened. Write a personalised follow-up email based on what was discussed.
 
@@ -335,22 +336,24 @@ export async function draftVoicemailEmail(
   leadName: string,
   leadCompany: string | null,
   leadCategory: string | null,
-  previousEmails?: string
+  previousEmails?: string,
+  senderName: string = 'Jordan Bell'
 ): Promise<EmailDraftResult> {
   const startTime = Date.now();
 
-  logger.info({ leadName, leadCompany, leadCategory }, 'Starting voicemail follow-up email draft');
+  logger.info({ leadName, leadCompany, leadCategory, senderName }, 'Starting voicemail follow-up email draft');
 
+  const senderFirstName = senderName.split(' ')[0];
   const previousEmailsSection = previousEmails
-    ? `\n## Jordan's previously sent emails (match this style and tone closely)\n${previousEmails}\n`
+    ? `\n## ${senderFirstName}'s previously sent emails (match this style and tone closely)\n${previousEmails}\n`
     : '';
 
   const playbookSection = getCategoryPrompt(leadCategory);
   const ctx = getSettingsContext();
 
-  const prompt = `You are writing a short follow-up email for Jordan Bell from OxyScale (${ctx.companyDescription}) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
+  const prompt = `You are writing a short follow-up email for ${senderName} from OxyScale (${ctx.companyDescription}) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
 
-Jordan just tried calling this person and left a voicemail. Now write a brief follow-up email to accompany the voicemail.
+${senderFirstName} just tried calling this person and left a voicemail. Now write a brief follow-up email to accompany the voicemail.
 
 ${EMAIL_STYLE_GUIDE}
 ${previousEmailsSection}
@@ -602,8 +605,17 @@ export async function draftAndStoreEmailForCall(callLogId: number, leadId: numbe
     }
 
     const callLog = db
-      .prepare('SELECT transcript, summary FROM call_logs WHERE id = ?')
-      .get(callLogId) as { transcript: string | null; summary: string | null } | undefined;
+      .prepare('SELECT transcript, summary, user_id FROM call_logs WHERE id = ?')
+      .get(callLogId) as { transcript: string | null; summary: string | null; user_id: number | null } | undefined;
+
+    // Sender identity = whoever made this call. Falls back to Jordan's
+    // name if the call has no user_id (legacy rows pre-auth).
+    const sender = callLog?.user_id
+      ? (db
+          .prepare('SELECT name FROM users WHERE id = ?')
+          .get(callLog.user_id) as { name: string } | undefined)
+      : undefined;
+    const senderName = sender?.name || 'Jordan Bell';
 
     const transcript = callLog?.transcript?.trim() || '';
     const summary = callLog?.summary || '';
@@ -628,7 +640,7 @@ export async function draftAndStoreEmailForCall(callLogId: number, leadId: numbe
 
     let result: EmailDraftResult;
     if (draft.disposition === 'voicemail') {
-      result = await draftVoicemailEmail(lead.name, lead.company, lead.category, previousEmails);
+      result = await draftVoicemailEmail(lead.name, lead.company, lead.category, previousEmails, senderName);
     } else {
       result = await draftFollowUpEmail(
         transcript,
@@ -638,6 +650,7 @@ export async function draftAndStoreEmailForCall(callLogId: number, leadId: numbe
         undefined,
         previousEmails,
         lead.category,
+        senderName,
       );
     }
 
