@@ -16,8 +16,13 @@ import { summariseAndPersistCall, draftAndStoreEmailForCall } from '../services/
 const logger = pino({ name: 'leads-routes' });
 const router = Router();
 
-// Multer setup — store uploaded CSV in memory
-const upload = multer({ storage: multer.memoryStorage() });
+// Multer setup — store uploaded CSV in memory.
+// 10 MB cap so a hostile client cannot exhaust server RAM with a
+// giant upload. A typical CSV with ~50k leads is well under 5 MB.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+});
 
 // ============================================================
 // Row mappers — convert snake_case DB rows to camelCase types

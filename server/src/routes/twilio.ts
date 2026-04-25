@@ -10,6 +10,7 @@ import pino from 'pino';
 import { getDb } from '../db/index.js';
 import { transcribeAudio } from '../services/transcription.js';
 import { summariseAndPersistCall, draftAndStoreEmailForCall } from '../services/ai-summary.js';
+import { verifyTwilioSignature } from '../middleware/twilioSignature.js';
 
 // Run the post-transcript chain: summarise → draft email (if any pending draft exists).
 // Fire-and-forget from every code path that plants a real Whisper transcript.
@@ -125,7 +126,7 @@ router.get('/token', (req, res, next) => {
  * Twilio sends it as req.body.CallSid. We save it to call_sessions
  * so it can be matched later when the recording arrives.
  */
-router.post('/voice', (req, res, next) => {
+router.post('/voice', verifyTwilioSignature, (req, res, next) => {
   try {
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
@@ -230,7 +231,7 @@ router.get('/call-sid', (req, res) => {
  * Handles incoming calls to the Twilio number — forwards them to Jordan's mobile.
  * This means when a lead calls back the Twilio number, it rings Jordan's phone.
  */
-router.post('/incoming', (req, res) => {
+router.post('/incoming', verifyTwilioSignature, (req, res) => {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
@@ -257,7 +258,7 @@ router.post('/incoming', (req, res) => {
  * 2. Phone match: look up phone from call_sessions, find lead, find recent call_log
  * 3. Pending: save to pending_transcripts for later matching on disposition
  */
-router.post('/recording-status', async (req, res) => {
+router.post('/recording-status', verifyTwilioSignature, async (req, res) => {
   const { RecordingSid, RecordingUrl, RecordingStatus, RecordingDuration, CallSid } = req.body;
 
   logger.info({

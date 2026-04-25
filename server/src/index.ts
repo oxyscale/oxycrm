@@ -9,6 +9,7 @@ dotenv.config({ override: true });
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import pino from 'pino';
 
@@ -54,9 +55,50 @@ export const logger = pino({
 // Express app
 // ============================================================
 
+// ============================================================
+// Required env vars — fail fast on misconfiguration so we never
+// boot a half-broken server that only fails when a user clicks the
+// affected feature. Anything below in `OPTIONAL_VARS` is allowed to
+// be missing but is logged so it's easy to spot.
+// ============================================================
+const REQUIRED_VARS = [
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
+  'TWILIO_ACCOUNT_SID',
+  'TWILIO_AUTH_TOKEN',
+  'TWILIO_API_KEY_SID',
+  'TWILIO_API_KEY_SECRET',
+  'TWILIO_TWIML_APP_SID',
+  'TWILIO_PHONE_NUMBER',
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+  'GOOGLE_REDIRECT_URI',
+  'RESEND_API_KEY',
+  'EMAIL_FROM_ADDRESS',
+];
+const OPTIONAL_VARS = ['EMAIL_FROM_NAME', 'CLIENT_URL', 'DATA_DIR', 'PORT', 'LOG_LEVEL', 'TWILIO_CALLER_ID', 'UNANSWERED_CALL_THRESHOLD'];
+
+if (process.env.NODE_ENV === 'production') {
+  const missing = REQUIRED_VARS.filter((v) => !process.env[v]);
+  if (missing.length > 0) {
+    // Use console.error directly — the pino logger isn't constructed yet here.
+    console.error(`[FATAL] Missing required env vars: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+  const missingOptional = OPTIONAL_VARS.filter((v) => !process.env[v]);
+  if (missingOptional.length > 0) {
+    console.warn(`[WARN] Optional env vars unset (defaults used): ${missingOptional.join(', ')}`);
+  }
+}
+
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
+// Trust Railway's proxy so req.ip + x-forwarded-proto resolve correctly.
+// Required for the rate limiter (which keys off IP) and the Twilio
+// signature middleware (which rebuilds the original URL).
+app.set('trust proxy', 1);
 
 // --- Middleware ---
 
@@ -92,10 +134,27 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Rate limiters. Keyed by IP via trust proxy. Defaults are
+// generous for one-team internal use but block runaway loops.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60_000,   // 15 min
+  limit: 30,               // 30 login/forgot/reset attempts per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many auth attempts — try again in 15 minutes.' },
+});
+const expensiveLimiter = rateLimit({
+  windowMs: 60_000,        // per minute
+  limit: 30,               // 30 hits per IP per minute on AI / email / transcribe routes
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit hit — slow down.' },
+});
+
 // Auth routes — /login, /logout, /forgot, /reset are unauthenticated
 // by design (you can't already be logged in). /me + /change-password
 // apply requireAuth themselves inside the router.
-app.use('/api/auth', authRouter);
+app.use('/api/auth', authLimiter, authRouter);
 
 // Public-by-design routes that need to bypass session-cookie auth:
 //   - Twilio webhooks (called by Twilio's servers, not a browser).
@@ -118,11 +177,11 @@ app.use('/api/leads', leadsRouter);
 app.use('/api/callbacks', callbacksRouter);
 app.use('/api/twilio', twilioRouter);
 app.use('/api/calls', callsRouter);
-app.use('/api/intelligence', intelligenceRouter);
-app.use('/api/email', emailRouter);
-app.use('/api/email-drafts', emailDraftsRouter);
+app.use('/api/intelligence', expensiveLimiter, intelligenceRouter);
+app.use('/api/email', expensiveLimiter, emailRouter);
+app.use('/api/email-drafts', expensiveLimiter, emailDraftsRouter);
 app.use('/api/google', googleRouter);
-app.use('/api', transcribeRouter);
+app.use('/api', expensiveLimiter, transcribeRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/activities', activitiesRouter);
