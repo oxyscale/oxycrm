@@ -56,10 +56,12 @@ export async function transcribeAudio(
       type: getMimeType(resolvedFilename),
     });
 
-    const response = await getOpenAI().audio.transcriptions.create({
-      model: 'whisper-1',
-      file,
-    });
+    // 90s timeout. Whisper for a 5-min recording usually finishes in
+     // ~10s; the cap stops a hung request from holding a Node thread.
+    const response = await getOpenAI().audio.transcriptions.create(
+      { model: 'whisper-1', file },
+      { timeout: 90_000 },
+    );
 
     const durationMs = Date.now() - startTime;
     logger.info(

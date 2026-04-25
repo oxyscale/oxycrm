@@ -10,6 +10,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import path from 'path';
 import pino from 'pino';
 
@@ -102,6 +103,53 @@ app.set('trust proxy', 1);
 
 // --- Middleware ---
 
+// HTTPS enforcement (production only). Railway terminates TLS at its
+// edge proxy and forwards as HTTP, so we trust x-forwarded-proto.
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    const proto = req.headers['x-forwarded-proto'];
+    if (proto && proto !== 'https') {
+      return res.redirect(301, `https://${req.headers.host}${req.originalUrl}`);
+    }
+    next();
+  });
+}
+
+// Security headers via helmet. CSP is intentionally relaxed because
+// the React build inlines small Vite runtime scripts and Twilio's
+// Voice SDK requires its own connect-src + media-src origins.
+app.use(
+  helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'production'
+      ? {
+          useDefaults: true,
+          directives: {
+            'default-src': ["'self'"],
+            'script-src': ["'self'", "'unsafe-inline'"], // Vite runtime + Twilio SDK
+            'style-src': ["'self'", "'unsafe-inline'"],
+            'img-src': ["'self'", 'data:', 'https:'],
+            'font-src': ["'self'", 'data:'],
+            'connect-src': [
+              "'self'",
+              'https://*.twilio.com',
+              'wss://*.twilio.com',
+              'https://eventgw.twilio.com',
+              'https://api.anthropic.com',
+            ],
+            'media-src': ["'self'", 'blob:'],
+            'frame-ancestors': ["'none'"],
+          },
+        }
+      : false, // CSP off in dev — Vite hot reload + websocket would break
+    crossOriginEmbedderPolicy: false, // Twilio iframe + audio won't load with this
+    // HSTS: tell the browser "always use https for this domain for the
+    // next 6 months". Only meaningful in prod where we actually serve over HTTPS.
+    hsts: process.env.NODE_ENV === 'production'
+      ? { maxAge: 60 * 60 * 24 * 180, includeSubDomains: true, preload: false }
+      : false,
+  }),
+);
+
 // CORS — same-origin in production (server serves the React build),
 // Vite dev server in development. credentials:true so the session
 // cookie crosses origins in dev.
@@ -120,9 +168,11 @@ app.use(express.urlencoded({ extended: true }));
 // session cookie. Must come BEFORE any route that uses requireAuth.
 app.use(cookieParser());
 
-// Request logging
+// Request logging — log path only (NOT full URL) so query strings
+// containing reset tokens, search terms, or other sensitive data
+// don't leak into the log stream.
 app.use((req, _res, next) => {
-  logger.info({ method: req.method, url: req.url }, 'Incoming request');
+  logger.info({ method: req.method, path: req.path }, 'Incoming request');
   next();
 });
 
@@ -205,7 +255,7 @@ app.use(createErrorHandler(logger));
 // Start server
 // ============================================================
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   logger.info({ port: PORT, clientUrl: CLIENT_URL }, 'OxyScale Dialler server is running');
 
   // Seed the two team accounts on first boot (no-op if already present).
@@ -223,5 +273,28 @@ app.listen(PORT, () => {
     logger.warn({ err }, 'Failed to start Gmail sync on startup — will retry when Google auth completes');
   }
 });
+
+// Graceful shutdown. Railway sends SIGTERM on every redeploy; without
+// this, in-flight requests (AI summarisation, email sends, Twilio
+// recording downloads) would be killed mid-flight. We stop accepting
+// new connections, give existing ones up to 25s to finish, then exit.
+function shutdown(signal: string): void {
+  logger.info({ signal }, 'Received shutdown signal — closing server');
+  server.close((err) => {
+    if (err) {
+      logger.error({ err }, 'Error during server close');
+      process.exit(1);
+    }
+    logger.info('Server closed cleanly');
+    process.exit(0);
+  });
+  // Hard cap so a hung request can't block redeploys forever.
+  setTimeout(() => {
+    logger.warn('Shutdown timeout reached — forcing exit');
+    process.exit(1);
+  }, 25_000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 export default app;

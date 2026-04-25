@@ -731,7 +731,12 @@ router.post('/:id/disposition', (req, res, next) => {
       }
     });
 
-    processDisposition();
+    // BEGIN IMMEDIATE acquires a RESERVED write lock at transaction
+    // start. Without this, two simultaneous dispositions on the same
+    // lead can both read the row, both compute new positions, and one
+    // write silently overwrites the other (lost-update race). With
+    // immediate, the second transaction queues until the first commits.
+    processDisposition.immediate();
 
     // For wrong_number, the lead has been deleted — return a simple confirmation
     if (payload.disposition === 'wrong_number') {
@@ -747,7 +752,14 @@ router.post('/:id/disposition', (req, res, next) => {
       (async () => {
         await summariseAndPersistCall(createdCallLogId!, id);
         await draftAndStoreEmailForCall(createdCallLogId!, id);
-      })().catch(() => {});
+      })().catch((err) => {
+        // Surface the failure in logs so a stuck "pending" draft is
+        // diagnosable instead of silently abandoned.
+        logger.error(
+          { err, leadId: id, callLogId: createdCallLogId },
+          'Post-transcript chain failed (summarise -> draft) — email draft will stay pending until 15-min sweep marks it failed',
+        );
+      });
     }
 
     // Return the updated lead + the id of the call_log we just created so the

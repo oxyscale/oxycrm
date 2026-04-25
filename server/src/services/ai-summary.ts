@@ -31,8 +31,11 @@ async function callClaude(prompt: string, maxTokens: number = 2000): Promise<str
     throw new Error('ANTHROPIC_API_KEY is not configured');
   }
 
+  // 60s timeout. Claude calls usually finish in ~5s; without a cap a
+  // hung request would tie up a Node thread indefinitely.
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
+    signal: AbortSignal.timeout(60_000),
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
@@ -46,8 +49,9 @@ async function callClaude(prompt: string, maxTokens: number = 2000): Promise<str
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    logger.error({ status: response.status, error: errorText }, 'Claude API error');
+    // Log only the status — error bodies can include rate-limit metadata
+    // and tokens we don't want in centralised logs.
+    logger.error({ status: response.status }, 'Claude API error');
     throw new Error(`Claude API request failed with status ${response.status}`);
   }
 

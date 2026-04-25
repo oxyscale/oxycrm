@@ -290,6 +290,7 @@ router.post('/recording-status', verifyTwilioSignature, async (req, res) => {
     logger.info({ url: recordingMp3Url }, 'Downloading recording from Twilio');
 
     const response = await fetch(recordingMp3Url, {
+      signal: AbortSignal.timeout(45_000), // recording downloads are usually <2s
       headers: {
         'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
       },
