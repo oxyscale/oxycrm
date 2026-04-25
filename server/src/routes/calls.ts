@@ -293,8 +293,12 @@ router.patch('/:id/disposition', async (req, res, next) => {
         db.prepare('DELETE FROM leads WHERE id = ?').run(leadRow.id);
         logger.info({ leadId: leadRow.id, callId }, 'Lead deleted via re-disposition — wrong number');
       } else if (disposition === 'interested' || disposition === 'not_interested') {
-        db.prepare("UPDATE leads SET status = 'called', updated_at = datetime('now') WHERE id = ?")
-          .run(leadRow.id);
+        // Reaching the lead live — clear any stale "voicemail left"
+        // flag from a previous attempt so the UI doesn't keep showing
+        // "voicemail previously left" indefinitely.
+        db.prepare(
+          "UPDATE leads SET status = 'called', voicemail_left = 0, voicemail_date = NULL, updated_at = datetime('now') WHERE id = ?",
+        ).run(leadRow.id);
       } else if (disposition === 'no_answer' || disposition === 'voicemail') {
         // Put back in queue if it was previously marked as called
         if (leadRow.status === 'called') {

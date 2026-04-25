@@ -77,12 +77,22 @@ function mapDraftWithLead(row: DraftRowWithLead) {
 }
 
 // ── Stale-pending sweep ───────────────────────────────────────
-// Runs inline on every list request. Any draft stuck in 'pending' for
-// more than 15 minutes is marked 'failed' so Jordan knows to handle it
-// manually (or hit Retry). Cheap, no cron needed.
+// Any draft stuck in 'pending' for more than 15 minutes is marked
+// 'failed' so the team knows to retry or handle it manually.
+//
+// Only runs once every 5 min at most — earlier the sweep ran on every
+// /api/email-drafts GET, so a polling page hit Jordan's DB ~12x/min
+// for no reason. Tracked via a module-local timestamp.
+let lastSweepAt = 0;
+const SWEEP_MIN_INTERVAL_MS = 5 * 60_000;
+
 function sweepStalePendings(): void {
+  const now = Date.now();
+  if (now - lastSweepAt < SWEEP_MIN_INTERVAL_MS) return;
+  lastSweepAt = now;
+
   const db = getDb();
-  const cutoff = new Date(Date.now() - 15 * 60_000).toISOString();
+  const cutoff = new Date(now - 15 * 60_000).toISOString();
   const result = db
     .prepare(
       `UPDATE email_drafts

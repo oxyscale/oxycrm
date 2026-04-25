@@ -13,7 +13,7 @@ const logger = pino({ name: 'gmail-sync-service' });
 
 // ── State ───────────────────────────────────────────────────
 
-let syncInterval: ReturnType<typeof setInterval> | null = null;
+let syncInterval: ReturnType<typeof setTimeout> | null = null;
 let isRunning = false;
 
 // ── Core sync logic ─────────────────────────────────────────
@@ -158,18 +158,52 @@ export async function syncSentEmails(): Promise<{ matched: number; total: number
  * Call this once on server startup. Safe to call multiple times
  * (will not create duplicate intervals).
  */
+// Exponential-backoff state. On consecutive failures the loop waits
+// progressively longer up to MAX_BACKOFF_MS so a Google rate-limit or
+// outage doesn't generate hundreds of failing requests per hour.
+let consecutiveFailures = 0;
+const BASE_INTERVAL_MS = 60_000;
+const MAX_BACKOFF_MS = 30 * 60_000;
+
+function nextDelay(): number {
+  if (consecutiveFailures === 0) return BASE_INTERVAL_MS;
+  const exp = Math.min(BASE_INTERVAL_MS * 2 ** consecutiveFailures, MAX_BACKOFF_MS);
+  // ±20% jitter so multiple processes don't sync in lockstep.
+  const jitter = exp * (0.8 + Math.random() * 0.4);
+  return Math.min(jitter, MAX_BACKOFF_MS);
+}
+
+async function runSyncAndScheduleNext(): Promise<void> {
+  let result: { ok: boolean } = { ok: true };
+  try {
+    result = await runSync();
+  } catch (err) {
+    // runSync handles its own errors, but defend in depth.
+    logger.warn({ err }, 'Gmail sync threw unexpectedly');
+    result = { ok: false };
+  }
+  if (result.ok) consecutiveFailures = 0;
+  else consecutiveFailures += 1;
+
+  const delay = nextDelay();
+  if (consecutiveFailures > 0) {
+    logger.warn({ consecutiveFailures, nextDelayMs: Math.round(delay) }, 'Gmail sync backoff active');
+  }
+  syncInterval = setTimeout(runSyncAndScheduleNext, delay);
+}
+
 export function startGmailSync(): void {
   if (syncInterval) {
     logger.info('Gmail sync is already running');
     return;
   }
 
-  logger.info('Starting Gmail sync loop (every 60 seconds)');
+  logger.info('Starting Gmail sync loop (60s base, exponential backoff on failure)');
   isRunning = true;
-
-  // Run immediately on start, then every 60 seconds
-  runSync();
-  syncInterval = setInterval(runSync, 60_000);
+  consecutiveFailures = 0;
+  // Kick off the recursive scheduler. Each cycle's outcome decides the
+  // next delay, so transient failures don't pile up requests.
+  runSyncAndScheduleNext();
 }
 
 /**
@@ -177,7 +211,7 @@ export function startGmailSync(): void {
  */
 export function stopGmailSync(): void {
   if (syncInterval) {
-    clearInterval(syncInterval);
+    clearTimeout(syncInterval);
     syncInterval = null;
     isRunning = false;
     logger.info('Gmail sync loop stopped');
@@ -197,19 +231,21 @@ export function isGmailSyncRunning(): boolean {
  * Runs a single sync cycle with full error handling.
  * Never throws — logs errors and returns gracefully.
  */
-async function runSync(): Promise<void> {
+async function runSync(): Promise<{ ok: boolean }> {
   try {
-    // Check auth before attempting sync
+    // Check auth before attempting sync. "Not authenticated" is a
+    // no-op, NOT a failure — don't trigger the backoff for it.
     if (!isAuthenticated()) {
       logger.debug('Gmail sync skipped — Google not authenticated');
-      return;
+      return { ok: true };
     }
 
     await syncSentEmails();
+    return { ok: true };
   } catch (err: unknown) {
-    // Log and continue — never crash the server
     const message = err instanceof Error ? err.message : String(err);
-    logger.warn({ err: message }, 'Gmail sync cycle failed — will retry next cycle');
+    logger.warn({ err: message }, 'Gmail sync cycle failed — will back off next cycle');
+    return { ok: false };
   }
 }
 

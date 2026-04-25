@@ -542,9 +542,22 @@ export async function summariseAndPersistCall(callLogId: number, leadId: number)
       callLogId,
     );
 
-    // Persist rolling relationship summary on the lead
+    // Persist rolling relationship summary on the lead, capped to
+    // ~16 KB. Without a cap a chatty lead with hundreds of calls would
+    // grow consolidated_summary without bound, slow the lead profile
+    // page, and inflate every Claude prompt that includes prior
+    // context. The truncation keeps the most recent material (the
+    // summarisation prompt is told to lead with the latest call) and
+    // appends a clear marker so future summarisations know they're
+    // working from a clipped history.
+    const SUMMARY_CAP = 16_000;
+    let summary = result.summary;
+    if (summary.length > SUMMARY_CAP) {
+      summary = summary.slice(0, SUMMARY_CAP) + '\n\n[older entries trimmed]';
+      logger.info({ leadId, originalLen: result.summary.length, cappedLen: summary.length }, 'Consolidated summary truncated');
+    }
     db.prepare('UPDATE leads SET consolidated_summary = ?, updated_at = ? WHERE id = ?').run(
-      result.summary,
+      summary,
       now,
       leadId,
     );
