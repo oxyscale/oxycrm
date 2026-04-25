@@ -767,6 +767,31 @@ export default function LeadProfilePage() {
       <div className="flex gap-8">
         {/* ── Left: tabbed content ──────────────────────────── */}
         <div className="flex-1 min-w-0">
+          {/* Call Summary — pinned above the tabs so it's always visible
+              before dialling. Shows the rolling AI summary across calls,
+              with an empty state for never-called leads. */}
+          <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-ink-dim text-xs font-medium uppercase tracking-wider">
+                Call Summary
+              </h3>
+              {totalCallsCount > 0 && (
+                <span className="text-ink-dim text-[11px]">
+                  {totalCallsCount} call{totalCallsCount !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            {lead.consolidatedSummary ? (
+              <p className="text-ink-muted text-sm leading-relaxed whitespace-pre-line">
+                {lead.consolidatedSummary}
+              </p>
+            ) : (
+              <p className="text-ink-dim text-sm italic">
+                No call notes available for this lead yet.
+              </p>
+            )}
+          </div>
+
           {/* Tab bar */}
           <div className="flex items-center gap-1 mb-6 bg-paper border border-hair-soft rounded-lg p-1 w-fit">
             {tabs.map((t) => (
@@ -1222,9 +1247,7 @@ export default function LeadProfilePage() {
                                   {/* Email body */}
                                   {displayText ? (
                                     <>
-                                      <p className={`text-sm leading-relaxed whitespace-pre-line ${
-                                        isSent ? 'text-[#d1fae5]' : 'text-ink-muted'
-                                      }`}>
+                                      <p className="text-sm leading-relaxed whitespace-pre-line text-ink">
                                         {displayText}
                                       </p>
                                       {isLong && (
@@ -1381,18 +1404,6 @@ export default function LeadProfilePage() {
               </div>
             </div>
           </div>
-
-          {/* Consolidated summary */}
-          {lead.consolidatedSummary && (
-            <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-4">
-              <h3 className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-3">
-                Consolidated Summary
-              </h3>
-              <p className="text-ink-muted text-sm leading-relaxed">
-                {lead.consolidatedSummary}
-              </p>
-            </div>
-          )}
 
           {/* Converted to project link */}
           {lead.convertedToProject && (
