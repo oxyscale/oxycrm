@@ -1113,6 +1113,10 @@ export default function LeadProfilePage() {
                                 {note.content}
                               </p>
                               <p className="text-ink-dim text-xs mt-2">
+                                {note.createdBy && note.createdBy !== 'unknown' && (
+                                  <span className="text-sky-ink font-medium">{note.createdBy}</span>
+                                )}
+                                {note.createdBy && note.createdBy !== 'unknown' && ' · '}
                                 {formatDate(note.createdAt)}
                               </p>
                             </div>

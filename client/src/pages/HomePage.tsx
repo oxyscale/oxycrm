@@ -479,10 +479,10 @@ export default function HomePage() {
 
             <div className="grid grid-cols-3 gap-4 mb-4">
               {([
-                { key: 'name', label: 'Name', placeholder: 'John Smith', required: true },
-                { key: 'phone', label: 'Phone', placeholder: '0412 345 678', required: true },
-                { key: 'company', label: 'Company', placeholder: 'Acme Corp', required: false },
-              ] as const).map(({ key, label, placeholder, required }) => (
+                { key: 'name', label: 'Name', placeholder: 'John Smith', required: true, maxLength: 120 },
+                { key: 'phone', label: 'Phone', placeholder: '0412 345 678', required: true, maxLength: 32 },
+                { key: 'company', label: 'Company', placeholder: 'Acme Corp', required: false, maxLength: 200 },
+              ] as const).map(({ key, label, placeholder, required, maxLength }) => (
                 <div key={key}>
                   <EyebrowLabel variant="bare" className="mb-2">
                     {label}
@@ -491,6 +491,7 @@ export default function HomePage() {
                   <input
                     type={key === 'phone' ? 'tel' : 'text'}
                     value={newLead[key]}
+                    maxLength={maxLength}
                     onChange={(e) =>
                       setNewLead((prev) => ({ ...prev, [key]: e.target.value }))
                     }
@@ -503,10 +504,10 @@ export default function HomePage() {
 
             <div className="grid grid-cols-3 gap-4 mb-5">
               {([
-                { key: 'email', label: 'Email', placeholder: 'john@acme.com' },
-                { key: 'website', label: 'Website', placeholder: 'acme.com' },
-                { key: 'category', label: 'Category', placeholder: 'e.g. Recruitment' },
-              ] as const).map(({ key, label, placeholder }) => (
+                { key: 'email', label: 'Email', placeholder: 'john@acme.com', maxLength: 254 },
+                { key: 'website', label: 'Website', placeholder: 'acme.com', maxLength: 255 },
+                { key: 'category', label: 'Category', placeholder: 'e.g. Recruitment', maxLength: 80 },
+              ] as const).map(({ key, label, placeholder, maxLength }) => (
                 <div key={key}>
                   <EyebrowLabel variant="bare" className="mb-2">
                     {label}
@@ -514,6 +515,7 @@ export default function HomePage() {
                   <input
                     type={key === 'email' ? 'email' : 'text'}
                     value={newLead[key]}
+                    maxLength={maxLength}
                     onChange={(e) =>
                       setNewLead((prev) => ({ ...prev, [key]: e.target.value }))
                     }

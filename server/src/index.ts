@@ -11,6 +11,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
+import compression from 'compression';
 import path from 'path';
 import pino from 'pino';
 
@@ -157,6 +158,11 @@ app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? true : CLIENT_URL,
   credentials: true,
 }));
+
+// Gzip JSON + static asset responses. Lead lists, activity timelines,
+// and the React bundle benefit most. Tiny CPU hit, big bandwidth win
+// over slow connections.
+app.use(compression());
 
 // Parse JSON request bodies (up to 10mb for transcripts)
 app.use(express.json({ limit: '10mb' }));
