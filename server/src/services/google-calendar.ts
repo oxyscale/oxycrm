@@ -74,13 +74,19 @@ function saveTokens(tokens: Record<string, unknown>): void {
 /**
  * Returns the Google OAuth2 authorization URL.
  * The frontend should redirect the user here to grant calendar access.
+ *
+ * `returnTo` is round-tripped via the OAuth `state` param so the callback
+ * can send the user back to where they came from (e.g. mid-disposition).
  */
-export function getAuthUrl(): string {
+export function getAuthUrl(returnTo?: string): string {
   const client = getOAuth2Client();
   const url = client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
     prompt: 'consent', // Force consent to always get a refresh token
+    // Pass returnTo raw — googleapis URL-encodes it once when building
+    // the redirect. Encoding here would double-encode.
+    state: returnTo || undefined,
   });
   logger.info('Generated Google OAuth authorization URL');
   return url;
@@ -105,13 +111,62 @@ export async function handleCallback(code: string): Promise<void> {
 }
 
 /**
- * Checks whether we have valid saved tokens.
- * Returns true if tokens exist on disk (does not verify expiry —
- * the googleapis library handles refresh automatically).
+ * Checks whether we have a token file on disk. Cheap, no network.
+ * Does NOT confirm Google still honours the refresh token — for that
+ * use isAuthenticatedAndValid().
  */
 export function isAuthenticated(): boolean {
   const tokens = loadTokens();
   return tokens !== null;
+}
+
+/**
+ * Verifies the saved tokens still work by attempting a lightweight
+ * Google call (oauth2.userinfo.get). Cached for 5 minutes to avoid
+ * hammering the API on every status poll. Returns false when:
+ *   - no tokens on disk
+ *   - the refresh token has been revoked (Google's 7-day rule for
+ *     unverified apps), or any other auth failure
+ */
+let validityCache: { value: boolean; checkedAt: number } | null = null;
+const VALIDITY_CACHE_MS = 5 * 60_000;
+
+export async function isAuthenticatedAndValid(opts?: { force?: boolean }): Promise<boolean> {
+  if (!opts?.force && validityCache && Date.now() - validityCache.checkedAt < VALIDITY_CACHE_MS) {
+    return validityCache.value;
+  }
+
+  const tokens = loadTokens();
+  if (!tokens) {
+    validityCache = { value: false, checkedAt: Date.now() };
+    return false;
+  }
+
+  try {
+    const client = getOAuth2Client();
+    client.setCredentials(tokens);
+    // Listen for token refresh events so a successful silent refresh persists.
+    client.on('tokens', (newTokens) => {
+      const merged = { ...tokens, ...newTokens };
+      saveTokens(merged);
+    });
+    const oauth2 = google.oauth2({ version: 'v2', auth: client });
+    await oauth2.userinfo.get();
+    validityCache = { value: true, checkedAt: Date.now() };
+    return true;
+  } catch (err) {
+    logger.warn({ err }, 'Google token validation failed — likely revoked or expired');
+    validityCache = { value: false, checkedAt: Date.now() };
+    return false;
+  }
+}
+
+/**
+ * Force the next isAuthenticatedAndValid() call to re-check.
+ * Call after a fresh OAuth callback so the chip clears immediately.
+ */
+export function invalidateAuthCache(): void {
+  validityCache = null;
 }
 
 /**

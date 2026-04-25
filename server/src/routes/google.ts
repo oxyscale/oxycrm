@@ -15,10 +15,17 @@ const router = Router();
 
 // ── GET /auth — Returns the OAuth authorization URL ─────────
 
-router.get('/auth', (_req, res, next) => {
+router.get('/auth', (req, res, next) => {
   try {
-    const url = googleCalendar.getAuthUrl();
-    logger.info('Redirecting to Google OAuth authorization URL');
+    // Optional ?returnTo=/some/path so the OAuth callback can send the
+    // user back to where they came from instead of always landing on /.
+    const rawReturnTo = typeof req.query.returnTo === 'string' ? req.query.returnTo : undefined;
+    // Only allow same-origin paths, never absolute URLs (open redirect guard).
+    const safeReturnTo = rawReturnTo && rawReturnTo.startsWith('/') && !rawReturnTo.startsWith('//')
+      ? rawReturnTo
+      : undefined;
+    const url = googleCalendar.getAuthUrl(safeReturnTo);
+    logger.info({ returnTo: safeReturnTo }, 'Redirecting to Google OAuth authorization URL');
     res.redirect(url);
   } catch (err) {
     next(err);
@@ -30,6 +37,7 @@ router.get('/auth', (_req, res, next) => {
 router.get('/callback', async (req, res, next) => {
   try {
     const code = req.query.code as string | undefined;
+    const stateRaw = typeof req.query.state === 'string' ? req.query.state : undefined;
 
     if (!code) {
       throw new ApiError(400, 'Missing authorization code in callback');
@@ -37,6 +45,7 @@ router.get('/callback', async (req, res, next) => {
 
     logger.info('Handling Google OAuth callback');
     await googleCalendar.handleCallback(code);
+    googleCalendar.invalidateAuthCache();
 
     // Start Gmail sync if it's not already running (now that we have tokens)
     try {
@@ -54,7 +63,16 @@ router.get('/callback', async (req, res, next) => {
     const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
     const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:5173';
     const baseUrl = process.env.CLIENT_URL || `${protocol}://${host}`;
-    res.redirect(`${baseUrl}?googleAuth=success`);
+
+    // Read the returnTo path back out of `state`. Express has already
+    // decoded the query once; the value sits raw. Re-validate before
+    // honouring (open-redirect guard, identical rule to /auth).
+    let returnTo = '/';
+    if (stateRaw && stateRaw.startsWith('/') && !stateRaw.startsWith('//')) {
+      returnTo = stateRaw;
+    }
+    const sep = returnTo.includes('?') ? '&' : '?';
+    res.redirect(`${baseUrl}${returnTo}${sep}googleAuth=success`);
   } catch (err) {
     logger.error({ err }, 'Google OAuth callback failed');
     next(err);
@@ -62,11 +80,18 @@ router.get('/callback', async (req, res, next) => {
 });
 
 // ── GET /status — Check if we're authenticated with Google ──
+// Verifies tokens still work (catches Google's 7-day refresh-token
+// revocation for unverified apps). Cached for 5 min server-side.
+// Pass ?force=1 to bypass the cache (e.g. just after a fresh callback).
 
-router.get('/status', (_req, res) => {
-  const authenticated = googleCalendar.isAuthenticated();
-  logger.info({ authenticated }, 'Google auth status check');
-  res.json({ authenticated });
+router.get('/status', async (req, res, next) => {
+  try {
+    const force = req.query.force === '1' || req.query.force === 'true';
+    const authenticated = await googleCalendar.isAuthenticatedAndValid({ force });
+    res.json({ authenticated });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ── GET /calendar/events — List events for a day ────────────

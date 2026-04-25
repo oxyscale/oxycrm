@@ -281,8 +281,19 @@ export async function getGoogleAuthUrl(): Promise<{ url: string }> {
   return request<{ url: string }>('/google/auth');
 }
 
-export async function getGoogleAuthStatus(): Promise<{ authenticated: boolean }> {
-  return request<{ authenticated: boolean }>('/google/status');
+export async function getGoogleAuthStatus(opts?: { force?: boolean }): Promise<{ authenticated: boolean }> {
+  const qs = opts?.force ? '?force=1' : '';
+  return request<{ authenticated: boolean }>(`/google/status${qs}`);
+}
+
+/**
+ * Build the URL that kicks off the Google OAuth flow. Pass the page the
+ * user is currently on as `returnTo` so the OAuth callback can land them
+ * back where they started instead of bouncing them home.
+ */
+export function buildGoogleAuthUrl(returnTo?: string): string {
+  if (!returnTo) return '/api/google/auth';
+  return `/api/google/auth?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 export async function getCalendarEvents(

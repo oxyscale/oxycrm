@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useDialler } from '../hooks/useDiallerSession';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
-import { createCalendarEvent, getGoogleAuthStatus, getCalendarEvents, updateLeadTemperature } from '../services/api';
+import { createCalendarEvent, getGoogleAuthStatus, getCalendarEvents, updateLeadTemperature, buildGoogleAuthUrl } from '../services/api';
 import type { Disposition } from '../types';
 
 export default function DispositionPage() {
@@ -91,14 +91,18 @@ export default function DispositionPage() {
 
   const handleConnectGoogle = async () => {
     try {
-      // Navigate directly to the auth endpoint — it redirects to Google OAuth
-      const url = '/api/google/auth';
+      // Pass the current page as returnTo so a same-tab fallback (popup
+      // blocker) lands the user back on this disposition screen, not on
+      // the home page.
+      const returnTo = window.location.pathname + window.location.search;
+      const url = buildGoogleAuthUrl(returnTo);
       window.open(url, '_blank');
-      // After the user connects, they'll come back — re-check auth status
-      // Poll briefly to detect when they've completed the flow
+      // After the user connects, they'll come back — re-check auth status.
+      // Force=true bypasses the server's 5-min validity cache so we see
+      // the success the moment the callback finishes.
       const pollInterval = setInterval(async () => {
         try {
-          const { authenticated } = await getGoogleAuthStatus();
+          const { authenticated } = await getGoogleAuthStatus({ force: true });
           if (authenticated) {
             setCalendarAuthenticated(true);
             clearInterval(pollInterval);

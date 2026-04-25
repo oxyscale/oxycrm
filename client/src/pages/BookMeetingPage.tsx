@@ -92,11 +92,15 @@ export default function BookMeetingPage() {
   }, [meetingDate, meetingTimezone, calendarAuthenticated]);
 
   const handleConnectGoogle = () => {
-    window.open('/api/google/auth', '_blank');
-    // Poll to detect when auth completes
+    // Round-trip the current page so a same-tab fallback (popup blocker)
+    // lands the user back on this booking screen, not on the home page.
+    const returnTo = window.location.pathname + window.location.search;
+    window.open(api.buildGoogleAuthUrl(returnTo), '_blank');
+    // Poll to detect when auth completes. Force bypasses the server's
+    // 5-min validity cache so we pick up the fresh tokens immediately.
     const pollInterval = setInterval(async () => {
       try {
-        const { authenticated } = await api.getGoogleAuthStatus();
+        const { authenticated } = await api.getGoogleAuthStatus({ force: true });
         if (authenticated) {
           setCalendarAuthenticated(true);
           clearInterval(pollInterval);

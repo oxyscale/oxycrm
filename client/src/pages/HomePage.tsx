@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Activity as ActivityIcon,
   X,
+  CalendarX,
 } from 'lucide-react';
 import Glyph from '../components/ui/Glyph';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
@@ -99,6 +100,12 @@ export default function HomePage() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [showCreateLead, setShowCreateLead] = useState(searchParams.get('create') === 'lead');
+
+  // Calendar connection state. `null` = not yet checked. Polled every 60s
+  // server-side (which itself caches for 5 min). When we land back from
+  // a successful OAuth callback (?googleAuth=success) we force-refresh
+  // the cache and clear the stale chip immediately.
+  const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
   const [newLead, setNewLead] = useState({
     name: '',
     company: '',
@@ -114,6 +121,45 @@ export default function HomePage() {
     temperature?: string;
   } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Calendar status — initial check, then poll every 60s. After an OAuth
+  // success redirect we force a fresh check and clear the URL flag so the
+  // chip disappears the moment Google honours the new tokens.
+  useEffect(() => {
+    let cancelled = false;
+    const justAuthed = searchParams.get('googleAuth') === 'success';
+    const check = async () => {
+      try {
+        const { authenticated } = await api.getGoogleAuthStatus({ force: justAuthed });
+        if (!cancelled) setCalendarConnected(authenticated);
+      } catch {
+        // Network blip — leave the previous value rather than flicker.
+      }
+    };
+    check();
+    if (justAuthed) {
+      searchParams.delete('googleAuth');
+      setSearchParams(searchParams, { replace: true });
+    }
+    const id = setInterval(check, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [searchParams, setSearchParams]);
+
+  const handleReconnectCalendar = () => {
+    window.open(api.buildGoogleAuthUrl('/'), '_blank');
+    // Active poll while the new tab does its thing — every 3s for 2 min.
+    const start = Date.now();
+    const id = setInterval(async () => {
+      try {
+        const { authenticated } = await api.getGoogleAuthStatus({ force: true });
+        if (authenticated) {
+          setCalendarConnected(true);
+          clearInterval(id);
+        }
+      } catch { /* ignore */ }
+      if (Date.now() - start > 120_000) clearInterval(id);
+    }, 3000);
+  };
 
   useEffect(() => {
     loadTodaysCallbacks();
@@ -324,6 +370,24 @@ export default function HomePage() {
 
           {/* Action bar */}
           <div className="mt-8 flex flex-wrap items-center gap-3">
+            {/* Calendar reconnect chip — only when tokens have been
+                revoked (Google's 7-day rule for unverified apps).
+                Pushes itself to the right edge with ml-auto so it sits
+                above the Avg Call stat without crowding the primary
+                actions on the left. */}
+            {calendarConnected === false && (
+              <PillButton
+                variant="outline"
+                size="md"
+                trailing="none"
+                icon={<CalendarX size={16} className="text-warn" />}
+                onClick={handleReconnectCalendar}
+                className="order-last ml-auto border-[rgba(245,158,11,0.4)] text-warn hover:bg-[rgba(245,158,11,0.06)]"
+              >
+                Reconnect calendar
+              </PillButton>
+            )}
+
             {leads.length > 0 && (
               <PillButton
                 variant="primary"
