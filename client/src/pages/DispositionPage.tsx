@@ -376,7 +376,7 @@ export default function DispositionPage() {
             value={followUpDate}
             onChange={(e) => setFollowUpDate(e.target.value)}
             min={new Date().toISOString().split('T')[0]}
-            className="bg-paper border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:dark]"
+            className="bg-paper border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:light]"
           />
           {followUpDate && (
             <button
@@ -548,7 +548,7 @@ export default function DispositionPage() {
                   type="date"
                   value={meetingDate}
                   onChange={(e) => setMeetingDate(e.target.value)}
-                  className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:dark]"
+                  className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:light]"
                 />
               </div>
               <div>
@@ -559,7 +559,7 @@ export default function DispositionPage() {
                   type="time"
                   value={meetingTime}
                   onChange={(e) => setMeetingTime(e.target.value)}
-                  className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:dark]"
+                  className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:light]"
                 />
               </div>
               <div>

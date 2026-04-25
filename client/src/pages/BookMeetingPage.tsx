@@ -336,7 +336,7 @@ export default function BookMeetingPage() {
                 type="date"
                 value={meetingDate}
                 onChange={(e) => setMeetingDate(e.target.value)}
-                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:dark]"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:light]"
               />
             </div>
             <div>
@@ -345,7 +345,7 @@ export default function BookMeetingPage() {
                 type="time"
                 value={meetingTime}
                 onChange={(e) => setMeetingTime(e.target.value)}
-                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:dark]"
+                className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all [color-scheme:light]"
               />
             </div>
             <div>

@@ -268,57 +268,78 @@ export default function DiallerPage() {
 
   // ── Initialise Twilio Device on mount ───────────────────────
 
-  useEffect(() => {
-    let device: Device | null = null;
+  // Tracks whether a manual retry is in flight so the button can show
+  // a spinner and avoid double-clicks.
+  const [twilioInitting, setTwilioInitting] = useState(false);
 
-    async function initTwilio() {
-      try {
-        setTwilioError(null);
-        const { token } = await api.getTwilioToken();
-
-        device = new Device(token, {
-          codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
-          logLevel: 1, // errors only in production
-        });
-
-        device.on('error', (err) => {
-          console.error('[Twilio] Device error:', err);
-          setTwilioError(err.message || 'Twilio device error');
-        });
-
-        device.on('tokenWillExpire', async () => {
-          // Refresh the token before it expires
-          try {
-            const { token: newToken } = await api.getTwilioToken();
-            device?.updateToken(newToken);
-            console.log('[Twilio] Token refreshed');
-          } catch (err) {
-            console.error('[Twilio] Failed to refresh token:', err);
-          }
-        });
-
-        // Device is ready for outgoing calls as soon as it's created with a valid token
-        // No need to call register() — that's only for incoming calls
-        deviceRef.current = device;
-        setTwilioReady(true);
-        console.log('[Twilio] Device initialised and ready for outgoing calls');
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Failed to initialise Twilio';
-        console.error('[Twilio] Init failed:', msg);
-        setTwilioError(msg);
-      }
+  // Token re-init lives in a callback so the offline UI can fire it
+  // again from a Retry button. Returns the new Device for cleanup.
+  const initTwilioOnce = useCallback(async (): Promise<Device | null> => {
+    setTwilioInitting(true);
+    setTwilioError(null);
+    try {
+      const { token } = await api.getTwilioToken();
+      const device = new Device(token, {
+        codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
+        logLevel: 1,
+      });
+      device.on('error', (err) => {
+        console.error('[Twilio] Device error:', err);
+        setTwilioError(err.message || 'Twilio device error');
+      });
+      device.on('tokenWillExpire', async () => {
+        try {
+          const { token: newToken } = await api.getTwilioToken();
+          device.updateToken(newToken);
+          console.log('[Twilio] Token refreshed');
+        } catch (err) {
+          console.error('[Twilio] Failed to refresh token:', err);
+        }
+      });
+      deviceRef.current = device;
+      setTwilioReady(true);
+      console.log('[Twilio] Device initialised and ready for outgoing calls');
+      return device;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to initialise Twilio';
+      console.error('[Twilio] Init failed:', msg);
+      setTwilioError(msg);
+      setTwilioReady(false);
+      return null;
+    } finally {
+      setTwilioInitting(false);
     }
+  }, []);
 
-    initTwilio();
+  // Manual retry — destroys any half-initialised device, then re-runs
+  // the init flow. Bound to the Retry button shown when status='offline'.
+  const handleRetryTwilio = useCallback(() => {
+    if (deviceRef.current) {
+      try { deviceRef.current.destroy(); } catch { /* ignore */ }
+      deviceRef.current = null;
+    }
+    initTwilioOnce();
+  }, [initTwilioOnce]);
 
+  useEffect(() => {
+    let cancelled = false;
+    let createdDevice: Device | null = null;
+    initTwilioOnce().then((device) => {
+      if (cancelled && device) {
+        try { device.destroy(); } catch { /* ignore */ }
+        return;
+      }
+      createdDevice = device;
+    });
     return () => {
-      if (device) {
-        device.destroy();
+      cancelled = true;
+      if (createdDevice) {
+        createdDevice.destroy();
         deviceRef.current = null;
         setTwilioReady(false);
       }
     };
-  }, []);
+  }, [initTwilioOnce]);
 
   // ── Load categories + leads on mount ────────────────────────
   // If navigated from a lead profile with loadLeadId, auto-select that lead
@@ -499,6 +520,19 @@ export default function DiallerPage() {
     appendTranscript('[Call ended]');
   }, [updateCallState, appendTranscript]);
 
+  // Hard-cleanup on unmount. If the user clicks the sidebar / browser
+  // back mid-ring or mid-call, the previous behaviour left the Twilio
+  // call ringing in the background — they'd come back later and not
+  // know it was still connected. Now the call is force-disconnected.
+  useEffect(() => {
+    return () => {
+      if (activeCallRef.current) {
+        try { activeCallRef.current.disconnect(); } catch { /* ignore */ }
+        activeCallRef.current = null;
+      }
+    };
+  }, []);
+
   // ── Helpers ──────────────────────────────────────────────────
 
   const formatDuration = (seconds: number): string => {
@@ -574,10 +608,20 @@ export default function DiallerPage() {
               Phone Ready
             </span>
           ) : twilioError ? (
-            <span className="flex items-center gap-1.5 text-xs text-red-400" title={twilioError}>
-              <WifiOff size={12} />
-              Phone Offline
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 text-xs text-risk" title={twilioError}>
+                <WifiOff size={12} />
+                Phone Offline
+              </span>
+              <button
+                onClick={handleRetryTwilio}
+                disabled={twilioInitting}
+                className="text-[11px] px-2 py-0.5 rounded-full border border-hair-soft text-ink-muted hover:text-ink hover:border-hair-strong transition-all flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {twilioInitting ? <Loader2 size={10} className="animate-spin" /> : null}
+                {twilioInitting ? 'Retrying...' : 'Retry'}
+              </button>
+            </div>
           ) : (
             <span className="flex items-center gap-1.5 text-xs text-ink-dim">
               <Loader2 size={12} className="animate-spin" />

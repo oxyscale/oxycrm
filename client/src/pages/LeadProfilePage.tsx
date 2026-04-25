@@ -263,6 +263,7 @@ export default function LeadProfilePage() {
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [fieldUpdateError, setFieldUpdateError] = useState<string | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editingNoteContent, setEditingNoteContent] = useState('');
   const [isDictating, setIsDictating] = useState(false);
@@ -376,6 +377,11 @@ export default function LeadProfilePage() {
       setLead(updated);
     } catch (err) {
       console.error(`Failed to update ${field}:`, err);
+      // Surface the failure so the user knows their edit didn't stick
+      // instead of silently reverting to the previous value.
+      const msg = err instanceof Error ? err.message : 'Failed to save';
+      setFieldUpdateError(`${field}: ${msg}`);
+      setTimeout(() => setFieldUpdateError(null), 4000);
     }
   };
 
@@ -547,6 +553,12 @@ export default function LeadProfilePage() {
         Back
       </button>
 
+      {fieldUpdateError && (
+        <div className="mb-4 bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.22)] rounded-lg px-4 py-2.5 text-risk text-sm">
+          Couldn&apos;t save edit — {fieldUpdateError}
+        </div>
+      )}
+
       {/* ── Header section ──────────────────────────────────── */}
       <div className="mb-8">
         <EyebrowLabel variant="pill" className="mb-4">
@@ -713,7 +725,7 @@ export default function LeadProfilePage() {
                 console.error('Failed to update follow-up date:', err);
               }
             }}
-            className="bg-transparent text-ink-muted text-xs focus:outline-none [color-scheme:dark] cursor-pointer"
+            className="bg-transparent text-ink-muted text-xs focus:outline-none [color-scheme:light] cursor-pointer"
             title="Follow-up date"
           />
           {lead.followUpDate && (() => {
