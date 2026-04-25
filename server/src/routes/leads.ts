@@ -282,6 +282,9 @@ router.get('/search', (req, res, next) => {
     if (cleanPhone.length < 3) {
       throw new ApiError(400, 'Phone query must contain at least 3 digits');
     }
+    // Escape SQL LIKE wildcards in user input. Without this, an attacker
+    // could pass "%" or "_" to enumerate phone numbers via LIKE patterns.
+    const sanitized = cleanPhone.replace(/[%_]/g, '');
 
     // Search by phone number (partial match from the end — handles country code differences)
     const rows = db.prepare(`
@@ -289,7 +292,7 @@ router.get('/search', (req, res, next) => {
       WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') LIKE @pattern
       ORDER BY updated_at DESC
       LIMIT 10
-    `).all({ pattern: `%${cleanPhone}%` }) as LeadRow[];
+    `).all({ pattern: `%${sanitized}%` }) as LeadRow[];
 
     // For each matching lead, get their latest call log
     const results = rows.map((row) => {

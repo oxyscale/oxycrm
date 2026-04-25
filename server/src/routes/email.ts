@@ -19,12 +19,16 @@ const router = Router();
 // Validation schemas
 // ============================================================
 
+// Header-injection guard. CR/LF in any header value would let an
+// attacker tack on extra headers (e.g. "Bcc: evil@x") via newlines.
+const NO_CRLF = /^[^\r\n]*$/;
+
 const sendEmailSchema = z.object({
   leadId: z.number().int().positive(),
-  to: z.string().email('Invalid email address'),
-  cc: z.string().optional(),
-  bcc: z.string().optional(),
-  subject: z.string().min(1, 'Subject is required'),
+  to: z.string().email('Invalid email address').regex(NO_CRLF, 'Email address cannot contain line breaks'),
+  cc: z.string().regex(NO_CRLF, 'CC cannot contain line breaks').optional(),
+  bcc: z.string().regex(NO_CRLF, 'BCC cannot contain line breaks').optional(),
+  subject: z.string().min(1, 'Subject is required').max(998).regex(NO_CRLF, 'Subject cannot contain line breaks'),
   body: z.string().min(1, 'Email body is required'),
   pipelineStage: z.enum(['follow_up', 'call_booked']),
   attachments: z.array(z.string()).optional(),
