@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Upload,
   Phone,
@@ -97,7 +97,8 @@ export default function HomePage() {
   const [importCategory, setImportCategory] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [showCreateLead, setShowCreateLead] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showCreateLead, setShowCreateLead] = useState(searchParams.get('create') === 'lead');
   const [newLead, setNewLead] = useState({
     name: '',
     company: '',
@@ -342,10 +343,15 @@ export default function HomePage() {
               trailing="none"
               icon={<UserPlus size={16} className="text-sky-ink" />}
               onClick={() => {
-                setShowCreateLead(!showCreateLead);
+                const next = !showCreateLead;
+                setShowCreateLead(next);
                 setShowImport(false);
                 setCreateResult(null);
                 setCreateError(null);
+                if (!next && searchParams.get('create') === 'lead') {
+                  searchParams.delete('create');
+                  setSearchParams(searchParams, { replace: true });
+                }
               }}
             >
               Create lead

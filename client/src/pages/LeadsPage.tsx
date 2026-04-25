@@ -8,12 +8,14 @@ import {
   Flame,
   Thermometer,
   Snowflake,
+  UserPlus,
 } from 'lucide-react';
 import { useDialler } from '../hooks/useDiallerSession';
 import * as api from '../services/api';
 import type { Lead } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
+import PillButton from '../components/ui/PillButton';
 
 type SortField = 'name' | 'category' | 'queuePosition' | 'status' | 'lastCalledAt';
 type SortDir = 'asc' | 'desc';
@@ -186,14 +188,25 @@ export default function LeadsPage() {
   return (
     <div className="p-10 min-h-full bg-cream">
       {/* Header */}
-      <div className="mb-8">
-        <EyebrowLabel variant="pill" className="mb-4">
-          DIRECTORY · LEADS
-        </EyebrowLabel>
-        <SectionHeading size="section">All leads.</SectionHeading>
-        <p className="text-ink-muted text-sm mt-3">
-          {leads.length} total &middot; {leads.filter((l) => l.status === 'not_called').length} not called &middot; {leads.filter((l) => l.status === 'called').length} called
-        </p>
+      <div className="mb-8 flex items-start justify-between gap-6">
+        <div>
+          <EyebrowLabel variant="pill" className="mb-4">
+            DIRECTORY · LEADS
+          </EyebrowLabel>
+          <SectionHeading size="section">All leads.</SectionHeading>
+          <p className="text-ink-muted text-sm mt-3">
+            {leads.length} total &middot; {leads.filter((l) => l.status === 'not_called').length} not called &middot; {leads.filter((l) => l.status === 'called').length} called
+          </p>
+        </div>
+        <PillButton
+          variant="outline"
+          size="md"
+          trailing="none"
+          icon={<UserPlus size={16} className="text-sky-ink" />}
+          onClick={() => navigate('/?create=lead')}
+        >
+          Create lead
+        </PillButton>
       </div>
 
       {/* Filters bar */}
