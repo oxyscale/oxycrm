@@ -122,27 +122,36 @@ export default function HomePage() {
   } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Calendar status — initial check, then poll every 60s. After an OAuth
-  // success redirect we force a fresh check and clear the URL flag so the
-  // chip disappears the moment Google honours the new tokens.
+  // Calendar status — checked on mount, on window focus, and on a slow
+  // 5-min interval (matches the server's validity cache TTL so we are
+  // not asking faster than the server can answer with fresh data).
+  // The chip's state only flips once a week or so, this cadence is plenty.
+  // After an OAuth success redirect we force a fresh check and clear the
+  // URL flag so the chip disappears the moment Google honours new tokens.
   useEffect(() => {
     let cancelled = false;
     const justAuthed = searchParams.get('googleAuth') === 'success';
-    const check = async () => {
+    const check = async (force = false) => {
       try {
-        const { authenticated } = await api.getGoogleAuthStatus({ force: justAuthed });
+        const { authenticated } = await api.getGoogleAuthStatus({ force });
         if (!cancelled) setCalendarConnected(authenticated);
       } catch {
         // Network blip — leave the previous value rather than flicker.
       }
     };
-    check();
+    check(justAuthed);
     if (justAuthed) {
       searchParams.delete('googleAuth');
       setSearchParams(searchParams, { replace: true });
     }
-    const id = setInterval(check, 60_000);
-    return () => { cancelled = true; clearInterval(id); };
+    const id = setInterval(() => check(false), 5 * 60_000);
+    const onFocus = () => check(false);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [searchParams, setSearchParams]);
 
   const handleReconnectCalendar = () => {

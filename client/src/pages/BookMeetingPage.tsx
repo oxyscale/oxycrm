@@ -56,7 +56,13 @@ export default function BookMeetingPage() {
     meetLink?: string;
   } | null>(null);
 
-  // Load lead data
+  // Persist key for the in-flight booking form. Lead-scoped so two
+  // different leads do not collide. Used to survive a same-tab OAuth
+  // round-trip when the popup blocker forces it.
+  const draftKey = leadId ? `book_meeting_v1_${leadId}` : null;
+
+  // Load lead data. After the lead resolves, hydrate any saved draft so
+  // we restore exactly what the user had typed before clicking Connect.
   useEffect(() => {
     if (!leadId) return;
     setLoading(true);
@@ -64,10 +70,27 @@ export default function BookMeetingPage() {
       .then((data) => {
         setLead(data);
         setMeetingEmail(data.email || '');
+        if (draftKey) {
+          try {
+            const raw = window.sessionStorage.getItem(draftKey);
+            if (raw) {
+              const d = JSON.parse(raw) as Record<string, string>;
+              if (d.email) setMeetingEmail(d.email);
+              if (d.date) setMeetingDate(d.date);
+              if (d.time) setMeetingTime(d.time);
+              if (d.duration) setMeetingDuration(d.duration);
+              if (d.type === 'google_meet' || d.type === 'in_person') setMeetingType(d.type);
+              if (d.location) setMeetingLocation(d.location);
+              if (d.guests) setMeetingGuests(d.guests);
+              if (d.notes) setMeetingNotes(d.notes);
+              if (d.timezone) setMeetingTimezone(d.timezone);
+            }
+          } catch { /* corrupt draft, ignore */ }
+        }
       })
       .catch(() => navigate('/leads'))
       .finally(() => setLoading(false));
-  }, [leadId, navigate]);
+  }, [leadId, navigate, draftKey]);
 
   // Check Google Calendar auth on mount
   useEffect(() => {
@@ -92,6 +115,23 @@ export default function BookMeetingPage() {
   }, [meetingDate, meetingTimezone, calendarAuthenticated]);
 
   const handleConnectGoogle = () => {
+    // Stash the in-flight form so a same-tab fallback (popup blocker)
+    // restores everything the user had typed when they land back here.
+    if (draftKey) {
+      try {
+        window.sessionStorage.setItem(draftKey, JSON.stringify({
+          email: meetingEmail,
+          date: meetingDate,
+          time: meetingTime,
+          duration: meetingDuration,
+          type: meetingType,
+          location: meetingLocation,
+          guests: meetingGuests,
+          notes: meetingNotes,
+          timezone: meetingTimezone,
+        }));
+      } catch { /* sessionStorage full / disabled — proceed anyway */ }
+    }
     // Round-trip the current page so a same-tab fallback (popup blocker)
     // lands the user back on this booking screen, not on the home page.
     const returnTo = window.location.pathname + window.location.search;
@@ -138,6 +178,11 @@ export default function BookMeetingPage() {
         htmlLink: result.htmlLink,
         meetLink: result.meetLink,
       });
+      // Booking succeeded — drop any stashed draft so the next visit
+      // for this lead opens with a clean form.
+      if (draftKey) {
+        try { window.sessionStorage.removeItem(draftKey); } catch { /* ignore */ }
+      }
     } catch (err) {
       setBookingError(
         err instanceof Error ? err.message : 'Failed to book meeting. Please try again.'

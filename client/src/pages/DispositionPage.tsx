@@ -38,17 +38,33 @@ export default function DispositionPage() {
   const [quickNote, setQuickNote] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
 
-  // Book Meeting state
-  const [showBookMeeting, setShowBookMeeting] = useState(false);
-  const [meetingEmail, setMeetingEmail] = useState(currentLead?.email || '');
-  const [meetingDate, setMeetingDate] = useState('');
-  const [meetingTime, setMeetingTime] = useState('');
-  const [meetingDuration, setMeetingDuration] = useState('30');
-  const [meetingType, setMeetingType] = useState<'google_meet' | 'in_person'>('google_meet');
-  const [meetingLocation, setMeetingLocation] = useState('');
-  const [meetingGuests, setMeetingGuests] = useState('');
-  const [meetingNotes, setMeetingNotes] = useState('');
-  const [meetingTimezone, setMeetingTimezone] = useState('Australia/Sydney');
+  // Book Meeting state.
+  // Hydrated from sessionStorage if a previous Connect-Calendar click stashed
+  // a draft for this lead — covers the popup-blocker same-tab fallback so
+  // the user lands back on a fully-filled form rather than a blank one.
+  const draftKey = currentLead?.id ? `disposition_meeting_v1_${currentLead.id}` : null;
+  const initialDraft = (() => {
+    if (!draftKey || typeof window === 'undefined') return null;
+    try {
+      const raw = window.sessionStorage.getItem(draftKey);
+      return raw ? (JSON.parse(raw) as Record<string, string>) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const [showBookMeeting, setShowBookMeeting] = useState(initialDraft !== null);
+  const [meetingEmail, setMeetingEmail] = useState(initialDraft?.email ?? currentLead?.email ?? '');
+  const [meetingDate, setMeetingDate] = useState(initialDraft?.date ?? '');
+  const [meetingTime, setMeetingTime] = useState(initialDraft?.time ?? '');
+  const [meetingDuration, setMeetingDuration] = useState(initialDraft?.duration ?? '30');
+  const [meetingType, setMeetingType] = useState<'google_meet' | 'in_person'>(
+    (initialDraft?.type as 'google_meet' | 'in_person') ?? 'google_meet'
+  );
+  const [meetingLocation, setMeetingLocation] = useState(initialDraft?.location ?? '');
+  const [meetingGuests, setMeetingGuests] = useState(initialDraft?.guests ?? '');
+  const [meetingNotes, setMeetingNotes] = useState(initialDraft?.notes ?? '');
+  const [meetingTimezone, setMeetingTimezone] = useState(initialDraft?.timezone ?? 'Australia/Sydney');
   const [bookingMeeting, setBookingMeeting] = useState(false);
 
   // Calendar events for selected day
@@ -91,6 +107,24 @@ export default function DispositionPage() {
 
   const handleConnectGoogle = async () => {
     try {
+      // Stash the in-flight booking form so a same-tab fallback (popup
+      // blocker) doesn't make the user retype everything when they land
+      // back on this page after the OAuth round-trip.
+      if (draftKey) {
+        try {
+          window.sessionStorage.setItem(draftKey, JSON.stringify({
+            email: meetingEmail,
+            date: meetingDate,
+            time: meetingTime,
+            duration: meetingDuration,
+            type: meetingType,
+            location: meetingLocation,
+            guests: meetingGuests,
+            notes: meetingNotes,
+            timezone: meetingTimezone,
+          }));
+        } catch { /* sessionStorage full / disabled — proceed anyway */ }
+      }
       // Pass the current page as returnTo so a same-tab fallback (popup
       // blocker) lands the user back on this disposition screen, not on
       // the home page.
@@ -145,6 +179,11 @@ export default function DispositionPage() {
         htmlLink: result.htmlLink,
         meetLink: result.meetLink,
       });
+      // Booking succeeded — drop any stashed draft so the next call to
+      // this lead opens with a clean form.
+      if (draftKey) {
+        try { window.sessionStorage.removeItem(draftKey); } catch { /* ignore */ }
+      }
     } catch (err) {
       setBookingError(
         err instanceof Error ? err.message : 'Failed to book meeting. Please try again.'
