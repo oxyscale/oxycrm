@@ -177,7 +177,7 @@ export function initializeDatabase(db: Database.Database): void {
       created_by TEXT DEFAULT 'jordan',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (lead_id) REFERENCES leads(id)
+      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
     );
 
     -- Projects table: leads that converted into active projects
@@ -193,7 +193,7 @@ export function initializeDatabase(db: Database.Database): void {
       end_date TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (lead_id) REFERENCES leads(id)
+      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
     );
 
     -- Project tasks table: checklist items within a project
@@ -203,7 +203,7 @@ export function initializeDatabase(db: Database.Database): void {
       title TEXT NOT NULL,
       completed INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (project_id) REFERENCES projects(id)
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
     );
 
     -- Emails table: log of all emails (sent and received)
@@ -218,7 +218,7 @@ export function initializeDatabase(db: Database.Database): void {
       source TEXT DEFAULT 'dialler',
       direction TEXT DEFAULT 'sent',
       created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (lead_id) REFERENCES leads(id)
+      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
     );
 
     -- Activities table: timeline of all lead interactions
@@ -230,7 +230,7 @@ export function initializeDatabase(db: Database.Database): void {
       description TEXT,
       metadata TEXT,
       created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (lead_id) REFERENCES leads(id)
+      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
     );
 
     -- Index for notes by lead
@@ -339,6 +339,17 @@ export function initializeDatabase(db: Database.Database): void {
   // Nullable — legacy rows backfilled to Jordan during user seed.
   addColumnIfMissing(db, 'call_logs', 'user_id', 'INTEGER REFERENCES users(id) ON DELETE SET NULL');
   addColumnIfMissing(db, 'email_drafts', 'user_id', 'INTEGER REFERENCES users(id) ON DELETE SET NULL');
+
+  // Retrofit ON DELETE CASCADE on the legacy tables that were created
+  // before cascading was added. Wrong-Number disposition deletes the
+  // lead row and used to leave orphan notes / projects / activities /
+  // emails behind. SQLite cannot ALTER FK constraints in place — the
+  // helper recreates the table only when the existing FK is wrong.
+  retrofitCascadeIfMissing(db, 'notes', 'lead_id', 'leads');
+  retrofitCascadeIfMissing(db, 'projects', 'lead_id', 'leads');
+  retrofitCascadeIfMissing(db, 'project_tasks', 'project_id', 'projects');
+  retrofitCascadeIfMissing(db, 'emails_sent', 'lead_id', 'leads');
+  retrofitCascadeIfMissing(db, 'activities', 'lead_id', 'leads');
 }
 
 /**
@@ -355,5 +366,61 @@ function addColumnIfMissing(
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
   if (!cols.some((c) => c.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+interface ForeignKeyInfo {
+  table: string;
+  from: string;
+  on_delete: string;
+}
+
+/**
+ * Recreate a table with `ON DELETE CASCADE` on its FK to `parentTable`
+ * if the existing FK uses NO ACTION (the SQLite default). No-op
+ * otherwise. Safe to call repeatedly; idempotent.
+ */
+function retrofitCascadeIfMissing(
+  db: Database.Database,
+  table: string,
+  fkColumn: string,
+  parentTable: string,
+): void {
+  const fks = db.prepare(`PRAGMA foreign_key_list(${table})`).all() as ForeignKeyInfo[];
+  const existing = fks.find((f) => f.from === fkColumn && f.table === parentTable);
+  if (!existing) return;
+  if (existing.on_delete === 'CASCADE') return; // already correct
+
+  // Look up the original CREATE TABLE so we can rebuild it byte-for-byte
+  // with the FK clause swapped. Falling back to the parsed PRAGMA info
+  // would risk losing column defaults / collation hints.
+  const row = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name = ?`)
+    .get(table) as { sql: string } | undefined;
+  if (!row?.sql) return;
+
+  const fkPattern = new RegExp(
+    `FOREIGN KEY\\s*\\(\\s*${fkColumn}\\s*\\)\\s*REFERENCES\\s+${parentTable}\\s*\\(\\s*id\\s*\\)(?!\\s*ON DELETE)`,
+    'i',
+  );
+  const newSql = row.sql.replace(
+    fkPattern,
+    `FOREIGN KEY (${fkColumn}) REFERENCES ${parentTable}(id) ON DELETE CASCADE`,
+  );
+  if (newSql === row.sql) return; // pattern didn't match — bail safely
+
+  // SQLite's officially supported pattern for changing constraints:
+  // turn FK enforcement off, swap the table inside one transaction.
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(() => {
+      const tmpTable = `${table}_new_cascade_migration`;
+      db.exec(newSql.replace(`CREATE TABLE ${table}`, `CREATE TABLE ${tmpTable}`).replace(`CREATE TABLE IF NOT EXISTS ${table}`, `CREATE TABLE ${tmpTable}`));
+      db.exec(`INSERT INTO ${tmpTable} SELECT * FROM ${table}`);
+      db.exec(`DROP TABLE ${table}`);
+      db.exec(`ALTER TABLE ${tmpTable} RENAME TO ${table}`);
+    })();
+  } finally {
+    db.pragma('foreign_keys = ON');
   }
 }
