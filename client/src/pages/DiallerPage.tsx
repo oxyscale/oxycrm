@@ -20,6 +20,7 @@ import {
   Mail,
   Wifi,
   WifiOff,
+  FileText,
 } from 'lucide-react';
 import { useDialler } from '../hooks/useDiallerSession';
 import * as api from '../services/api';
@@ -856,6 +857,34 @@ export default function DiallerPage() {
                       <PhoneOff size={18} />
                       Call Ended — {formatDuration(callDuration)}
                     </div>
+                  )}
+                </div>
+
+                {/* Call Summary — pinned across every call state so Jordan
+                    can scan the rolling AI summary before dialling AND keep
+                    it on screen while talking to the lead. */}
+                <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-ink text-sm font-bold flex items-center gap-2">
+                      <FileText size={14} className="text-sky-ink" />
+                      Call Summary
+                    </h3>
+                    {previousCalls.length > 0 && (
+                      <span className="text-ink-dim text-[11px]">
+                        {previousCalls.length} prior call{previousCalls.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                  {currentLead.consolidatedSummary ? (
+                    <div className="max-h-[260px] overflow-y-auto pr-1">
+                      <p className="text-ink-muted text-sm leading-relaxed whitespace-pre-line">
+                        {currentLead.consolidatedSummary}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-ink-dim text-sm italic">
+                      No call notes available for this lead yet.
+                    </p>
                   )}
                 </div>
 
