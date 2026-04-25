@@ -29,12 +29,23 @@ async function request<T>(
   const url = `${BASE_URL}${endpoint}`;
 
   const res = await fetch(url, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
     ...options,
   });
+
+  if (res.status === 401 && !endpoint.startsWith('/auth/')) {
+    // Session expired or never existed. Bounce to /login and abort.
+    // The login page reads ?next= to send the user back after sign-in.
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/reset-password')) {
+      const next = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.replace(`/login?next=${next}`);
+    }
+    throw new Error('Not authenticated');
+  }
 
   if (!res.ok) {
     const errorBody = await res.text();
@@ -85,6 +96,7 @@ export async function importLeadsCSV(
 
   const res = await fetch(`${BASE_URL}/leads/import`, {
     method: 'POST',
+    credentials: 'include',
     body: formData,
   });
 
@@ -337,6 +349,7 @@ export async function transcribeAudio(
 
   const res = await fetch(`${BASE_URL}/transcribe`, {
     method: 'POST',
+    credentials: 'include',
     body: formData,
     // No Content-Type header — browser sets it with boundary for multipart
   });
@@ -666,5 +679,59 @@ export async function retryEmailDraft(id: number): Promise<{ success: true }> {
 export async function discardEmailDraft(id: number): Promise<{ success: true }> {
   return request<{ success: true }>(`/email-drafts/${id}`, {
     method: 'DELETE',
+  });
+}
+
+// ── Auth ────────────────────────────────────────────────────
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+  title: string;
+  phone: string;
+  senderEmail: string;
+  signOff: string;
+  calendlyLink: string;
+}
+
+export async function login(email: string, password: string): Promise<{ user: AuthUser }> {
+  return request<{ user: AuthUser }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function logout(): Promise<{ success: true }> {
+  return request<{ success: true }>('/auth/logout', { method: 'POST' });
+}
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const { user } = await request<{ user: AuthUser }>('/auth/me');
+    return user;
+  } catch {
+    return null;
+  }
+}
+
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  return request<{ message: string }>('/auth/forgot', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ user: AuthUser }> {
+  return request<{ user: AuthUser }>('/auth/reset', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword }),
+  });
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ success: true }> {
+  return request<{ success: true }>('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
 }

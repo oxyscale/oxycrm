@@ -8,11 +8,15 @@ dotenv.config({ override: true });
 
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import pino from 'pino';
 
 // Import database initialisation (runs schema creation on import)
-import './db/index.js';
+import { getDb } from './db/index.js';
+import { seedUsersIfEmpty } from './db/seed-users.js';
+import { requireAuth } from './middleware/auth.js';
+import authRouter from './routes/auth.js';
 
 // Import route handlers
 import leadsRouter from './routes/leads.js';
@@ -56,7 +60,9 @@ const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 // --- Middleware ---
 
-// CORS — allow the Vite dev server in development, or same-origin in production
+// CORS — same-origin in production (server serves the React build),
+// Vite dev server in development. credentials:true so the session
+// cookie crosses origins in dev.
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? true : CLIENT_URL,
   credentials: true,
@@ -68,6 +74,10 @@ app.use(express.json({ limit: '10mb' }));
 // Parse URL-encoded bodies (for Twilio webhook callbacks)
 app.use(express.urlencoded({ extended: true }));
 
+// Cookie parser — required by the auth middleware to read the
+// session cookie. Must come BEFORE any route that uses requireAuth.
+app.use(cookieParser());
+
 // Request logging
 app.use((req, _res, next) => {
   logger.info({ method: req.method, url: req.url }, 'Incoming request');
@@ -75,6 +85,34 @@ app.use((req, _res, next) => {
 });
 
 // --- Routes ---
+
+// Health check — unauthenticated. Useful for Railway's health probe
+// and for confirming the server is alive without needing to log in.
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Auth routes — /login, /logout, /forgot, /reset are unauthenticated
+// by design (you can't already be logged in). /me + /change-password
+// apply requireAuth themselves inside the router.
+app.use('/api/auth', authRouter);
+
+// Public-by-design routes that need to bypass session-cookie auth:
+//   - Twilio webhooks (called by Twilio's servers, not a browser).
+//     Signature verification protects them — separate blocker.
+//   - Google OAuth callback (called by the user's browser after
+//     Google redirects). The OAuth `code` itself is the credential.
+const PUBLIC_API_PATHS = new Set<string>([
+  '/twilio/voice',
+  '/twilio/incoming',
+  '/twilio/recording-status',
+  '/google/callback',
+]);
+
+app.use('/api', (req, res, next) => {
+  if (PUBLIC_API_PATHS.has(req.path)) return next();
+  return requireAuth(req, res, next);
+});
 
 app.use('/api/leads', leadsRouter);
 app.use('/api/callbacks', callbacksRouter);
@@ -90,11 +128,6 @@ app.use('/api/projects', projectsRouter);
 app.use('/api/activities', activitiesRouter);
 app.use('/api/pipeline', pipelineRouter);
 app.use('/api/settings', settingsRouter);
-
-// Health check endpoint
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 // --- Serve React frontend in production ---
 if (process.env.NODE_ENV === 'production') {
@@ -115,6 +148,13 @@ app.use(createErrorHandler(logger));
 
 app.listen(PORT, () => {
   logger.info({ port: PORT, clientUrl: CLIENT_URL }, 'OxyScale Dialler server is running');
+
+  // Seed the two team accounts on first boot (no-op if already present).
+  try {
+    seedUsersIfEmpty(getDb());
+  } catch (err) {
+    logger.error({ err }, 'User seeding failed — login will not work until resolved');
+  }
 
   // Start Gmail auto-sync in the background.
   // Wrapped in try/catch so it never prevents the server from starting.

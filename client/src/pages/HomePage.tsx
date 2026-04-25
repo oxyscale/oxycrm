@@ -179,7 +179,7 @@ export default function HomePage() {
         const [statsRes, activitiesRes, callStatsRes, followUpsRes] = await Promise.allSettled([
           api.getPipelineStats(),
           api.getRecentActivities(),
-          fetch('/api/calls/stats?period=week').then((r) => r.json()),
+          fetch('/api/calls/stats?period=week', { credentials: 'include' }).then((r) => r.json()),
           api.getFollowUpQueue(),
         ]);
 

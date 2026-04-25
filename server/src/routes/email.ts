@@ -43,41 +43,35 @@ router.post('/send', async (req, res, next) => {
       'Processing email send request'
     );
 
-    // ── Fetch settings for signature ─────────────────────────
+    // Identity comes from the logged-in user — sender email + signature
+    // are personal, not shared. Company-wide bits still come from settings.
+    const user = req.user!;
+
     const db = getDb();
     const settingsRows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
     const settingsMap: Record<string, string> = {};
-    for (const row of settingsRows) {
-      settingsMap[row.key] = row.value;
-    }
+    for (const row of settingsRows) settingsMap[row.key] = row.value;
 
-    const senderName = settingsMap.sender_name || 'Jordan Bell';
-    const senderTitle = settingsMap.sender_title || 'Co-Founder';
-    const senderPhone = settingsMap.sender_phone || '0478 197 600';
     const companyName = settingsMap.company_name || 'OxyScale';
     const websiteUrl = settingsMap.website_url || 'https://oxyscale.ai';
-    const calendlyLink = settingsMap.calendly_link || 'https://calendly.com/jordan-oxyscale/30min';
-    const signOff = settingsMap.email_sign_off || 'Cheers';
 
-    // Get recipient name from lead record
     const lead = db.prepare('SELECT name FROM leads WHERE id = ?').get(payload.leadId) as { name: string } | undefined;
     const recipientName = lead?.name?.split(' ')[0] || 'there';
 
-    // Build branded HTML version
     const signature = buildEmailSignature({
-      sender_name: senderName,
-      sender_title: senderTitle,
-      sender_phone: senderPhone,
+      sender_name: user.name,
+      sender_title: user.title,
+      sender_phone: user.phone,
       company_name: companyName,
       website_url: websiteUrl,
-      calendly_link: calendlyLink,
+      calendly_link: user.calendlyLink,
     });
 
     const htmlBody = buildBrandedEmailHtml({
       body: payload.body,
       recipientName,
-      senderName,
-      signOff,
+      senderName: user.name,
+      signOff: user.signOff,
       signature,
     });
 
@@ -88,6 +82,8 @@ router.post('/send', async (req, res, next) => {
       subject: payload.subject,
       textBody: payload.body,
       htmlBody,
+      fromName: user.name,
+      fromAddress: user.senderEmail,
     });
 
     logger.info(
@@ -104,8 +100,8 @@ router.post('/send', async (req, res, next) => {
       db.transaction(() => {
         db.prepare(`
           INSERT INTO emails_sent (lead_id, to_address, from_address, subject, body_snippet, gmail_message_id, source, direction, created_at)
-          VALUES (?, ?, 'jordan@oxyscale.ai', ?, ?, ?, 'dialler', 'sent', ?)
-        `).run(payload.leadId, payload.to, payload.subject, bodySnippet, result.messageId || null, now);
+          VALUES (?, ?, ?, ?, ?, ?, 'dialler', 'sent', ?)
+        `).run(payload.leadId, payload.to, user.senderEmail, payload.subject, bodySnippet, result.messageId || null, now);
 
         db.prepare(`
           INSERT INTO activities (lead_id, type, title, description, created_at)

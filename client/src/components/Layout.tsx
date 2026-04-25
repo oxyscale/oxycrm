@@ -1,9 +1,10 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { Home, Users, Phone, Kanban, FolderKanban, Brain, BarChart3, HelpCircle, Settings, Inbox } from 'lucide-react';
+import { Home, Users, Phone, Kanban, FolderKanban, Brain, BarChart3, HelpCircle, Settings, Inbox, LogOut } from 'lucide-react';
 import SearchBar from './SearchBar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useAuth } from '../hooks/useAuth';
 import * as api from '../services/api';
 
 const navItems = [
@@ -36,6 +37,7 @@ const shortcutEntries = [
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [emailBankReadyCount, setEmailBankReadyCount] = useState(0);
 
@@ -143,6 +145,20 @@ export default function Layout() {
 
         {/* Spacer to push help button to bottom */}
         <div className="flex-1" />
+
+        {/* Current user initials. Click to sign out. */}
+        {user && (
+          <button
+            onClick={signOut}
+            title={`${user.name} — click to sign out`}
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-tray border border-hair-soft text-ink-muted text-xs font-semibold tracking-tight hover:bg-sky-wash hover:border-sky-hair hover:text-sky-ink transition-all duration-200 group relative"
+          >
+            <span className="group-hover:hidden">
+              {user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+            </span>
+            <LogOut size={16} className="hidden group-hover:block" />
+          </button>
+        )}
 
         {/* Shortcuts help button */}
         <button

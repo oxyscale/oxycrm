@@ -308,5 +308,52 @@ export function initializeDatabase(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_email_drafts_lead
       ON email_drafts(lead_id);
+
+    -- ============================================================
+    -- Users — internal team accounts (George + Jordan)
+    -- Identity for sending emails (sender_email + signature) and
+    -- attribution on calls / drafts. Password reset via emailed token.
+    -- ============================================================
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      name TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT 'Co-founder',
+      phone TEXT NOT NULL DEFAULT '',
+      sender_email TEXT NOT NULL,
+      sign_off TEXT NOT NULL DEFAULT 'Cheers',
+      calendly_link TEXT NOT NULL DEFAULT '',
+      reset_token TEXT,
+      reset_token_expires_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token)
+      WHERE reset_token IS NOT NULL;
   `);
+
+  // Add user_id columns to call_logs and email_drafts (idempotent migration).
+  // Nullable — legacy rows backfilled to Jordan during user seed.
+  addColumnIfMissing(db, 'call_logs', 'user_id', 'INTEGER REFERENCES users(id) ON DELETE SET NULL');
+  addColumnIfMissing(db, 'email_drafts', 'user_id', 'INTEGER REFERENCES users(id) ON DELETE SET NULL');
+}
+
+/**
+ * Add a column to an existing table if it does not already exist.
+ * SQLite has no `ALTER TABLE ADD COLUMN IF NOT EXISTS`, so we check
+ * PRAGMA table_info first.
+ */
+function addColumnIfMissing(
+  db: Database.Database,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }

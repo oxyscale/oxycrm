@@ -9,14 +9,16 @@ import {
   Mail,
   MessageSquareText,
   Pen,
+  Lock,
 } from 'lucide-react';
 import * as api from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
 
 // ── Types ───────────────────────────────────────────────────
 
-type Tab = 'prompts' | 'company' | 'email' | 'signature';
+type Tab = 'prompts' | 'company' | 'email' | 'signature' | 'account';
 
 // ── Main Component ──────────────────────────────────────────
 
@@ -169,6 +171,7 @@ export default function SettingsPage() {
     { key: 'company', label: 'Company Profile', icon: Building2 },
     { key: 'email', label: 'Email Preferences', icon: Mail },
     { key: 'signature', label: 'Email Signature', icon: Pen },
+    { key: 'account', label: 'Account', icon: Lock },
   ];
 
   // ── Render ────────────────────────────────────────────────
@@ -499,6 +502,112 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {tab === 'account' && <AccountSection />}
+
+    </div>
+  );
+}
+
+// ── Account section — change-password form for the logged-in user ──
+
+function AccountSection() {
+  const { user } = useAuth();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 10) {
+      setError('New password must be at least 10 characters');
+      return;
+    }
+    if (newPassword !== confirm) {
+      setError('New passwords do not match');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    setSuccess(false);
+    try {
+      await api.changePassword(currentPassword, newPassword);
+      setSuccess(true);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirm('');
+      setTimeout(() => setSuccess(false), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to change password');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="bg-paper border border-hair-soft rounded-xl p-8 max-w-[560px]">
+      <div className="mb-6">
+        <h2 className="text-ink text-lg font-medium tracking-tight mb-1">Signed in as</h2>
+        <p className="text-ink-muted text-sm">{user?.name} &middot; {user?.email}</p>
+      </div>
+
+      <hr className="border-t border-hair-soft mb-6" />
+
+      <h3 className="text-ink text-sm font-semibold tracking-tight mb-4">Change password</h3>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="text-ink-dim text-xs font-medium block mb-1.5">Current password</label>
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className="w-full bg-paper border border-hair rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
+            autoComplete="current-password"
+          />
+        </div>
+        <div>
+          <label className="text-ink-dim text-xs font-medium block mb-1.5">New password</label>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="w-full bg-paper border border-hair rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
+            autoComplete="new-password"
+          />
+        </div>
+        <div>
+          <label className="text-ink-dim text-xs font-medium block mb-1.5">Confirm new password</label>
+          <input
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            className="w-full bg-paper border border-hair rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
+            autoComplete="new-password"
+          />
+        </div>
+
+        {error && (
+          <div className="bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.22)] rounded-lg px-3 py-2 text-risk text-xs">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="bg-[rgba(94,197,230,0.08)] border border-sky-hair rounded-lg px-3 py-2 text-sky-ink text-xs">
+            Password updated.
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting || !currentPassword || !newPassword || !confirm}
+          className="bg-ink text-white font-medium text-sm rounded-full px-5 py-2.5 hover:bg-[#1a1d1f] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+        >
+          {submitting && <Loader2 size={14} className="animate-spin" />}
+          Save new password
+        </button>
+      </form>
     </div>
   );
 }

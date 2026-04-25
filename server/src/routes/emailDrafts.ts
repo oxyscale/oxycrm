@@ -264,36 +264,35 @@ router.post('/:id/send', async (req, res, next) => {
       throw new ApiError(400, 'Missing to_email, subject, or body');
     }
 
-    // Fetch settings (same pattern as /api/email/send)
+    // Identity = the logged-in user. The draft was generated for the
+    // person who made the call, but at send time we use whoever is
+    // actually clicking Send (they own the outgoing message).
+    const user = req.user!;
+
     const settingsRows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
     const settings: Record<string, string> = {};
     for (const r of settingsRows) settings[r.key] = r.value;
 
-    const senderName = settings.sender_name || 'Jordan Bell';
-    const senderTitle = settings.sender_title || 'Co-Founder';
-    const senderPhone = settings.sender_phone || '0478 197 600';
     const companyName = settings.company_name || 'OxyScale';
     const websiteUrl = settings.website_url || 'https://oxyscale.ai';
-    const calendlyLink = settings.calendly_link || 'https://calendly.com/jordan-oxyscale/30min';
-    const signOff = settings.email_sign_off || 'Cheers';
 
     const lead = db.prepare('SELECT name FROM leads WHERE id = ?').get(draft.lead_id) as { name: string } | undefined;
     const recipientName = lead?.name?.split(' ')[0] || 'there';
 
     const signature = buildEmailSignature({
-      sender_name: senderName,
-      sender_title: senderTitle,
-      sender_phone: senderPhone,
+      sender_name: user.name,
+      sender_title: user.title,
+      sender_phone: user.phone,
       company_name: companyName,
       website_url: websiteUrl,
-      calendly_link: calendlyLink,
+      calendly_link: user.calendlyLink,
     });
 
     const htmlBody = buildBrandedEmailHtml({
       body: draft.body,
       recipientName,
-      senderName,
-      signOff,
+      senderName: user.name,
+      signOff: user.signOff,
       signature,
     });
 
@@ -303,6 +302,8 @@ router.post('/:id/send', async (req, res, next) => {
       subject: draft.subject,
       textBody: draft.body,
       htmlBody,
+      fromName: user.name,
+      fromAddress: user.senderEmail,
     });
 
     // Log sent email + activity + update pipeline stage + mark draft sent.
@@ -310,8 +311,8 @@ router.post('/:id/send', async (req, res, next) => {
     db.transaction(() => {
       db.prepare(`
         INSERT INTO emails_sent (lead_id, to_address, from_address, subject, body_snippet, gmail_message_id, source, direction, created_at)
-        VALUES (?, ?, 'jordan@oxyscale.ai', ?, ?, ?, 'dialler', 'sent', ?)
-      `).run(draft.lead_id, draft.to_email, draft.subject, draft.body, result.messageId || null, now);
+        VALUES (?, ?, ?, ?, ?, ?, 'dialler', 'sent', ?)
+      `).run(draft.lead_id, draft.to_email, user.senderEmail, draft.subject, draft.body, result.messageId || null, now);
 
       db.prepare(`
         INSERT INTO activities (lead_id, type, title, description, created_at)

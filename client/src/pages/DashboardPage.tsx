@@ -36,7 +36,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/calls/stats?period=${period}`)
+    fetch(`/api/calls/stats?period=${period}`, { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
         setStats(data);

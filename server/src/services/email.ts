@@ -55,11 +55,16 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   const ccList = cc ? cc.split(',').map((e) => e.trim()).filter(Boolean) : undefined;
   const bccList = bcc ? bcc.split(',').map((e) => e.trim()).filter(Boolean) : undefined;
 
-  // If Resend isn't configured, save locally but skip sending
+  // If Resend isn't configured: in production, hard-fail so a missing
+  // key never silently masquerades as a successful send. In dev,
+  // return a stub so the rest of the flow can be exercised.
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    logger.warn({ to, subject }, 'RESEND_API_KEY not set — email saved locally but not sent');
-    return { messageId: `local-${Date.now()}` };
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('RESEND_API_KEY is not set — refusing to fake a send in production');
+    }
+    logger.warn({ to, subject }, 'RESEND_API_KEY not set — email NOT sent (dev stub)');
+    return { messageId: `dev-stub-${Date.now()}` };
   }
 
   logger.info({ to, cc: ccList, bcc: bccList, subject, from }, 'Sending email via Resend');
