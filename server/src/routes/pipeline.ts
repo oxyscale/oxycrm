@@ -229,18 +229,20 @@ router.patch('/:leadId/stage', (req, res, next) => {
 
     const now = new Date().toISOString();
 
+    const actor = req.user?.name || null;
     const updateStage = db.transaction(() => {
       db.prepare('UPDATE leads SET pipeline_stage = ?, updated_at = ? WHERE id = ?')
         .run(newStage, now, leadId);
 
       db.prepare(`
-        INSERT INTO activities (lead_id, type, title, description, created_at)
-        VALUES (?, 'stage_change', ?, ?, ?)
+        INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+        VALUES (?, 'stage_change', ?, ?, ?, ?)
       `).run(
         leadId,
         `Moved to ${stageLabels[newStage] || newStage}`,
         `from ${stageLabels[oldStage as PipelineStage] || oldStage}`,
         now,
+        actor,
       );
     });
 
@@ -280,18 +282,20 @@ router.patch('/:leadId/temperature', (req, res, next) => {
     const newTemp = payload.temperature;
     const now = new Date().toISOString();
 
+    const actor = req.user?.name || null;
     const updateTemp = db.transaction(() => {
       db.prepare('UPDATE leads SET temperature = ?, updated_at = ? WHERE id = ?')
         .run(newTemp, now, leadId);
 
       db.prepare(`
-        INSERT INTO activities (lead_id, type, title, description, created_at)
-        VALUES (?, 'temperature_change', ?, ?, ?)
+        INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+        VALUES (?, 'temperature_change', ?, ?, ?, ?)
       `).run(
         leadId,
         `Temperature set to ${newTemp || 'none'}`,
         oldTemp ? `from ${oldTemp}` : null,
         now,
+        actor,
       );
     });
 

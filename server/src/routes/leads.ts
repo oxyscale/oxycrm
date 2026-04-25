@@ -410,11 +410,13 @@ router.post('/', (req, res, next) => {
 
       const leadId = result.lastInsertRowid as number;
 
-      // Create activity record
+      // Create activity record. Attribution captured so the activity
+      // feed can show who added the lead.
+      const actor = req.user?.name || null;
       db.prepare(`
-        INSERT INTO activities (lead_id, type, title, description, created_at)
-        VALUES (?, 'stage_change', 'Lead created', ?, ?)
-      `).run(leadId, payload.company ? `${payload.name} at ${payload.company}` : payload.name, now);
+        INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+        VALUES (?, 'stage_change', 'Lead created', ?, ?, ?)
+      `).run(leadId, payload.company ? `${payload.name} at ${payload.company}` : payload.name, now, actor);
 
       return leadId;
     });

@@ -340,6 +340,11 @@ export function initializeDatabase(db: Database.Database): void {
   addColumnIfMissing(db, 'call_logs', 'user_id', 'INTEGER REFERENCES users(id) ON DELETE SET NULL');
   addColumnIfMissing(db, 'email_drafts', 'user_id', 'INTEGER REFERENCES users(id) ON DELETE SET NULL');
 
+  // Capture who performed each activity. Free-text name (not a FK) so
+  // a deleted user's history doesn't disappear and so legacy rows
+  // can carry "Jordan Bell" as the safe assumption.
+  addColumnIfMissing(db, 'activities', 'created_by', 'TEXT');
+
   // Retrofit ON DELETE CASCADE on the legacy tables that were created
   // before cascading was added. Wrong-Number disposition deletes the
   // lead row and used to leave orphan notes / projects / activities /

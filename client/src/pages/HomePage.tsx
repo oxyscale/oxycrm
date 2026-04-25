@@ -1009,6 +1009,12 @@ export default function HomePage() {
                               {activity.leadCompany && ` · ${activity.leadCompany}`}
                             </p>
                             <p className="font-mono text-ink-faint text-[10px] mt-0.5 tracking-wide">
+                              {activity.createdBy && (
+                                <>
+                                  <span className="text-sky-ink/80">{activity.createdBy}</span>
+                                  <span> · </span>
+                                </>
+                              )}
                               {formatTimeAgo(activity.createdAt)}
                             </p>
                           </div>

@@ -108,9 +108,9 @@ router.post('/send', async (req, res, next) => {
         `).run(payload.leadId, payload.to, user.senderEmail, payload.subject, bodySnippet, result.messageId || null, now);
 
         db.prepare(`
-          INSERT INTO activities (lead_id, type, title, description, created_at)
-          VALUES (?, 'email', 'Email sent', ?, ?)
-        `).run(payload.leadId, `To: ${payload.to} — ${payload.subject}`, now);
+          INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+          VALUES (?, 'email', 'Email sent', ?, ?, ?)
+        `).run(payload.leadId, `To: ${payload.to} — ${payload.subject}`, now, user.name);
       })();
     } catch (dbErr) {
       // Log but don't fail the request — the email was already sent

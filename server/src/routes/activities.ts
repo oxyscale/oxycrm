@@ -24,6 +24,7 @@ interface ActivityRow {
   description: string | null;
   metadata: string | null;
   created_at: string;
+  created_by: string | null;
 }
 
 function mapActivityRow(row: ActivityRow): Activity {
@@ -35,6 +36,7 @@ function mapActivityRow(row: ActivityRow): Activity {
     description: row.description,
     metadata: row.metadata,
     createdAt: row.created_at,
+    createdBy: row.created_by,
   };
 }
 

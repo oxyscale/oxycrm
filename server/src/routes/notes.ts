@@ -114,9 +114,9 @@ router.post('/', (req, res, next) => {
         : payload.content;
 
       db.prepare(`
-        INSERT INTO activities (lead_id, type, title, description, created_at)
-        VALUES (?, 'note', 'Note added', ?, ?)
-      `).run(payload.leadId, snippet, now);
+        INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+        VALUES (?, 'note', 'Note added', ?, ?, ?)
+      `).run(payload.leadId, snippet, now, author);
 
       return result.lastInsertRowid;
     });

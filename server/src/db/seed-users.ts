@@ -54,29 +54,39 @@ const SEED_USERS: SeedUser[] = [
  */
 export function seedUsersIfEmpty(db: Database.Database): void {
   const existing = db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number };
-  if (existing.n > 0) return;
+  if (existing.n === 0) {
+    logger.info('Users table empty — seeding initial team accounts');
 
-  logger.info('Users table empty — seeding initial team accounts');
+    const insert = db.prepare(`
+      INSERT INTO users (email, password_hash, name, title, phone, sender_email, sign_off, calendly_link, created_at, updated_at)
+      VALUES (@email, @passwordHash, @name, @title, @phone, @senderEmail, @signOff, @calendlyLink, datetime('now'), datetime('now'))
+    `);
 
-  const insert = db.prepare(`
-    INSERT INTO users (email, password_hash, name, title, phone, sender_email, sign_off, calendly_link, created_at, updated_at)
-    VALUES (@email, @passwordHash, @name, @title, @phone, @senderEmail, @signOff, @calendlyLink, datetime('now'), datetime('now'))
-  `);
+    db.transaction(() => {
+      for (const u of SEED_USERS) {
+        const r = insert.run(u);
+        logger.info({ email: u.email, id: r.lastInsertRowid }, 'Seeded user');
+      }
+    })();
+  }
 
-  const ids: Record<string, number> = {};
-  db.transaction(() => {
-    for (const u of SEED_USERS) {
-      const r = insert.run(u);
-      ids[u.email] = r.lastInsertRowid as number;
-      logger.info({ email: u.email, id: r.lastInsertRowid }, 'Seeded user');
+  // Backfill runs every boot but is idempotent — only touches rows
+  // whose attribution column is still NULL. Lets us add later
+  // attribution migrations without re-seeding users.
+  const jordan = db
+    .prepare("SELECT id FROM users WHERE email = 'jordan@oxyscale.ai'")
+    .get() as { id: number } | undefined;
+  if (jordan) {
+    const calls = db.prepare('UPDATE call_logs SET user_id = ? WHERE user_id IS NULL').run(jordan.id);
+    const drafts = db.prepare('UPDATE email_drafts SET user_id = ? WHERE user_id IS NULL').run(jordan.id);
+    const acts = db
+      .prepare("UPDATE activities SET created_by = 'Jordan Bell' WHERE created_by IS NULL")
+      .run();
+    if (calls.changes + drafts.changes + acts.changes > 0) {
+      logger.info(
+        { calls: calls.changes, drafts: drafts.changes, activities: acts.changes },
+        'Backfilled legacy rows to Jordan',
+      );
     }
-  })();
-
-  // Backfill: every existing call and draft was Jordan's.
-  const jordanId = ids['jordan@oxyscale.ai'];
-  if (jordanId) {
-    const calls = db.prepare('UPDATE call_logs SET user_id = ? WHERE user_id IS NULL').run(jordanId);
-    const drafts = db.prepare('UPDATE email_drafts SET user_id = ? WHERE user_id IS NULL').run(jordanId);
-    logger.info({ calls: calls.changes, drafts: drafts.changes }, 'Backfilled legacy rows to Jordan');
   }
 }

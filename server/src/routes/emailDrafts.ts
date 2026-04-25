@@ -325,9 +325,9 @@ router.post('/:id/send', async (req, res, next) => {
       `).run(draft.lead_id, draft.to_email, user.senderEmail, draft.subject, draft.body, result.messageId || null, now);
 
       db.prepare(`
-        INSERT INTO activities (lead_id, type, title, description, created_at)
-        VALUES (?, 'email', 'Email sent', ?, ?)
-      `).run(draft.lead_id, `To: ${draft.to_email} — ${draft.subject}`, now);
+        INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+        VALUES (?, 'email', 'Email sent', ?, ?, ?)
+      `).run(draft.lead_id, `To: ${draft.to_email} — ${draft.subject}`, now, user.name);
 
       // Move lead to the suggested pipeline stage (follow_up or call_booked)
       const stage = draft.suggested_stage || 'follow_up';

@@ -216,6 +216,7 @@ export interface Activity {
   description: string | null;
   metadata: string | null;
   createdAt: string;
+  createdBy: string | null;
 }
 
 // ============================================================

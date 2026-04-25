@@ -104,8 +104,23 @@ export default function EmailBankPage() {
     }
   }, [drafts, selectedId]);
 
-  const saveEdits = useCallback(async () => {
+  // Saves are debounced + serialised. Tabbing rapidly through To, CC,
+  // Subject and Body fields used to fire 4 concurrent PATCH requests
+  // whose responses could arrive out of order, leaving the server with
+  // a stale value. Now: 250ms debounce coalesces a tab-burst into one
+  // request, and the in-flight guard ensures the next save waits for
+  // the previous to land.
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savingRef = useRef(false);
+  const pendingRef = useRef(false);
+
+  const flushSave = useCallback(async () => {
     if (!selected || !dirty) return;
+    if (savingRef.current) {
+      pendingRef.current = true;
+      return;
+    }
+    savingRef.current = true;
     try {
       await api.updateEmailDraft(selected.id, {
         subject: editSubject,
@@ -118,8 +133,31 @@ export default function EmailBankPage() {
       await load();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      savingRef.current = false;
+      if (pendingRef.current) {
+        pendingRef.current = false;
+        // Re-run with whatever the latest field values are by the time
+        // the previous save completes.
+        flushSave();
+      }
     }
   }, [selected, dirty, editSubject, editBody, editTo, editCc, editStage, load]);
+
+  const saveEdits = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      flushSave();
+    }, 250);
+  }, [flushSave]);
+
+  // Cancel any pending debounced save when the component unmounts so a
+  // late-firing setTimeout doesn't write into a stale draft after the
+  // user has navigated away.
+  useEffect(() => () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  }, []);
 
   const handleSend = async () => {
     if (!selected) return;

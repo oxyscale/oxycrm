@@ -201,9 +201,9 @@ router.post('/', (req, res, next) => {
       // If linked to a lead, create an activity and mark converted
       if (payload.leadId) {
         db.prepare(`
-          INSERT INTO activities (lead_id, type, title, description, created_at)
-          VALUES (?, 'stage_change', 'Converted to project', ?, ?)
-        `).run(payload.leadId, `Project: ${payload.name}`, now);
+          INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+          VALUES (?, 'stage_change', 'Converted to project', ?, ?, ?)
+        `).run(payload.leadId, `Project: ${payload.name}`, now, req.user?.name || null);
 
         db.prepare('UPDATE leads SET converted_to_project = 1, updated_at = ? WHERE id = ?')
           .run(now, payload.leadId);
