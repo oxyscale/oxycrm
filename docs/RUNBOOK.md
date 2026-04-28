@@ -114,3 +114,27 @@ Delete `/data/session-secret` from the volume. Every active cookie becomes inval
 - Server log line on boot: `OxyScale Dialler server is running` confirms successful startup.
 
 If `/api/health` returns non-200 in Railway logs but the deploy went green, check the live tail for `[FATAL] Missing required env vars` — that's the most common cause.
+
+---
+
+## Resend webhook (email engagement tracking)
+
+Email open / click events flow from Resend to `/api/webhooks/resend` and update the engagement counters on `emails_sent`. Visible per-lead on the lead profile email tab (Delivered / Opened Nx / Clicked Nx / Bounced chips).
+
+**One-time setup on Railway** (Jordan only — George doesn't have access):
+
+1. Add env var `RESEND_WEBHOOK_SECRET` — value from the Resend dashboard webhook page (starts with `whsec_`). Without this set in production, the route returns 503 by design.
+
+**One-time setup on Resend dashboard:**
+
+1. Settings → Webhooks → Add webhook
+2. Endpoint: `https://oxycrm-production.up.railway.app/api/webhooks/resend`
+3. Events to subscribe to: `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`, `email.complained`
+4. Copy the signing secret into the Railway env var above
+
+After both are set, send a test email through the dialler and watch the lead profile email tab — the Delivered chip should appear within seconds, Opened chip when you open the email in Gmail.
+
+If chips never appear:
+- Check Railway logs for `Resend event processed` lines. If absent, Resend isn't reaching the endpoint (verify webhook URL).
+- Check for `signature verification failed` — secret mismatch.
+- Check for `Resend event for unknown email — ignoring` — the webhook fired before the email_id was stored on `emails_sent`. Race condition; rare.

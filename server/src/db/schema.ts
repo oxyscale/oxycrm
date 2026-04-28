@@ -378,6 +378,34 @@ export function initializeDatabase(db: Database.Database): void {
   addColumnIfMissing(db, 'email_drafts', 'include_after_call_header', 'INTEGER NOT NULL DEFAULT 1');
   addColumnIfMissing(db, 'email_drafts', 'include_capabilities', 'INTEGER NOT NULL DEFAULT 0');
   addColumnIfMissing(db, 'email_drafts', 'include_book_a_call', 'INTEGER NOT NULL DEFAULT 1');
+
+  // ============================================================
+  // Email engagement tracking — populated by Resend webhook events.
+  // The gmail_message_id column doubles as the Resend email_id (legacy
+  // name; reused when we migrated from Gmail-direct sends to Resend).
+  //
+  // Events we track:
+  //   delivered  → delivered_at
+  //   opened     → opened_at (first), last_opened_at, open_count
+  //   clicked    → clicked_at (first), last_clicked_at, click_count
+  //   bounced    → bounced_at
+  // ============================================================
+  addColumnIfMissing(db, 'emails_sent', 'delivered_at', 'TEXT');
+  addColumnIfMissing(db, 'emails_sent', 'opened_at', 'TEXT');
+  addColumnIfMissing(db, 'emails_sent', 'last_opened_at', 'TEXT');
+  addColumnIfMissing(db, 'emails_sent', 'open_count', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'emails_sent', 'clicked_at', 'TEXT');
+  addColumnIfMissing(db, 'emails_sent', 'last_clicked_at', 'TEXT');
+  addColumnIfMissing(db, 'emails_sent', 'click_count', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'emails_sent', 'bounced_at', 'TEXT');
+
+  // Index for "recently engaged" queries on the intelligence + email-bank
+  // sent views — opens are by far the highest-volume event.
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_emails_sent_last_opened
+       ON emails_sent(last_opened_at DESC)
+       WHERE last_opened_at IS NOT NULL`,
+  );
 }
 
 /**

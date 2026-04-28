@@ -898,7 +898,10 @@ router.get('/:id/emails', (req, res, next) => {
     }
 
     const rows = db.prepare(`
-      SELECT id, lead_id, to_address, from_address, subject, body_snippet, gmail_message_id, source, direction, created_at
+      SELECT id, lead_id, to_address, from_address, subject, body_snippet, gmail_message_id,
+             source, direction, created_at,
+             delivered_at, opened_at, last_opened_at, open_count,
+             clicked_at, last_clicked_at, click_count, bounced_at
       FROM emails_sent
       WHERE lead_id = ?
       ORDER BY created_at DESC
@@ -913,6 +916,14 @@ router.get('/:id/emails', (req, res, next) => {
       source: string;
       direction: string;
       created_at: string;
+      delivered_at: string | null;
+      opened_at: string | null;
+      last_opened_at: string | null;
+      open_count: number;
+      clicked_at: string | null;
+      last_clicked_at: string | null;
+      click_count: number;
+      bounced_at: string | null;
     }>;
 
     const emails = rows.map((r) => ({
@@ -926,6 +937,14 @@ router.get('/:id/emails', (req, res, next) => {
       source: r.source,
       direction: r.direction || 'sent',
       createdAt: r.created_at,
+      deliveredAt: r.delivered_at,
+      openedAt: r.opened_at,
+      lastOpenedAt: r.last_opened_at,
+      openCount: r.open_count,
+      clickedAt: r.clicked_at,
+      lastClickedAt: r.last_clicked_at,
+      clickCount: r.click_count,
+      bouncedAt: r.bounced_at,
     }));
 
     logger.info({ leadId: id, count: emails.length }, 'Fetched emails for lead');

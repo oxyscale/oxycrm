@@ -203,6 +203,15 @@ export interface EmailSent {
   source: 'dialler' | 'gmail';
   direction: 'sent' | 'received';
   createdAt: string;
+  /** Resend webhook engagement signals — null until the event fires. */
+  deliveredAt: string | null;
+  openedAt: string | null;
+  lastOpenedAt: string | null;
+  openCount: number;
+  clickedAt: string | null;
+  lastClickedAt: string | null;
+  clickCount: number;
+  bouncedAt: string | null;
 }
 
 // Activity timeline

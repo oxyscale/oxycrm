@@ -31,6 +31,7 @@ import intelligenceRouter from './routes/intelligence.js';
 import emailRouter from './routes/email.js';
 import emailDraftsRouter from './routes/emailDrafts.js';
 import googleRouter from './routes/google.js';
+import webhooksRouter from './routes/webhooks.js';
 import transcribeRouter from './routes/transcribe.js';
 import notesRouter from './routes/notes.js';
 import projectsRouter from './routes/projects.js';
@@ -165,8 +166,16 @@ app.use(cors({
 // over slow connections.
 app.use(compression());
 
-// Parse JSON request bodies (up to 10mb for transcripts)
-app.use(express.json({ limit: '10mb' }));
+// Parse JSON request bodies (up to 10mb for transcripts).
+// `verify` stashes the raw bytes on req.rawBody so webhook handlers
+// (Resend, future others) can do HMAC signature verification against
+// the unparsed payload without spinning up a per-route raw parser.
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buf) => {
+    (req as { rawBody?: Buffer }).rawBody = buf;
+  },
+}));
 
 // Parse URL-encoded bodies (for Twilio webhook callbacks)
 app.use(express.urlencoded({ extended: true }));
@@ -228,11 +237,14 @@ app.use('/api/auth', authLimiter, authRouter);
 //     Signature verification protects them — separate blocker.
 //   - Google OAuth callback (called by the user's browser after
 //     Google redirects). The OAuth `code` itself is the credential.
+//   - Resend webhooks (email engagement events). Svix-style HMAC
+//     signature verification inside the route protects them.
 const PUBLIC_API_PATHS = new Set<string>([
   '/twilio/voice',
   '/twilio/incoming',
   '/twilio/recording-status',
   '/google/callback',
+  '/webhooks/resend',
 ]);
 
 app.use('/api', (req, res, next) => {
@@ -254,6 +266,7 @@ app.use('/api/projects', projectsRouter);
 app.use('/api/activities', activitiesRouter);
 app.use('/api/pipeline', pipelineRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/webhooks', webhooksRouter);
 
 // --- Serve React frontend in production ---
 if (process.env.NODE_ENV === 'production') {

@@ -164,6 +164,14 @@ export interface EmailSent {
     source: 'dialler' | 'gmail';
     direction: 'sent' | 'received';
     createdAt: string;
+    deliveredAt: string | null;
+    openedAt: string | null;
+    lastOpenedAt: string | null;
+    openCount: number;
+    clickedAt: string | null;
+    lastClickedAt: string | null;
+    clickCount: number;
+    bouncedAt: string | null;
 }
 export type ActivityType = 'call' | 'note' | 'email' | 'stage_change' | 'meeting' | 'temperature_change';
 export interface Activity {

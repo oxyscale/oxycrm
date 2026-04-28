@@ -1275,6 +1275,38 @@ export default function LeadProfilePage() {
                                   ) : (
                                     <p className="text-ink-dim text-sm italic">No preview available</p>
                                   )}
+
+                                  {/* Engagement signals — populated by Resend webhook events. */}
+                                  {isSent && (email.deliveredAt || email.openCount > 0 || email.clickCount > 0 || email.bouncedAt) && (
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2 border-t border-[rgba(10,156,212,0.12)]">
+                                      {email.deliveredAt && (
+                                        <span className="font-mono text-[9.5px] tracking-[0.18em] uppercase font-bold inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-tray text-ink-dim">
+                                          Delivered
+                                        </span>
+                                      )}
+                                      {email.openCount > 0 && (
+                                        <span
+                                          className="font-mono text-[9.5px] tracking-[0.18em] uppercase font-bold inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-sky-wash text-sky-ink border border-sky-hair"
+                                          title={email.lastOpenedAt ? `Last opened ${formatDate(email.lastOpenedAt)}` : ''}
+                                        >
+                                          Opened {email.openCount > 1 ? `${email.openCount}x` : ''}
+                                        </span>
+                                      )}
+                                      {email.clickCount > 0 && (
+                                        <span
+                                          className="font-mono text-[9.5px] tracking-[0.18em] uppercase font-bold inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[rgba(16,185,129,0.1)] text-ok border border-[rgba(16,185,129,0.22)]"
+                                          title={email.lastClickedAt ? `Last clicked ${formatDate(email.lastClickedAt)}` : ''}
+                                        >
+                                          Clicked {email.clickCount > 1 ? `${email.clickCount}x` : ''}
+                                        </span>
+                                      )}
+                                      {email.bouncedAt && (
+                                        <span className="font-mono text-[9.5px] tracking-[0.18em] uppercase font-bold inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[rgba(239,68,68,0.08)] text-risk border border-[rgba(239,68,68,0.22)]">
+                                          Bounced
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             );
