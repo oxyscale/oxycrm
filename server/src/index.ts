@@ -207,6 +207,16 @@ const expensiveLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Rate limit hit — slow down.' },
 });
+// Email Bank gets its own looser cap because the live preview endpoint
+// fires per keystroke (debounced 400ms) on top of 5s list polling and
+// PATCH-on-blur. Active editing burns through 30/min in seconds.
+const emailDraftsLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit hit — slow down.' },
+});
 
 // Auth routes — /login, /logout, /forgot, /reset are unauthenticated
 // by design (you can't already be logged in). /me + /change-password
@@ -236,7 +246,7 @@ app.use('/api/twilio', twilioRouter);
 app.use('/api/calls', callsRouter);
 app.use('/api/intelligence', expensiveLimiter, intelligenceRouter);
 app.use('/api/email', expensiveLimiter, emailRouter);
-app.use('/api/email-drafts', expensiveLimiter, emailDraftsRouter);
+app.use('/api/email-drafts', emailDraftsLimiter, emailDraftsRouter);
 app.use('/api/google', googleRouter);
 app.use('/api', expensiveLimiter, transcribeRouter);
 app.use('/api/notes', notesRouter);
