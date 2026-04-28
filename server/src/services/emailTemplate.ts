@@ -57,7 +57,21 @@ function escapeHtml(input: string): string {
   return input
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Defence-in-depth on URL fields used in href attributes. Reject any
+// scheme that isn't http or https — kills javascript:, data:, vbscript:
+// and friends. Untrusted URLs come from the category_prompts table
+// (admin-controlled via Settings, but a defensive layer is cheap).
+function safeHref(url: string): string {
+  const trimmed = url.trim();
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return 'about:blank';
+  }
+  return escapeHtml(trimmed);
 }
 
 function firstNameOf(full: string): string {
@@ -142,7 +156,7 @@ function renderStandardGreeting(name: string): string {
 }
 
 function renderCapabilitiesRow(cta: CapabilitiesCta): string {
-  const safeUrl = escapeHtml(cta.url);
+  const safeUrl = safeHref(cta.url);
   const safeLabel = escapeHtml(cta.label || 'View capabilities document');
   const safeTitle = cta.title ? escapeHtml(cta.title) : '';
   const safeIntro = escapeHtml(cta.intro || '');
@@ -171,7 +185,7 @@ function renderCapabilitiesRow(cta: CapabilitiesCta): string {
 }
 
 function renderBookACallRow(url: string): string {
-  const safeUrl = escapeHtml(url);
+  const safeUrl = safeHref(url);
   return `
                 <tr><td style="padding: 26px 32px 30px 32px;">
                   <p style="margin: 0 0 10px 0; color: #8a95a0; font-family: ${MONO_STACK}; font-size: 10px; text-transform: uppercase; letter-spacing: 0.24em; font-weight: 600;">

@@ -117,11 +117,24 @@ router.get('/prompts/:category', (req, res) => {
 
 // ── PUT /prompts/:category — Create or update a prompt ──────
 
+// CTA URL must be http(s) — defence against javascript:/data:/vbscript:
+// schemes ending up in email button hrefs. Empty string is allowed
+// (means "no CTA configured for this category"); the route normalises
+// empty strings to NULL further down.
+const httpUrl = z
+  .string()
+  .refine(
+    (v) => v === '' || /^https?:\/\//i.test(v.trim()),
+    { message: 'URL must start with http:// or https://' },
+  )
+  .nullable()
+  .optional();
+
 const promptSchema = z.object({
   prompt: z.string().default(''),
-  ctaDocUrl: z.string().nullable().optional(),
-  ctaDocLabel: z.string().nullable().optional(),
-  ctaIntro: z.string().nullable().optional(),
+  ctaDocUrl: httpUrl,
+  ctaDocLabel: z.string().max(120).nullable().optional(),
+  ctaIntro: z.string().max(500).nullable().optional(),
 });
 
 router.put('/prompts/:category', (req, res) => {

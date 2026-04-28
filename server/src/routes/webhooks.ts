@@ -102,6 +102,22 @@ router.post('/resend', (req, res) => {
       return;
     }
 
+    // Reject replays of old (or future-dated) webhook deliveries.
+    // Svix recommends a 5-minute tolerance window. The timestamp
+    // header is Unix seconds.
+    const tsSeconds = parseInt(svixTimestamp, 10);
+    if (!Number.isFinite(tsSeconds)) {
+      logger.warn({ svixTimestamp }, 'Resend webhook timestamp not numeric');
+      res.status(400).json({ error: 'Invalid timestamp' });
+      return;
+    }
+    const ageSeconds = Math.abs(Date.now() / 1000 - tsSeconds);
+    if (ageSeconds > 300) {
+      logger.warn({ ageSeconds }, 'Resend webhook timestamp outside 5-min replay window');
+      res.status(401).json({ error: 'Timestamp out of range' });
+      return;
+    }
+
     if (!rawBody) {
       logger.error('Resend webhook missing rawBody — verify callback not running');
       res.status(500).json({ error: 'Misconfigured' });

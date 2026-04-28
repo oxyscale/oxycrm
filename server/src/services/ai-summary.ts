@@ -127,7 +127,10 @@ export function getCategoryCta(category: string | null): CategoryCta | null {
       label: (row.cta_doc_label?.trim() || 'View capabilities document'),
       intro: (row.cta_intro?.trim() || ''),
     };
-  } catch {
+  } catch (err) {
+    // Treat as "no CTA configured" to keep the email flow working,
+    // but log so a transient DB issue doesn't degrade silently.
+    logger.warn({ err, category }, 'getCategoryCta lookup failed');
     return null;
   }
 }
