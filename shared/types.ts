@@ -239,6 +239,13 @@ export interface EmailDraft {
   generatedAt: string | null;
   sentAt: string | null;
   errorMessage: string | null;
+  /** "A note after our chat" editorial header at the top of the email. */
+  includeAfterCallHeader: boolean;
+  /** Capabilities-document blue button. Only effective if the lead's
+   *  category has a configured CTA URL in category_prompts. */
+  includeCapabilities: boolean;
+  /** Black "Book a call" button to the campaign-wide Calendly. */
+  includeBookACall: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -248,4 +255,6 @@ export interface EmailDraftWithLead extends EmailDraft {
   leadCompany: string | null;
   leadPhone: string;
   leadCategory: string | null;
+  /** True when the lead's category has a configured capabilities CTA URL. */
+  categoryHasCta: boolean;
 }

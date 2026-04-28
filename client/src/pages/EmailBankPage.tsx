@@ -12,6 +12,7 @@ import {
   Sparkles,
   Inbox,
   ExternalLink,
+  Eye,
 } from 'lucide-react';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
@@ -38,12 +39,20 @@ export default function EmailBankPage() {
   const [editTo, setEditTo] = useState('');
   const [editCc, setEditCc] = useState('');
   const [editStage, setEditStage] = useState<'follow_up' | 'call_booked'>('follow_up');
+  const [editIncludeHeader, setEditIncludeHeader] = useState(true);
+  const [editIncludeCapabilities, setEditIncludeCapabilities] = useState(false);
+  const [editIncludeBookACall, setEditIncludeBookACall] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [sending, setSending] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  // Live preview state — refreshed via debounced /preview endpoint
+  // whenever any field that affects rendering changes.
+  const [previewHtml, setPreviewHtml] = useState<string>('');
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const loadRef = useRef<(filterOverride?: StatusFilter) => Promise<void>>(() => Promise.resolve());
 
@@ -90,9 +99,14 @@ export default function EmailBankPage() {
       setEditTo(selected.toEmail || '');
       setEditCc(selected.ccEmail || '');
       setEditStage(selected.suggestedStage || 'follow_up');
+      setEditIncludeHeader(selected.includeAfterCallHeader);
+      setEditIncludeCapabilities(selected.includeCapabilities);
+      setEditIncludeBookACall(selected.includeBookACall);
       setDirty(false);
       setActionError(null);
       setActionSuccess(null);
+      // Clear preview while we wait for the first render of the new draft.
+      setPreviewHtml('');
     }
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -128,6 +142,9 @@ export default function EmailBankPage() {
         toEmail: editTo || null,
         ccEmail: editCc || null,
         suggestedStage: editStage,
+        includeAfterCallHeader: editIncludeHeader,
+        includeCapabilities: editIncludeCapabilities,
+        includeBookACall: editIncludeBookACall,
       });
       setDirty(false);
       await load();
@@ -137,12 +154,22 @@ export default function EmailBankPage() {
       savingRef.current = false;
       if (pendingRef.current) {
         pendingRef.current = false;
-        // Re-run with whatever the latest field values are by the time
-        // the previous save completes.
         flushSave();
       }
     }
-  }, [selected, dirty, editSubject, editBody, editTo, editCc, editStage, load]);
+  }, [
+    selected,
+    dirty,
+    editSubject,
+    editBody,
+    editTo,
+    editCc,
+    editStage,
+    editIncludeHeader,
+    editIncludeCapabilities,
+    editIncludeBookACall,
+    load,
+  ]);
 
   const saveEdits = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -159,6 +186,49 @@ export default function EmailBankPage() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
   }, []);
 
+  // ── Live preview ─────────────────────────────────────────────
+  // Whenever any rendered-affecting field changes, debounce 400ms then
+  // ask the server for the rendered HTML. Single source of truth: the
+  // preview endpoint runs the same buildBrandedEmailHtml the /send
+  // endpoint uses, so what Jordan sees is exactly what the recipient
+  // gets.
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!selectedId) return;
+    if (!selected || selected.status !== 'ready') return;
+
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    previewTimerRef.current = setTimeout(async () => {
+      setPreviewLoading(true);
+      try {
+        const res = await api.previewEmailDraft(selectedId, {
+          subject: editSubject,
+          body: editBody,
+          includeAfterCallHeader: editIncludeHeader,
+          includeCapabilities: editIncludeCapabilities,
+          includeBookACall: editIncludeBookACall,
+        });
+        setPreviewHtml(res.html);
+      } catch (err) {
+        console.error('Preview render failed:', err);
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 400);
+
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    };
+  }, [
+    selectedId,
+    selected,
+    editSubject,
+    editBody,
+    editIncludeHeader,
+    editIncludeCapabilities,
+    editIncludeBookACall,
+  ]);
+
   const handleSend = async () => {
     if (!selected) return;
     setSending(true);
@@ -172,6 +242,9 @@ export default function EmailBankPage() {
           toEmail: editTo || null,
           ccEmail: editCc || null,
           suggestedStage: editStage,
+          includeAfterCallHeader: editIncludeHeader,
+          includeCapabilities: editIncludeCapabilities,
+          includeBookACall: editIncludeBookACall,
         });
       }
       await api.sendEmailDraft(selected.id);
@@ -242,6 +315,11 @@ export default function EmailBankPage() {
   };
 
   const canSend = !!selected && selected.status === 'ready' && !!editTo && !!editSubject.trim() && !!editBody.trim();
+
+  // Visibility of the capabilities toggle: only show when the lead's
+  // category has a configured CTA URL. Hides clutter for non-manufacturing
+  // leads (and any future category we haven't configured CTAs for).
+  const showCapabilitiesToggle = !!selected?.categoryHasCta;
 
   return (
     <div className="p-10 min-h-full bg-cream">
@@ -314,10 +392,10 @@ export default function EmailBankPage() {
         })}
       </div>
 
-      {/* Two-column layout: list + review */}
-      <div className="grid grid-cols-5 gap-6">
+      {/* Three-column layout: list | editor | preview */}
+      <div className="grid grid-cols-12 gap-5">
         {/* Draft list */}
-        <div className="col-span-2">
+        <div className="col-span-3">
           <PanelCard eyebrow="QUEUE" title={`${drafts.length} drafts`} elevated padded={false}>
             {loading ? (
               <div className="flex items-center justify-center py-14">
@@ -332,7 +410,7 @@ export default function EmailBankPage() {
                 </p>
               </div>
             ) : (
-              <div className="max-h-[620px] overflow-y-auto divide-y divide-hair-soft">
+              <div className="max-h-[720px] overflow-y-auto divide-y divide-hair-soft">
                 {drafts.map((d) => {
                   const isSelected = selectedId === d.id;
                   return (
@@ -369,9 +447,9 @@ export default function EmailBankPage() {
           </PanelCard>
         </div>
 
-        {/* Review panel */}
-        <div className="col-span-3">
-          {!selected ? (
+        {/* Right side — editor + preview, or status panel for non-ready states */}
+        {!selected ? (
+          <div className="col-span-9">
             <PanelCard eyebrow="REVIEW" title="No draft selected" elevated>
               <div className="py-14 text-center">
                 <Mail size={32} className="mx-auto text-ink-dim mb-3" />
@@ -380,7 +458,9 @@ export default function EmailBankPage() {
                 </p>
               </div>
             </PanelCard>
-          ) : selected.status === 'pending' ? (
+          </div>
+        ) : selected.status === 'pending' ? (
+          <div className="col-span-9">
             <PanelCard eyebrow="DRAFTING" title={selected.leadName} elevated>
               <div className="py-14 text-center">
                 <Loader2 size={28} className="mx-auto animate-spin text-sky-ink mb-3" />
@@ -393,7 +473,9 @@ export default function EmailBankPage() {
                 </p>
               </div>
             </PanelCard>
-          ) : selected.status === 'failed' ? (
+          </div>
+        ) : selected.status === 'failed' ? (
+          <div className="col-span-9">
             <PanelCard
               eyebrow="FAILED"
               title={selected.leadName}
@@ -448,180 +530,295 @@ export default function EmailBankPage() {
                 </div>
               </div>
             </PanelCard>
-          ) : (
-            <PanelCard
-              eyebrow={`${selected.disposition.toUpperCase()} · READY`}
-              title={
-                <span className="flex items-center gap-2">
-                  {selected.leadName}
-                  {selected.leadCompany && (
-                    <span className="text-ink-muted font-normal">· {selected.leadCompany}</span>
+          </div>
+        ) : (
+          <>
+            {/* Editor — col-span-4 */}
+            <div className="col-span-4">
+              <PanelCard
+                eyebrow={`${selected.disposition.toUpperCase()} · READY`}
+                title={
+                  <span className="flex items-center gap-2">
+                    {selected.leadName}
+                    {selected.leadCompany && (
+                      <span className="text-ink-muted font-normal">· {selected.leadCompany}</span>
+                    )}
+                  </span>
+                }
+                elevated
+                right={
+                  <button
+                    onClick={() => navigate(`/leads/${selected.leadId}`)}
+                    className="text-sky-ink text-xs font-medium hover:underline inline-flex items-center gap-1"
+                  >
+                    Open lead <ExternalLink size={12} />
+                  </button>
+                }
+              >
+                <div className="space-y-4">
+                  {!editTo && (
+                    <div className="bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.24)] rounded-xl p-3 flex items-start gap-2">
+                      <AlertCircle size={14} className="text-warn mt-0.5 flex-shrink-0" />
+                      <p className="text-warn text-xs">
+                        No email on file for this lead. Add a recipient below before sending.
+                      </p>
+                    </div>
                   )}
-                </span>
-              }
-              elevated
-              right={
-                <button
-                  onClick={() => navigate(`/leads/${selected.leadId}`)}
-                  className="text-sky-ink text-xs font-medium hover:underline inline-flex items-center gap-1"
-                >
-                  Open lead <ExternalLink size={12} />
-                </button>
-              }
-            >
-              <div className="space-y-4">
-                {!editTo && (
-                  <div className="bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.24)] rounded-xl p-3 flex items-start gap-2">
-                    <AlertCircle size={14} className="text-warn mt-0.5 flex-shrink-0" />
-                    <p className="text-warn text-xs">
-                      No email on file for this lead. Add a recipient below before sending.
-                    </p>
-                  </div>
-                )}
 
-                {/* To / CC row */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <EyebrowLabel variant="bare" className="mb-1.5">
-                      To
-                    </EyebrowLabel>
-                    <input
-                      type="email"
-                      value={editTo}
-                      onChange={(e) => {
-                        setEditTo(e.target.value);
-                        setDirty(true);
-                      }}
-                      onBlur={saveEdits}
-                      placeholder="recipient@company.com"
-                      className="w-full bg-tray border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm placeholder-ink-faint focus:outline-none focus:border-sky-hair"
-                    />
+                  {/* To / CC row */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <EyebrowLabel variant="bare" className="mb-1.5">
+                        To
+                      </EyebrowLabel>
+                      <input
+                        type="email"
+                        value={editTo}
+                        onChange={(e) => {
+                          setEditTo(e.target.value);
+                          setDirty(true);
+                        }}
+                        onBlur={saveEdits}
+                        placeholder="recipient@company.com"
+                        className="w-full bg-tray border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm placeholder-ink-faint focus:outline-none focus:border-sky-hair"
+                      />
+                    </div>
+                    <div>
+                      <EyebrowLabel variant="bare" className="mb-1.5">
+                        CC (optional)
+                      </EyebrowLabel>
+                      <input
+                        type="text"
+                        value={editCc}
+                        onChange={(e) => {
+                          setEditCc(e.target.value);
+                          setDirty(true);
+                        }}
+                        onBlur={saveEdits}
+                        placeholder=""
+                        className="w-full bg-tray border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm placeholder-ink-faint focus:outline-none focus:border-sky-hair"
+                      />
+                    </div>
                   </div>
+
+                  {/* Subject */}
                   <div>
                     <EyebrowLabel variant="bare" className="mb-1.5">
-                      CC (optional)
+                      Subject
                     </EyebrowLabel>
                     <input
                       type="text"
-                      value={editCc}
+                      value={editSubject}
                       onChange={(e) => {
-                        setEditCc(e.target.value);
+                        setEditSubject(e.target.value);
                         setDirty(true);
                       }}
                       onBlur={saveEdits}
-                      placeholder=""
-                      className="w-full bg-tray border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm placeholder-ink-faint focus:outline-none focus:border-sky-hair"
+                      className="w-full bg-paper border border-hair-soft rounded-lg px-3 py-2.5 text-ink text-sm focus:outline-none focus:border-sky-hair"
                     />
                   </div>
-                </div>
 
-                {/* Subject */}
-                <div>
-                  <EyebrowLabel variant="bare" className="mb-1.5">
-                    Subject
-                  </EyebrowLabel>
-                  <input
-                    type="text"
-                    value={editSubject}
-                    onChange={(e) => {
-                      setEditSubject(e.target.value);
-                      setDirty(true);
-                    }}
-                    onBlur={saveEdits}
-                    className="w-full bg-paper border border-hair-soft rounded-lg px-3 py-2.5 text-ink text-sm focus:outline-none focus:border-sky-hair"
-                  />
-                </div>
+                  {/* Render-blocks toggles */}
+                  <div className="bg-tray border border-hair-soft rounded-xl p-3 space-y-2.5">
+                    <EyebrowLabel variant="bare">Email blocks</EyebrowLabel>
+                    <ToggleRow
+                      label='"A note after our chat" header'
+                      hint="Editorial italic display headline above the body. Untick for follow-ups after the first."
+                      checked={editIncludeHeader}
+                      onChange={(v) => {
+                        setEditIncludeHeader(v);
+                        setDirty(true);
+                        saveEdits();
+                      }}
+                    />
+                    {showCapabilitiesToggle && (
+                      <ToggleRow
+                        label="Capabilities document button"
+                        hint="Blue button below the body linking to the manufacturing capabilities site."
+                        checked={editIncludeCapabilities}
+                        onChange={(v) => {
+                          setEditIncludeCapabilities(v);
+                          setDirty(true);
+                          saveEdits();
+                        }}
+                      />
+                    )}
+                    <ToggleRow
+                      label='"Book a call" button'
+                      hint="Black pill linking to the discovery-call Calendly."
+                      checked={editIncludeBookACall}
+                      onChange={(v) => {
+                        setEditIncludeBookACall(v);
+                        setDirty(true);
+                        saveEdits();
+                      }}
+                    />
+                  </div>
 
-                {/* Body */}
-                <div>
-                  <EyebrowLabel variant="bare" className="mb-1.5">
-                    Body
-                  </EyebrowLabel>
-                  <textarea
-                    value={editBody}
-                    onChange={(e) => {
-                      setEditBody(e.target.value);
-                      setDirty(true);
-                    }}
-                    onBlur={saveEdits}
-                    rows={12}
-                    className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm focus:outline-none focus:border-sky-hair resize-none leading-relaxed font-mono"
-                  />
-                </div>
+                  {/* Body */}
+                  <div>
+                    <EyebrowLabel variant="bare" className="mb-1.5">
+                      Body
+                    </EyebrowLabel>
+                    <textarea
+                      value={editBody}
+                      onChange={(e) => {
+                        setEditBody(e.target.value);
+                        setDirty(true);
+                      }}
+                      onBlur={saveEdits}
+                      rows={12}
+                      className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm focus:outline-none focus:border-sky-hair resize-none leading-relaxed font-mono"
+                    />
+                    <p className="text-ink-dim text-[11px] mt-1.5 leading-relaxed">
+                      Wrap one outcome phrase in <code className="font-mono text-sky-ink">*asterisks*</code> to render it in italic sky-blue.
+                    </p>
+                  </div>
 
-                {/* Pipeline stage toggle */}
-                <div className="flex items-center gap-3">
-                  <EyebrowLabel variant="bare">Sends move lead to</EyebrowLabel>
-                  <div className="flex gap-1.5">
-                    {(['follow_up', 'call_booked'] as const).map((s) => {
-                      const active = editStage === s;
-                      return (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => {
-                            setEditStage(s);
-                            setDirty(true);
-                          }}
-                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[10px] font-bold tracking-[0.16em] uppercase transition-all border ${
-                            active
-                              ? 'bg-sky-ink border-sky-ink text-white'
-                              : 'bg-paper border-hair-soft text-ink-dim hover:text-ink-muted hover:border-hair'
-                          }`}
-                        >
-                          {s.replace('_', ' ')}
-                        </button>
-                      );
-                    })}
+                  {/* Pipeline stage toggle */}
+                  <div className="flex items-center gap-3">
+                    <EyebrowLabel variant="bare">Sends move lead to</EyebrowLabel>
+                    <div className="flex gap-1.5">
+                      {(['follow_up', 'call_booked'] as const).map((s) => {
+                        const active = editStage === s;
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => {
+                              setEditStage(s);
+                              setDirty(true);
+                              saveEdits();
+                            }}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[10px] font-bold tracking-[0.16em] uppercase transition-all border ${
+                              active
+                                ? 'bg-sky-ink border-sky-ink text-white'
+                                : 'bg-paper border-hair-soft text-ink-dim hover:text-ink-muted hover:border-hair'
+                            }`}
+                          >
+                            {s.replace('_', ' ')}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Feedback + actions */}
+                  {actionError && (
+                    <div className="bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.18)] rounded-xl p-3">
+                      <p className="text-risk text-xs">{actionError}</p>
+                    </div>
+                  )}
+                  {actionSuccess && (
+                    <div className="bg-sky-wash border border-sky-hair rounded-xl p-3">
+                      <p className="text-sky-ink text-xs">{actionSuccess}</p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2 border-t border-hair-soft">
+                    <div className="flex items-center gap-2 text-ink-dim text-xs">
+                      <Clock size={12} />
+                      Generated {selected.generatedAt ? formatAge(selected.generatedAt) : 'just now'}
+                      {dirty && <span className="text-warn">· unsaved edits</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <PillButton
+                        variant="ghost"
+                        size="sm"
+                        trailing="none"
+                        icon={<Trash2 size={13} />}
+                        onClick={handleDiscard}
+                        disabled={discarding}
+                      >
+                        Discard
+                      </PillButton>
+                      <PillButton
+                        variant="primary"
+                        size="md"
+                        trailing="none"
+                        icon={sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                        onClick={handleSend}
+                        disabled={!canSend || sending}
+                      >
+                        {sending ? 'Sending…' : 'Send email'}
+                      </PillButton>
+                    </div>
                   </div>
                 </div>
+              </PanelCard>
+            </div>
 
-                {/* Feedback + actions */}
-                {actionError && (
-                  <div className="bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.18)] rounded-xl p-3">
-                    <p className="text-risk text-xs">{actionError}</p>
-                  </div>
-                )}
-                {actionSuccess && (
-                  <div className="bg-sky-wash border border-sky-hair rounded-xl p-3">
-                    <p className="text-sky-ink text-xs">{actionSuccess}</p>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between pt-2 border-t border-hair-soft">
-                  <div className="flex items-center gap-2 text-ink-dim text-xs">
-                    <Clock size={12} />
-                    Generated {selected.generatedAt ? formatAge(selected.generatedAt) : 'just now'}
-                    {dirty && <span className="text-warn">· unsaved edits</span>}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <PillButton
-                      variant="ghost"
-                      size="sm"
-                      trailing="none"
-                      icon={<Trash2 size={13} />}
-                      onClick={handleDiscard}
-                      disabled={discarding}
-                    >
-                      Discard
-                    </PillButton>
-                    <PillButton
-                      variant="primary"
-                      size="md"
-                      trailing="none"
-                      icon={sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                      onClick={handleSend}
-                      disabled={!canSend || sending}
-                    >
-                      {sending ? 'Sending…' : 'Send email'}
-                    </PillButton>
-                  </div>
+            {/* Live preview — col-span-5 */}
+            <div className="col-span-5">
+              <PanelCard
+                eyebrow="LIVE PREVIEW"
+                title="What the recipient sees"
+                elevated
+                padded={false}
+                right={
+                  previewLoading ? (
+                    <span className="inline-flex items-center gap-1.5 text-ink-dim text-xs font-mono tracking-wider uppercase">
+                      <Loader2 size={11} className="animate-spin" />
+                      Rendering
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-sky-ink text-xs font-mono tracking-wider uppercase">
+                      <Eye size={11} />
+                      Live
+                    </span>
+                  )
+                }
+              >
+                <div className="bg-tray rounded-b-2xl overflow-hidden">
+                  {previewHtml ? (
+                    <iframe
+                      title="Email preview"
+                      srcDoc={previewHtml}
+                      sandbox=""
+                      className="w-full bg-cream block"
+                      style={{ height: '900px', border: '0' }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center" style={{ height: '900px' }}>
+                      <Loader2 size={20} className="animate-spin text-ink-dim" />
+                    </div>
+                  )}
                 </div>
-              </div>
-            </PanelCard>
-          )}
-        </div>
+              </PanelCard>
+            </div>
+          </>
+        )}
       </div>
     </div>
+  );
+}
+
+// ── Toggle row ───────────────────────────────────────────────
+// A single labelled checkbox with hint copy. Used for the three
+// render-block toggles in the editor pane.
+function ToggleRow({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="flex items-start gap-3 cursor-pointer group">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 rounded border-hair text-sky-ink focus:ring-sky-hair cursor-pointer"
+      />
+      <div className="flex-1">
+        <p className="text-ink text-sm font-medium leading-tight">{label}</p>
+        <p className="text-ink-dim text-[11px] leading-snug mt-0.5">{hint}</p>
+      </div>
+    </label>
   );
 }

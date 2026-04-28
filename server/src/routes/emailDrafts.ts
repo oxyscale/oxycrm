@@ -13,6 +13,8 @@ import { buildBrandedEmailHtml } from '../services/emailTemplate.js';
 import {
   summariseAndPersistCall,
   draftAndStoreEmailForCall,
+  getCategoryCta,
+  getBookACallUrl,
 } from '../services/ai-summary.js';
 import pino from 'pino';
 
@@ -35,6 +37,9 @@ interface DraftRow {
   generated_at: string | null;
   sent_at: string | null;
   error_message: string | null;
+  include_after_call_header: number;
+  include_capabilities: number;
+  include_book_a_call: number;
   created_at: string;
   updated_at: string;
 }
@@ -61,6 +66,9 @@ function mapDraft(row: DraftRow) {
     generatedAt: row.generated_at,
     sentAt: row.sent_at,
     errorMessage: row.error_message,
+    includeAfterCallHeader: !!row.include_after_call_header,
+    includeCapabilities: !!row.include_capabilities,
+    includeBookACall: !!row.include_book_a_call,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -73,6 +81,9 @@ function mapDraftWithLead(row: DraftRowWithLead) {
     leadCompany: row.lead_company,
     leadPhone: row.lead_phone,
     leadCategory: row.lead_category,
+    /** Whether the lead's category has a CTA URL configured. The
+     *  capabilities-document toggle is only meaningful when this is true. */
+    categoryHasCta: !!getCategoryCta(row.lead_category),
   };
 }
 
@@ -197,6 +208,9 @@ const patchSchema = z.object({
   subject: z.string().optional(),
   body: z.string().optional(),
   suggestedStage: z.enum(['follow_up', 'call_booked']).optional(),
+  includeAfterCallHeader: z.boolean().optional(),
+  includeCapabilities: z.boolean().optional(),
+  includeBookACall: z.boolean().optional(),
 });
 
 router.patch('/:id', (req, res, next) => {
@@ -238,6 +252,18 @@ router.patch('/:id', (req, res, next) => {
       setClauses.push('suggested_stage = @suggestedStage');
       params.suggestedStage = updates.suggestedStage;
     }
+    if (updates.includeAfterCallHeader !== undefined) {
+      setClauses.push('include_after_call_header = @includeAfterCallHeader');
+      params.includeAfterCallHeader = updates.includeAfterCallHeader ? 1 : 0;
+    }
+    if (updates.includeCapabilities !== undefined) {
+      setClauses.push('include_capabilities = @includeCapabilities');
+      params.includeCapabilities = updates.includeCapabilities ? 1 : 0;
+    }
+    if (updates.includeBookACall !== undefined) {
+      setClauses.push('include_book_a_call = @includeBookACall');
+      params.includeBookACall = updates.includeBookACall ? 1 : 0;
+    }
 
     if (setClauses.length === 0) {
       throw new ApiError(400, 'No fields provided');
@@ -251,6 +277,89 @@ router.patch('/:id', (req, res, next) => {
       .prepare('SELECT * FROM email_drafts WHERE id = ?')
       .get(id) as DraftRow;
     res.json(mapDraft(updated));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/email-drafts/:id/preview — live HTML preview ────
+//
+// Renders the same HTML the recipient will see, given the current edit
+// state passed in the body. Lets the Email Bank UI show a live iframe
+// preview that updates as Jordan types or toggles checkboxes.
+//
+// Single source of truth: uses buildBrandedEmailHtml — same code path
+// as /send. No drift possible.
+
+const previewSchema = z.object({
+  subject: z.string().optional(),
+  body: z.string().optional(),
+  includeAfterCallHeader: z.boolean().optional(),
+  includeCapabilities: z.boolean().optional(),
+  includeBookACall: z.boolean().optional(),
+});
+
+router.post('/:id/preview', (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) throw new ApiError(400, 'Invalid draft ID');
+
+    const overrides = previewSchema.parse(req.body);
+    const db = getDb();
+
+    const draft = db.prepare('SELECT * FROM email_drafts WHERE id = ?').get(id) as DraftRow | undefined;
+    if (!draft) throw new ApiError(404, 'Email draft not found');
+
+    const lead = db
+      .prepare('SELECT name, company, category FROM leads WHERE id = ?')
+      .get(draft.lead_id) as { name: string; company: string | null; category: string | null } | undefined;
+    if (!lead) throw new ApiError(404, 'Lead not found');
+
+    const user = req.user!;
+
+    const settingsRows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+    const settings: Record<string, string> = {};
+    for (const r of settingsRows) settings[r.key] = r.value;
+    const companyName = settings.company_name || 'OxyScale';
+    const websiteUrl = settings.website_url || 'https://oxyscale.ai';
+
+    const recipientName = lead.name.split(' ')[0] || 'there';
+    const recipientCompany = lead.company || undefined;
+
+    const signature = buildEmailSignature({
+      sender_name: user.name,
+      sender_title: user.title,
+      sender_phone: user.phone,
+      company_name: companyName,
+      website_url: websiteUrl,
+      calendly_link: user.calendlyLink,
+    });
+
+    // Apply overrides on top of the persisted draft state.
+    const body = overrides.body ?? draft.body ?? '';
+    const includeHeader = overrides.includeAfterCallHeader ?? !!draft.include_after_call_header;
+    const includeCaps = overrides.includeCapabilities ?? !!draft.include_capabilities;
+    const includeBook = overrides.includeBookACall ?? !!draft.include_book_a_call;
+
+    const categoryCta = lead.category ? getCategoryCta(lead.category) : null;
+    const capabilitiesCta = includeCaps && categoryCta
+      ? { url: categoryCta.url, label: categoryCta.label, intro: categoryCta.intro }
+      : null;
+    const bookACallUrl = includeBook ? getBookACallUrl(user.calendlyLink) : null;
+
+    const html = buildBrandedEmailHtml({
+      body,
+      recipientName,
+      recipientCompany,
+      senderName: user.name,
+      signOff: user.signOff,
+      signature,
+      mode: includeHeader ? 'post-call' : 'standard',
+      capabilitiesCta,
+      bookACallUrl,
+    });
+
+    res.json({ html });
   } catch (err) {
     next(err);
   }
@@ -286,8 +395,11 @@ router.post('/:id/send', async (req, res, next) => {
     const companyName = settings.company_name || 'OxyScale';
     const websiteUrl = settings.website_url || 'https://oxyscale.ai';
 
-    const lead = db.prepare('SELECT name FROM leads WHERE id = ?').get(draft.lead_id) as { name: string } | undefined;
+    const lead = db
+      .prepare('SELECT name, company, category FROM leads WHERE id = ?')
+      .get(draft.lead_id) as { name: string; company: string | null; category: string | null } | undefined;
     const recipientName = lead?.name?.split(' ')[0] || 'there';
+    const recipientCompany = lead?.company || undefined;
 
     const signature = buildEmailSignature({
       sender_name: user.name,
@@ -298,12 +410,30 @@ router.post('/:id/send', async (req, res, next) => {
       calendly_link: user.calendlyLink,
     });
 
+    // Resolve CTA context from toggles. Capabilities CTA only renders if
+    // the lead's category has a configured doc URL AND the toggle is on.
+    // Book-a-call URL is campaign-wide (settings table) with per-user
+    // calendly fallback.
+    const categoryCta = lead?.category ? getCategoryCta(lead.category) : null;
+    const capabilitiesCta = draft.include_capabilities && categoryCta
+      ? {
+          url: categoryCta.url,
+          label: categoryCta.label,
+          intro: categoryCta.intro,
+        }
+      : null;
+    const bookACallUrl = draft.include_book_a_call ? getBookACallUrl(user.calendlyLink) : null;
+
     const htmlBody = buildBrandedEmailHtml({
       body: draft.body,
       recipientName,
+      recipientCompany,
       senderName: user.name,
       signOff: user.signOff,
       signature,
+      mode: draft.include_after_call_header ? 'post-call' : 'standard',
+      capabilitiesCta,
+      bookACallUrl,
     });
 
     const result = await sendEmail({

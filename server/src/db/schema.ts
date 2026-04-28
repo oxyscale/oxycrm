@@ -355,6 +355,29 @@ export function initializeDatabase(db: Database.Database): void {
   retrofitCascadeIfMissing(db, 'project_tasks', 'project_id', 'projects');
   retrofitCascadeIfMissing(db, 'emails_sent', 'lead_id', 'leads');
   retrofitCascadeIfMissing(db, 'activities', 'lead_id', 'leads');
+
+  // ============================================================
+  // CTA card configuration (manufacturing campaign onwards)
+  //
+  // Per-category capabilities CTA: extends category_prompts with the
+  // URL, button label, and intro line for the blue "capabilities
+  // document" button rendered in post-call follow-up emails. A row
+  // with cta_doc_url IS NULL means no CTA available for that category
+  // and the toggle stays hidden in the UI.
+  //
+  // Per-draft toggles on email_drafts: control which optional blocks
+  // render at send time. After-call header defaults ON for Email Bank
+  // drafts (post-call channel). Book-a-call defaults ON universally.
+  // Capabilities defaults OFF at the DB level — flipped to ON in code
+  // at draft creation when the lead's category has a CTA configured.
+  // ============================================================
+  addColumnIfMissing(db, 'category_prompts', 'cta_doc_url', 'TEXT');
+  addColumnIfMissing(db, 'category_prompts', 'cta_doc_label', 'TEXT');
+  addColumnIfMissing(db, 'category_prompts', 'cta_intro', 'TEXT');
+
+  addColumnIfMissing(db, 'email_drafts', 'include_after_call_header', 'INTEGER NOT NULL DEFAULT 1');
+  addColumnIfMissing(db, 'email_drafts', 'include_capabilities', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'email_drafts', 'include_book_a_call', 'INTEGER NOT NULL DEFAULT 1');
 }
 
 /**

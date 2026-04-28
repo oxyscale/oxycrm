@@ -1,6 +1,13 @@
 // ============================================================
 // AI Summary Service — Claude API for call summaries & email drafts
-// Handles transcript summarisation and follow-up email generation
+// Handles transcript summarisation and follow-up email generation.
+//
+// Email drafting is mode-aware. The renderer (emailTemplate.ts) appends
+// optional blocks — editorial post-call header, capabilities button,
+// book-a-call button — based on per-draft toggles. This file's job is
+// to make Claude write a body that COMPOSES with whichever blocks are
+// going to appear: e.g. when a "Book a call" button will be attached,
+// the body must not paste the Calendly link inline.
 // ============================================================
 
 import pino from 'pino';
@@ -22,6 +29,22 @@ export interface EmailDraftResult {
   subject: string;
   body: string;
 }
+
+/**
+ * Draft mode tells the prompt what blocks the renderer will append
+ * around the body so Claude composes with them in mind.
+ */
+export interface FollowUpDraftMode {
+  includeAfterCallHeader: boolean;
+  includeCapabilities: boolean;
+  includeBookACall: boolean;
+}
+
+const POST_CALL_DEFAULT_MODE: FollowUpDraftMode = {
+  includeAfterCallHeader: true,
+  includeCapabilities: false,
+  includeBookACall: true,
+};
 
 // ── Claude API helper ────────────────────────────────────────
 
@@ -65,7 +88,7 @@ async function callClaude(prompt: string, maxTokens: number = 2000): Promise<str
     .join('');
 }
 
-// ── Playbook + Settings context helper ──────────────────────
+// ── Playbook + Settings context helpers ──────────────────────
 
 function getCategoryPrompt(category: string | null): string {
   if (!category) return '';
@@ -78,6 +101,34 @@ function getCategoryPrompt(category: string | null): string {
     return `\n## Industry context for ${category}\n${row.prompt}\n\nUse the above context to make the email specific to their industry. Weave in the most relevant points naturally, don't list them all.\n`;
   } catch {
     return '';
+  }
+}
+
+interface CategoryCta {
+  url: string;
+  label: string;
+  intro: string;
+}
+
+/**
+ * Returns CTA config for a category if cta_doc_url is populated, else null.
+ * Used at draft creation to decide whether the capabilities toggle starts ON.
+ */
+export function getCategoryCta(category: string | null): CategoryCta | null {
+  if (!category) return null;
+  try {
+    const db = getDb();
+    const row = db
+      .prepare('SELECT cta_doc_url, cta_doc_label, cta_intro FROM category_prompts WHERE category = ?')
+      .get(category) as { cta_doc_url: string | null; cta_doc_label: string | null; cta_intro: string | null } | undefined;
+    if (!row?.cta_doc_url?.trim()) return null;
+    return {
+      url: row.cta_doc_url.trim(),
+      label: (row.cta_doc_label?.trim() || 'View capabilities document'),
+      intro: (row.cta_intro?.trim() || ''),
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -104,22 +155,115 @@ function getSettingsContext(): { calendlyLink: string; calendlyDuration: string;
 }
 
 /**
+ * Read the campaign-wide book-a-call URL from settings. Falls back to the
+ * sender's per-user calendly_link if unset, then to a hardcoded default.
+ */
+export function getBookACallUrl(fallback?: string | null): string {
+  try {
+    const db = getDb();
+    const row = db
+      .prepare("SELECT value FROM settings WHERE key = 'book_a_call_url'")
+      .get() as { value: string } | undefined;
+    if (row?.value?.trim()) return row.value.trim();
+  } catch {
+    /* fall through */
+  }
+  if (fallback?.trim()) return fallback.trim();
+  return 'https://calendly.com/jordan-oxyscale/discovery-call-30-minutes';
+}
+
+/**
+ * Decide which toggles start ON for a freshly created Email Bank draft.
+ * After-call header and book-a-call default ON for all post-call drafts.
+ * Capabilities defaults ON only when the lead's category has a CTA URL
+ * configured in category_prompts.
+ */
+export function computeInitialDraftMode(category: string | null): FollowUpDraftMode {
+  return {
+    includeAfterCallHeader: true,
+    includeCapabilities: !!getCategoryCta(category),
+    includeBookACall: true,
+  };
+}
+
+/**
+ * Build the per-prompt instructions explaining which blocks the renderer
+ * will append, so Claude writes a body that composes with them.
+ */
+function buildRenderContextSection(mode: FollowUpDraftMode, calendlyLink: string): string {
+  const appended: string[] = [];
+  if (mode.includeAfterCallHeader) {
+    appended.push(
+      'an editorial header block ABOVE your body — a mono "TO {recipient}" label and an italic display headline reading "A note after our chat."',
+    );
+  }
+  if (mode.includeCapabilities) {
+    appended.push(
+      'a "View capabilities document" button BELOW your body, linking to our manufacturing capabilities site',
+    );
+  }
+  if (mode.includeBookACall) {
+    appended.push(
+      'a "Book a call" button BELOW your body, linking to our discovery-call Calendly',
+    );
+  }
+
+  const constraints: string[] = [];
+  constraints.push('No greeting line ("Hi name,") — the wrapper adds the recipient framing automatically.');
+  constraints.push('No signature block — the wrapper adds it.');
+  if (mode.includeBookACall) {
+    constraints.push(
+      'Do NOT paste the Calendly URL or any "book a time here" link in the body. The button handles the click. Close on a forward-looking line that makes the discovery call feel like the obvious next step (without typing the link).',
+    );
+  } else {
+    constraints.push(`Close with a clear next step. Include this booking link inline: ${calendlyLink}`);
+  }
+  if (mode.includeCapabilities) {
+    constraints.push(
+      'Do NOT paste any document URL or "here is our capabilities doc at..." link in the body. The button handles it. You can refer to "the picture below" or similar.',
+    );
+  }
+
+  if (appended.length === 0) {
+    return `\n## Render context\nNo CTA buttons are being appended. Write a self-contained body.\n${constraints.map((c) => `- ${c}`).join('\n')}\n`;
+  }
+
+  return `\n## Render context (changes how you write the body)\nThe system will wrap your body in branded HTML. It will also append: ${appended.join('; ')}.\n\nConstraints:\n${constraints.map((c) => `- ${c}`).join('\n')}\n`;
+}
+
+/**
+ * Universal italic accent instruction. Locked across all email drafts.
+ * Wrap exactly one OUTCOME-focused phrase in single asterisks. The renderer
+ * converts asterisks to Fraunces italic sky-ink. The italic represents
+ * the change OxyScale brings — never the prospect's current pain.
+ */
+const ITALIC_ACCENT_INSTRUCTION = `\n## Italic accent (mandatory)
+Wrap exactly ONE phrase or short sentence (5-15 words) in single asterisks, e.g. *like this*. The renderer turns it into a sky-blue italic that catches the eye.
+
+The italic must highlight the OUTCOME OxyScale brings — the change, the future state, the new operating picture, the moment things click for them. Never italicise the prospect's current pain or problem; the blue represents what changes for them, not what's wrong now.
+
+Choose a phrase that is concrete, specific to what was discussed, and reads naturally inside the surrounding sentence. Examples of good outcome italics:
+- "*surface what each department needs to handle today*"
+- "*one live picture of every corner of the business*"
+- "*caught the day it happens, not at month-end*"
+- "*the numbers your Monday meeting goes hunting for arrive on their own*"
+
+If the body genuinely has no clear outcome phrase to italicise, omit the asterisks. But on a real follow-up after a working call there should almost always be one.
+`;
+
+/**
  * Extracts a JSON object from Claude's response text.
  * Handles responses that may include markdown code fences or extra text.
  */
 function extractJson<T>(text: string): T {
-  // Try to find JSON in code fence first
   const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) {
     return JSON.parse(fenceMatch[1].trim()) as T;
   }
-
-  // Fall back to finding a raw JSON object
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error('No valid JSON found in AI response');
   }
-
   return JSON.parse(jsonMatch[0]) as T;
 }
 
@@ -200,7 +344,6 @@ Guidelines:
     const responseText = await callClaude(prompt);
     const result = extractJson<CallSummaryResult>(responseText);
 
-    // Validate the result has all required fields
     if (!result.summary || !Array.isArray(result.keyTopics) || !Array.isArray(result.actionItems) || !result.sentiment) {
       throw new Error('AI response missing required fields');
     }
@@ -235,9 +378,9 @@ Guidelines:
 // ── Email Drafting ───────────────────────────────────────────
 
 /**
- * Drafts a follow-up email using Claude, based on the call transcript and summary.
- * Uses the email style guide from prompts/emailDraft.ts.
- * Returns plain text (the frontend wraps it in the branded HTML template).
+ * Drafts a follow-up email after a real call.
+ * Mode-aware: the prompt adapts to which renderer blocks (editorial header,
+ * capabilities button, book-a-call button) will be appended.
  */
 export async function draftFollowUpEmail(
   transcript: string,
@@ -247,13 +390,14 @@ export async function draftFollowUpEmail(
   callContext?: string,
   previousEmails?: string,
   leadCategory?: string | null,
-  senderName: string = 'Jordan Bell'
+  senderName: string = 'Jordan Bell',
+  mode: FollowUpDraftMode = POST_CALL_DEFAULT_MODE,
 ): Promise<EmailDraftResult> {
   const startTime = Date.now();
 
   logger.info(
-    { leadName, leadCompany, leadCategory, senderName, hasCallContext: !!callContext, hasPreviousEmails: !!previousEmails },
-    'Starting email draft generation'
+    { leadName, leadCompany, leadCategory, senderName, hasCallContext: !!callContext, hasPreviousEmails: !!previousEmails, mode },
+    'Starting email draft generation',
   );
 
   const previousEmailsSection = previousEmails
@@ -262,24 +406,25 @@ export async function draftFollowUpEmail(
 
   const playbookSection = getCategoryPrompt(leadCategory || null);
   const ctx = getSettingsContext();
+  const renderContext = buildRenderContextSection(mode, ctx.calendlyLink);
 
   const prompt = `You are writing a follow-up email for ${senderName} from OxyScale (${ctx.companyDescription}) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
 
-A sales call just happened. Write a personalised follow-up email based on what was discussed.
+A real sales call just happened. Write a personalised follow-up email based on what was discussed.
 
 ${EMAIL_STYLE_GUIDE}
 ${previousEmailsSection}
 ${playbookSection}
+${renderContext}
+${ITALIC_ACCENT_INSTRUCTION}
 
 ## Structure
-1. One line referencing the call warmly
-2. "As promised, here is..." transition into the value proposition
-3. Brief OxyScale positioning (1-2 sentences, tailored to their context)
-4. Acknowledge what they already have in place, frame OxyScale as additive
-5. Pull in 2-3 specific things discussed on the call and weave them in naturally
-6. Clear next step (demo, catch up, meet face to face). If appropriate, include the booking link: ${ctx.calendlyLink}
-7. "Looking forward to hearing your thoughts."
-8. Sign off with "${ctx.signOff},"
+1. Open with a one-line warm reference to the call. Pick up something specific they said, not generic ("Great chat just then..." style).
+2. Tie what they raised on the call directly to what OxyScale would deliver. This is the heart of the email — weave 2-3 specific things they discussed into how OxyScale would handle them. Frame OxyScale as additive to what they already have, not a replacement.
+3. Forward-looking close that sets up the next step (see the render-context constraints above for whether to paste the Calendly link).
+4. Sign off with "${ctx.signOff},"
+
+Total length 110-180 words. Concrete and specific to the call, not generic.
 
 ## Call transcript
 ${transcript}
@@ -292,8 +437,8 @@ ${callContext ? `## Additional context\n${callContext}` : ''}
 ## Output format
 Return ONLY valid JSON in this exact format, no other text:
 {
-  "subject": "Short, casual subject line under 8 words. No em dashes. No corporate jargon. Examples: 'Great speaking with you today', 'Quick follow up from our chat', 'As promised, the overview'",
-  "body": "The email body. No greeting (no 'Hi [name],' as it is added automatically). No signature block. Keep it between 100-200 words. Be specific to what was discussed, not generic. Plain text only."
+  "subject": "Short, casual subject line under 8 words. Never include 'OxyScale' (it's already in the from-address). No em dashes. Examples: 'Quick follow up from our chat', 'After our chat — the picture below', 'On the margin question you raised'",
+  "body": "The email body, plain text. No greeting line, no signature block. One italic-accented phrase wrapped in single asterisks per the rule above. Match the EMAIL_STYLE_GUIDE precisely: never use em dashes."
 }`;
 
   try {
@@ -312,7 +457,7 @@ Return ONLY valid JSON in this exact format, no other text:
         subjectLength: result.subject.length,
         bodyLength: result.body.length,
       },
-      'Email draft generation completed'
+      'Email draft generation completed',
     );
 
     return result;
@@ -324,7 +469,7 @@ Return ONLY valid JSON in this exact format, no other text:
         durationMs,
         error: error instanceof Error ? error.message : String(error),
       },
-      'Email draft generation failed'
+      'Email draft generation failed',
     );
     throw error;
   }
@@ -337,11 +482,12 @@ export async function draftVoicemailEmail(
   leadCompany: string | null,
   leadCategory: string | null,
   previousEmails?: string,
-  senderName: string = 'Jordan Bell'
+  senderName: string = 'Jordan Bell',
+  mode: FollowUpDraftMode = POST_CALL_DEFAULT_MODE,
 ): Promise<EmailDraftResult> {
   const startTime = Date.now();
 
-  logger.info({ leadName, leadCompany, leadCategory, senderName }, 'Starting voicemail follow-up email draft');
+  logger.info({ leadName, leadCompany, leadCategory, senderName, mode }, 'Starting voicemail follow-up email draft');
 
   const senderFirstName = senderName.split(' ')[0];
   const previousEmailsSection = previousEmails
@@ -350,6 +496,7 @@ export async function draftVoicemailEmail(
 
   const playbookSection = getCategoryPrompt(leadCategory);
   const ctx = getSettingsContext();
+  const renderContext = buildRenderContextSection(mode, ctx.calendlyLink);
 
   const prompt = `You are writing a short follow-up email for ${senderName} from OxyScale (${ctx.companyDescription}) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
 
@@ -358,27 +505,23 @@ ${senderFirstName} just tried calling this person and left a voicemail. Now writ
 ${EMAIL_STYLE_GUIDE}
 ${previousEmailsSection}
 ${playbookSection}
+${renderContext}
+${ITALIC_ACCENT_INSTRUCTION}
 
-## Key points to cover
-1. Mention you just tried calling and left a voicemail
-2. Very briefly introduce OxyScale and what you do, tailored to their industry if playbook context is available above
-3. If playbook context is available, mention 1-2 specific pain points that are relevant to their business. Frame it as "if any of these sound familiar" rather than assuming.
-4. End with a soft invite to book a chat: "If you're keen for a quick ${ctx.calendlyDuration} minute chat to see where AI could help in your business, feel free to book a time here: ${ctx.calendlyLink}"
-5. Keep it casual, short, and non-pushy
+## Structure
+1. Mention you just tried calling and left a voicemail.
+2. Very briefly introduce OxyScale, tailored to their industry if playbook context is available above.
+3. If playbook context is available, mention 1-2 specific outcomes that would matter for their business. Frame as "if any of this sounds useful" rather than assuming pain.
+4. Forward-looking close per the render-context constraints above.
+5. Sign off with "${ctx.signOff},"
 
-## Rules
-- Keep it under 100 words. This is a voicemail follow-up, not a sales pitch.
-- The Calendly link (${ctx.calendlyLink}) MUST appear in the email body. Never skip it.
-- No greeting line (no "Hi [name]," as it is added automatically).
-- No signature block.
-- Sound human. One person reaching out to another.
-- Sign off with "${ctx.signOff},"
+Total length under 110 words.
 
 ## Output format
 Return ONLY valid JSON in this exact format, no other text:
 {
-  "subject": "Short casual subject line, 5-7 words. e.g. 'Just tried giving you a call', 'Quick voicemail follow up'",
-  "body": "The email body. Plain text only."
+  "subject": "Short casual subject line, 5-7 words. e.g. 'Just tried giving you a call', 'Quick voicemail follow up'. Never include 'OxyScale'.",
+  "body": "The email body, plain text. No greeting, no signature. One italic-accented outcome phrase in single asterisks per the rule. Never use em dashes."
 }`;
 
   try {
@@ -396,7 +539,7 @@ Return ONLY valid JSON in this exact format, no other text:
     const durationMs = Date.now() - startTime;
     logger.error(
       { leadName, durationMs, error: error instanceof Error ? error.message : String(error) },
-      'Voicemail email draft failed'
+      'Voicemail email draft failed',
     );
     throw error;
   }
@@ -409,14 +552,14 @@ export async function draftEmailFromInstructions(
   leadName: string,
   leadCompany: string | null,
   leadCategory: string | null,
-  existingContext?: string
+  existingContext?: string,
 ): Promise<EmailDraftResult> {
   const startTime = Date.now();
   const firstName = leadName.split(' ')[0];
 
   logger.info(
     { leadName, leadCompany, instructionLength: instructions.length },
-    'Starting email draft from instructions'
+    'Starting email draft from instructions',
   );
 
   const playbookSection = getCategoryPrompt(leadCategory);
@@ -429,6 +572,7 @@ Jordan has given you these instructions on what the email should say:
 
 ${EMAIL_STYLE_GUIDE}
 ${playbookSection}
+${ITALIC_ACCENT_INSTRUCTION}
 
 ${existingContext ? `## Context about this lead (previous interactions)\n${existingContext}\n` : ''}
 
@@ -441,12 +585,13 @@ ${existingContext ? `## Context about this lead (previous interactions)\n${exist
 - No greeting line (no "Hi ${firstName}," as it is added automatically).
 - No signature block.
 - Sign off with "${ctx.signOff},"
+- Never use em dashes. Comma, full stop, or semicolon instead.
 
 ## Output format
 Return ONLY valid JSON in this exact format, no other text:
 {
-  "subject": "Short, casual subject line under 8 words. No em dashes.",
-  "body": "The email body. Plain text only. Keep it concise and natural."
+  "subject": "Short, casual subject line under 8 words. Never include 'OxyScale'. No em dashes.",
+  "body": "The email body, plain text only. Concise and natural. One italic-accented outcome phrase in single asterisks per the rule above (skip if the email genuinely has no outcome moment, e.g. a quick logistics note)."
 }`;
 
   try {
@@ -460,7 +605,7 @@ Return ONLY valid JSON in this exact format, no other text:
     const durationMs = Date.now() - startTime;
     logger.info(
       { leadName, durationMs, subjectLength: result.subject.length, bodyLength: result.body.length },
-      'Email draft from instructions completed'
+      'Email draft from instructions completed',
     );
 
     return result;
@@ -468,7 +613,7 @@ Return ONLY valid JSON in this exact format, no other text:
     const durationMs = Date.now() - startTime;
     logger.error(
       { leadName, durationMs, error: error instanceof Error ? error.message : String(error) },
-      'Email draft from instructions failed'
+      'Email draft from instructions failed',
     );
     throw error;
   }
@@ -542,14 +687,6 @@ export async function summariseAndPersistCall(callLogId: number, leadId: number)
       callLogId,
     );
 
-    // Persist rolling relationship summary on the lead, capped to
-    // ~16 KB. Without a cap a chatty lead with hundreds of calls would
-    // grow consolidated_summary without bound, slow the lead profile
-    // page, and inflate every Claude prompt that includes prior
-    // context. The truncation keeps the most recent material (the
-    // summarisation prompt is told to lead with the latest call) and
-    // appends a clear marker so future summarisations know they're
-    // working from a clipped history.
     const SUMMARY_CAP = 16_000;
     let summary = result.summary;
     if (summary.length > SUMMARY_CAP) {
@@ -564,7 +701,6 @@ export async function summariseAndPersistCall(callLogId: number, leadId: number)
 
     logger.info({ callLogId, leadId }, 'Post-Whisper summarisation persisted');
   } catch (error) {
-    // Never throw — this runs off the main request path.
     logger.error(
       {
         callLogId,
@@ -589,9 +725,6 @@ export async function summariseAndPersistCall(callLogId: number, leadId: number)
 export async function draftAndStoreEmailForCall(callLogId: number, leadId: number): Promise<void> {
   const db = getDb();
 
-  // Find the pending draft for this call. If none, nothing to do —
-  // the dispositions we care about (interested / voicemail) always
-  // create a pending draft row at disposition time.
   const draft = db
     .prepare('SELECT id, disposition, status FROM email_drafts WHERE call_log_id = ?')
     .get(callLogId) as { id: number; disposition: string; status: string } | undefined;
@@ -601,14 +734,12 @@ export async function draftAndStoreEmailForCall(callLogId: number, leadId: numbe
     return;
   }
 
-  // Idempotency: never overwrite a ready/sent/discarded draft.
   if (draft.status !== 'pending' && draft.status !== 'failed') {
     logger.info({ callLogId, draftId: draft.id, status: draft.status }, 'Email draft already resolved — skipping');
     return;
   }
 
   try {
-    // Fetch lead + call_log + recent style-matching emails.
     const lead = db
       .prepare('SELECT name, company, email, category FROM leads WHERE id = ?')
       .get(leadId) as { name: string; company: string | null; email: string | null; category: string | null } | undefined;
@@ -621,8 +752,6 @@ export async function draftAndStoreEmailForCall(callLogId: number, leadId: numbe
       .prepare('SELECT transcript, summary, user_id FROM call_logs WHERE id = ?')
       .get(callLogId) as { transcript: string | null; summary: string | null; user_id: number | null } | undefined;
 
-    // Sender identity = whoever made this call. Falls back to Jordan's
-    // name if the call has no user_id (legacy rows pre-auth).
     const sender = callLog?.user_id
       ? (db
           .prepare('SELECT name FROM users WHERE id = ?')
@@ -634,8 +763,6 @@ export async function draftAndStoreEmailForCall(callLogId: number, leadId: numbe
     const summary = callLog?.summary || '';
 
     if (transcript.length < 20 && draft.disposition === 'interested') {
-      // Interested disposition but no meaningful transcript yet — don't fabricate.
-      // Mark as failed with a retry-able reason.
       throw new Error('Transcript unavailable — cannot draft from empty call audio');
     }
 
@@ -651,9 +778,14 @@ export async function draftAndStoreEmailForCall(callLogId: number, leadId: numbe
       ? recentEmailsRows.map((e) => `Subject: ${e.subject}\n${e.body_snippet}`).join('\n---\n')
       : undefined;
 
+    // Compute the toggle defaults for this draft based on the lead's
+    // category. Header + book-a-call default ON; capabilities default ON
+    // only when the category has a configured CTA URL.
+    const mode = computeInitialDraftMode(lead.category);
+
     let result: EmailDraftResult;
     if (draft.disposition === 'voicemail') {
-      result = await draftVoicemailEmail(lead.name, lead.company, lead.category, previousEmails, senderName);
+      result = await draftVoicemailEmail(lead.name, lead.company, lead.category, previousEmails, senderName, mode);
     } else {
       result = await draftFollowUpEmail(
         transcript,
@@ -664,17 +796,32 @@ export async function draftAndStoreEmailForCall(callLogId: number, leadId: numbe
         previousEmails,
         lead.category,
         senderName,
+        mode,
       );
     }
 
     db.prepare(
       `UPDATE email_drafts
        SET subject = ?, body = ?, to_email = COALESCE(to_email, ?),
+           include_after_call_header = ?, include_capabilities = ?, include_book_a_call = ?,
            status = 'ready', generated_at = ?, error_message = NULL, updated_at = ?
        WHERE id = ?`,
-    ).run(result.subject, result.body, lead.email, new Date().toISOString(), new Date().toISOString(), draft.id);
+    ).run(
+      result.subject,
+      result.body,
+      lead.email,
+      mode.includeAfterCallHeader ? 1 : 0,
+      mode.includeCapabilities ? 1 : 0,
+      mode.includeBookACall ? 1 : 0,
+      new Date().toISOString(),
+      new Date().toISOString(),
+      draft.id,
+    );
 
-    logger.info({ callLogId, leadId, draftId: draft.id }, 'Email draft generated and stored in Email Bank');
+    logger.info(
+      { callLogId, leadId, draftId: draft.id, mode },
+      'Email draft generated and stored in Email Bank',
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error({ callLogId, leadId, draftId: draft.id, error: message }, 'Email draft generation failed');

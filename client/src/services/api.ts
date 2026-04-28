@@ -604,6 +604,12 @@ export interface CategoryPrompt {
   id: number;
   category: string;
   prompt: string;
+  /** Capabilities-document URL the blue button points to. Null when no
+   *  CTA is configured for this category — the toggle stays hidden in
+   *  the Email Bank for leads in this category. */
+  cta_doc_url: string | null;
+  cta_doc_label: string | null;
+  cta_intro: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -612,10 +618,18 @@ export async function getCategoryPrompts(): Promise<CategoryPrompt[]> {
   return request<CategoryPrompt[]>('/settings/prompts');
 }
 
-export async function saveCategoryPrompt(category: string, prompt: string): Promise<CategoryPrompt> {
+export async function saveCategoryPrompt(
+  category: string,
+  data: {
+    prompt: string;
+    ctaDocUrl?: string | null;
+    ctaDocLabel?: string | null;
+    ctaIntro?: string | null;
+  },
+): Promise<CategoryPrompt> {
   return request<CategoryPrompt>(`/settings/prompts/${encodeURIComponent(category)}`, {
     method: 'PUT',
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify(data),
   });
 }
 
@@ -654,11 +668,30 @@ export async function updateEmailDraft(
     subject?: string;
     body?: string;
     suggestedStage?: 'follow_up' | 'call_booked';
+    includeAfterCallHeader?: boolean;
+    includeCapabilities?: boolean;
+    includeBookACall?: boolean;
   },
 ): Promise<EmailDraft> {
   return request<EmailDraft>(`/email-drafts/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
+  });
+}
+
+export async function previewEmailDraft(
+  id: number,
+  overrides: {
+    subject?: string;
+    body?: string;
+    includeAfterCallHeader?: boolean;
+    includeCapabilities?: boolean;
+    includeBookACall?: boolean;
+  },
+): Promise<{ html: string }> {
+  return request<{ html: string }>(`/email-drafts/${id}/preview`, {
+    method: 'POST',
+    body: JSON.stringify(overrides),
   });
 }
 

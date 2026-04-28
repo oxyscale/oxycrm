@@ -18,6 +18,7 @@ import pino from 'pino';
 // Import database initialisation (runs schema creation on import)
 import { getDb } from './db/index.js';
 import { seedUsersIfEmpty } from './db/seed-users.js';
+import { seedManufacturingIfMissing } from './db/seed-manufacturing.js';
 import { requireAuth } from './middleware/auth.js';
 import authRouter from './routes/auth.js';
 
@@ -269,6 +270,14 @@ const server = app.listen(PORT, () => {
     seedUsersIfEmpty(getDb());
   } catch (err) {
     logger.error({ err }, 'User seeding failed — login will not work until resolved');
+  }
+
+  // Seed the Manufacturing playbook + CTA URL + book-a-call URL on
+  // first boot. Idempotent — never overwrites edits made via the UI.
+  try {
+    seedManufacturingIfMissing(getDb());
+  } catch (err) {
+    logger.error({ err }, 'Manufacturing seed failed (non-blocking)');
   }
 
   // Start Gmail auto-sync in the background.

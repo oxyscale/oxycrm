@@ -34,6 +34,9 @@ export default function SettingsPage() {
   const [loadingPrompts, setLoadingPrompts] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [promptDraft, setPromptDraft] = useState('');
+  const [ctaDocUrl, setCtaDocUrl] = useState('');
+  const [ctaDocLabel, setCtaDocLabel] = useState('');
+  const [ctaIntro, setCtaIntro] = useState('');
   const [savingPrompt, setSavingPrompt] = useState(false);
   const [savedPrompt, setSavedPrompt] = useState(false);
   const [newCategory, setNewCategory] = useState('');
@@ -112,13 +115,21 @@ export default function SettingsPage() {
     setSavedPrompt(false);
     const existing = prompts.find((p) => p.category === category);
     setPromptDraft(existing?.prompt || '');
+    setCtaDocUrl(existing?.cta_doc_url || '');
+    setCtaDocLabel(existing?.cta_doc_label || '');
+    setCtaIntro(existing?.cta_intro || '');
   };
 
   const handleSavePrompt = async () => {
     if (!activeCategory) return;
     setSavingPrompt(true);
     try {
-      const result = await api.saveCategoryPrompt(activeCategory, promptDraft);
+      const result = await api.saveCategoryPrompt(activeCategory, {
+        prompt: promptDraft,
+        ctaDocUrl: ctaDocUrl,
+        ctaDocLabel: ctaDocLabel,
+        ctaIntro: ctaIntro,
+      });
       setPrompts((prev) => {
         const idx = prev.findIndex((p) => p.category === activeCategory);
         if (idx >= 0) {
@@ -336,6 +347,59 @@ export default function SettingsPage() {
                     className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
                   />
                 </div>
+
+                {/* Capabilities CTA — populated for industries that have a hosted capabilities doc */}
+                <div className="mt-6 border-t border-hair-soft pt-5">
+                  <div className="mb-3">
+                    <label className="text-ink-muted text-sm font-medium block">
+                      Capabilities document CTA <span className="text-ink-dim font-normal">(optional)</span>
+                    </label>
+                    <p className="text-ink-dim text-xs mt-1.5 leading-relaxed">
+                      When configured, leads in this category get a "Include capabilities document" toggle in the Email Bank that drops a blue button into the email linking to this URL. Leave blank to keep the toggle hidden.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-ink-dim text-xs font-medium block mb-1.5 uppercase tracking-wider">
+                        URL
+                      </label>
+                      <input
+                        type="url"
+                        value={ctaDocUrl}
+                        onChange={(e) => { setCtaDocUrl(e.target.value); setSavedPrompt(false); }}
+                        placeholder="https://manufacturing.oxyscale.ai"
+                        className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-ink-dim text-xs font-medium block mb-1.5 uppercase tracking-wider">
+                        Button label
+                      </label>
+                      <input
+                        type="text"
+                        value={ctaDocLabel}
+                        onChange={(e) => { setCtaDocLabel(e.target.value); setSavedPrompt(false); }}
+                        placeholder="View capabilities document"
+                        className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-ink-dim text-xs font-medium block mb-1.5 uppercase tracking-wider">
+                        Intro line
+                      </label>
+                      <textarea
+                        value={ctaIntro}
+                        onChange={(e) => { setCtaIntro(e.target.value); setSavedPrompt(false); }}
+                        placeholder="A deeper look at how we work with manufacturers and the operating system we'd build for you."
+                        rows={2}
+                        className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="bg-paper border border-hair-soft rounded-xl p-12 text-center">
@@ -423,6 +487,12 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-5">
+            <SettingsField
+              label='"Book a call" button URL'
+              value={settings.book_a_call_url || ''}
+              onChange={(v) => updateSetting('book_a_call_url', v)}
+              description="Campaign-wide Calendly link the black 'Book a call' button drops into emails. Same link goes out regardless of which user sends."
+            />
             <SettingsField
               label="Sign-off Style"
               value={settings.email_sign_off || ''}

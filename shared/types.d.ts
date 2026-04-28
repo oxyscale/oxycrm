@@ -190,6 +190,9 @@ export interface EmailDraft {
     generatedAt: string | null;
     sentAt: string | null;
     errorMessage: string | null;
+    includeAfterCallHeader: boolean;
+    includeCapabilities: boolean;
+    includeBookACall: boolean;
     createdAt: string;
     updatedAt: string;
 }
@@ -198,5 +201,6 @@ export interface EmailDraftWithLead extends EmailDraft {
     leadCompany: string | null;
     leadPhone: string;
     leadCategory: string | null;
+    categoryHasCta: boolean;
 }
 //# sourceMappingURL=types.d.ts.map

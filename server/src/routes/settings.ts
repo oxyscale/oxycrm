@@ -119,6 +119,9 @@ router.get('/prompts/:category', (req, res) => {
 
 const promptSchema = z.object({
   prompt: z.string().default(''),
+  ctaDocUrl: z.string().nullable().optional(),
+  ctaDocLabel: z.string().nullable().optional(),
+  ctaIntro: z.string().nullable().optional(),
 });
 
 router.put('/prompts/:category', (req, res) => {
@@ -127,15 +130,24 @@ router.put('/prompts/:category', (req, res) => {
     const data = promptSchema.parse(req.body);
     const db = getDb();
 
+    // Normalise empty strings to NULL so getCategoryCta() correctly
+    // treats "no URL configured" as no CTA available.
+    const ctaDocUrl = data.ctaDocUrl?.trim() || null;
+    const ctaDocLabel = data.ctaDocLabel?.trim() || null;
+    const ctaIntro = data.ctaIntro?.trim() || null;
+
     db.prepare(`
-      INSERT INTO category_prompts (category, prompt, updated_at)
-      VALUES (?, ?, datetime('now'))
+      INSERT INTO category_prompts (category, prompt, cta_doc_url, cta_doc_label, cta_intro, updated_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(category) DO UPDATE SET
         prompt = excluded.prompt,
+        cta_doc_url = excluded.cta_doc_url,
+        cta_doc_label = excluded.cta_doc_label,
+        cta_intro = excluded.cta_intro,
         updated_at = excluded.updated_at
-    `).run(category, data.prompt);
+    `).run(category, data.prompt, ctaDocUrl, ctaDocLabel, ctaIntro);
 
-    logger.info({ category }, 'Category prompt saved');
+    logger.info({ category, hasCta: !!ctaDocUrl }, 'Category prompt saved');
 
     const result = db.prepare('SELECT * FROM category_prompts WHERE category = ?').get(category);
     res.json(result);
