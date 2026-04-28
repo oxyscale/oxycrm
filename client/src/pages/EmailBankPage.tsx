@@ -568,15 +568,7 @@ export default function EmailBankPage() {
             {/* Editor — col-span-4 */}
             <div className="col-span-4">
               <PanelCard
-                eyebrow={`${selected.disposition.toUpperCase()} · READY`}
-                title={
-                  <span className="flex items-center gap-2">
-                    {selected.leadName}
-                    {selected.leadCompany && (
-                      <span className="text-ink-muted font-normal">· {selected.leadCompany}</span>
-                    )}
-                  </span>
-                }
+                eyebrow={selected.disposition.toUpperCase()}
                 elevated
                 right={
                   <button
@@ -587,6 +579,17 @@ export default function EmailBankPage() {
                   </button>
                 }
               >
+                {/* Lead identity row — sits between the panel header and the form
+                    so Jordan can see who he's emailing while batching through a queue. */}
+                <div className="pb-4 mb-4 border-b border-hair-soft">
+                  <h3 className="text-ink text-[20px] font-medium leading-tight tracking-card">
+                    {selected.leadName}
+                  </h3>
+                  {selected.leadCompany && (
+                    <p className="text-ink-muted text-sm mt-1">{selected.leadCompany}</p>
+                  )}
+                </div>
+
                 <div className="space-y-4">
                   {!editTo && (
                     <div className="bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.24)] rounded-xl p-3 flex items-start gap-2">
