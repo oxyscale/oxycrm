@@ -8,11 +8,13 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
+  Check,
   Clock,
   Sparkles,
   Inbox,
   ExternalLink,
   Eye,
+  Save,
 } from 'lucide-react';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
@@ -43,6 +45,8 @@ export default function EmailBankPage() {
   const [editIncludeCapabilities, setEditIncludeCapabilities] = useState(false);
   const [editIncludeBookACall, setEditIncludeBookACall] = useState(true);
   const [dirty, setDirty] = useState(false);
+  const [savingExplicit, setSavingExplicit] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
   const [sending, setSending] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [discarding, setDiscarding] = useState(false);
@@ -270,6 +274,34 @@ export default function EmailBankPage() {
       setActionError(err instanceof Error ? err.message : 'Retry failed');
     } finally {
       setRetrying(false);
+    }
+  };
+
+  // Explicit save — for when Jordan wants to lock in edits without sending
+  // and without waiting for the on-blur auto-save to fire.
+  const handleSave = async () => {
+    if (!selected) return;
+    setSavingExplicit(true);
+    setActionError(null);
+    try {
+      await api.updateEmailDraft(selected.id, {
+        subject: editSubject,
+        body: editBody,
+        toEmail: editTo || null,
+        ccEmail: editCc || null,
+        suggestedStage: editStage,
+        includeAfterCallHeader: editIncludeHeader,
+        includeCapabilities: editIncludeCapabilities,
+        includeBookACall: editIncludeBookACall,
+      });
+      setDirty(false);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1800);
+      await load();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSavingExplicit(false);
     }
   };
 
@@ -719,7 +751,8 @@ export default function EmailBankPage() {
                     <div className="flex items-center gap-2 text-ink-dim text-xs">
                       <Clock size={12} />
                       Generated {selected.generatedAt ? formatAge(selected.generatedAt) : 'just now'}
-                      {dirty && <span className="text-warn">· unsaved edits</span>}
+                      {dirty && !savedFlash && <span className="text-warn">· unsaved edits</span>}
+                      {savedFlash && <span className="text-ok">· saved</span>}
                     </div>
                     <div className="flex items-center gap-2">
                       <PillButton
@@ -731,6 +764,22 @@ export default function EmailBankPage() {
                         disabled={discarding}
                       >
                         Discard
+                      </PillButton>
+                      <PillButton
+                        variant="outline"
+                        size="sm"
+                        trailing="none"
+                        icon={
+                          savingExplicit
+                            ? <Loader2 size={13} className="animate-spin" />
+                            : savedFlash
+                            ? <Check size={13} />
+                            : <Save size={13} />
+                        }
+                        onClick={handleSave}
+                        disabled={!dirty || savingExplicit || sending}
+                      >
+                        {savingExplicit ? 'Saving…' : savedFlash ? 'Saved' : 'Save'}
                       </PillButton>
                       <PillButton
                         variant="primary"

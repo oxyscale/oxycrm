@@ -32,9 +32,7 @@ export default function PanelCard({
       } ${className}`}
     >
       {(eyebrow || title || right) && (
-        <header
-          className={`flex items-center justify-between gap-4 ${padded ? 'px-6 pt-6 pb-4' : ''}`}
-        >
+        <header className="flex items-center justify-between gap-4 px-6 pt-6 pb-4">
           <div className="flex items-center gap-3 min-w-0">
             {eyebrow && <EyebrowLabel variant="bare">{eyebrow}</EyebrowLabel>}
             {title && (
