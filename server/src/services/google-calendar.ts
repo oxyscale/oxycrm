@@ -150,13 +150,24 @@ export async function isAuthenticatedAndValid(opts?: { force?: boolean }): Promi
       const merged = { ...tokens, ...newTokens };
       saveTokens(merged);
     });
-    // Validate using a scope we actually have (calendar.events).
-    // userinfo.get() needs userinfo.profile which we never requested,
-    // so it would 401 even when tokens are perfectly fine for our use.
-    // Listing one calendar entry is the cheapest call that exercises
-    // the access token + refresh path end-to-end.
+    // Validate against a method that maps to a scope we actually
+    // requested (calendar.events). The previous implementation called
+    // calendarList.list, which requires calendar.readonly / calendar /
+    // calendar.calendarlist scopes — none of which we ask for. That
+    // call would 403 with insufficient_scope on every check, the
+    // 5-min cache locked false, and the Reconnect Calendar chip
+    // sat on the home page forever even when the actual booking
+    // feature was working fine.
+    //
+    // events.list against the primary calendar uses calendar.events,
+    // exercises the same access-token + refresh path the booking
+    // flow does, and returns 200 immediately when tokens are valid.
     const calendar = google.calendar({ version: 'v3', auth: client });
-    await calendar.calendarList.list({ maxResults: 1 });
+    await calendar.events.list({
+      calendarId: 'primary',
+      maxResults: 1,
+      timeMin: new Date().toISOString(),
+    });
     validityCache = { value: true, checkedAt: Date.now() };
     return true;
   } catch (err) {
