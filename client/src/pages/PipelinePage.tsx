@@ -293,7 +293,7 @@ export default function PipelinePage() {
               return (
                 <div
                   key={stage.key}
-                  className="w-72 flex-shrink-0 flex flex-col bg-paper border border-hair-soft rounded-xl overflow-hidden h-[calc(100vh-220px)] min-h-[600px]"
+                  className="w-72 flex-shrink-0 flex flex-col bg-paper border border-hair-soft rounded-xl overflow-hidden"
                 >
                   {/* Column header */}
                   <div className={`${stage.bgTint} border-b border-hair-soft`}>
@@ -307,8 +307,8 @@ export default function PipelinePage() {
                     </div>
                   </div>
 
-                  {/* Scrollable card list */}
-                  <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                  {/* Card list — grows with content; whole page scrolls */}
+                  <div className="p-3 space-y-2.5">
                     {leads.length === 0 ? (
                       <div className="py-8 text-center">
                         <p className="text-ink-dim text-xs">No leads</p>
