@@ -188,7 +188,7 @@ export default function PipelinePage() {
   // ── Render ──────────────────────────────────────────────────
 
   return (
-    <div className="p-10 h-full flex flex-col bg-cream">
+    <div className="p-10 flex flex-col bg-cream min-h-full">
       {/* Header */}
       <div className="mb-8 flex-shrink-0">
         <EyebrowLabel variant="pill" className="mb-5">
@@ -286,14 +286,14 @@ export default function PipelinePage() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-x-auto pb-4">
-          <div className="flex gap-4 min-w-max h-full">
+        <div className="overflow-x-auto pb-4">
+          <div className="flex gap-4 min-w-max">
             {STAGES.map((stage) => {
               const leads = pipeline[stage.key] || [];
               return (
                 <div
                   key={stage.key}
-                  className="w-72 flex-shrink-0 flex flex-col bg-paper border border-hair-soft rounded-xl overflow-hidden"
+                  className="w-72 flex-shrink-0 flex flex-col bg-paper border border-hair-soft rounded-xl overflow-hidden h-[calc(100vh-220px)] min-h-[600px]"
                 >
                   {/* Column header */}
                   <div className={`${stage.bgTint} border-b border-hair-soft`}>
