@@ -226,6 +226,33 @@ router.get('/categories', (req, res, next) => {
 });
 
 /**
+ * POST /api/leads/categories/rename
+ * Bulk-renames a category. All leads where category = `from` are updated to category = `to`.
+ * Useful for merging duplicates (e.g. "Styling" -> "Property Styling").
+ * Body: { from: string, to: string }
+ */
+const renameCategorySchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+});
+
+router.post('/categories/rename', (req, res, next) => {
+  try {
+    const db = getDb();
+    const { from, to } = renameCategorySchema.parse(req.body);
+
+    const result = db.prepare(
+      "UPDATE leads SET category = @to, updated_at = datetime('now') WHERE category = @from"
+    ).run({ from, to });
+
+    logger.info({ from, to, updated: result.changes }, 'Category renamed in bulk');
+    res.json({ from, to, updated: result.changes });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /api/leads/search
  * Searches for leads by phone number (partial match) OR by general text query.
  *
