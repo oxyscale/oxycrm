@@ -3,7 +3,7 @@
 **You are picking up an internal CRM + cold-calling tool that is live in production.** This document gets you from zero context to making safe changes. Read it end-to-end before responding to your first message. Last updated: **2026-04-28**.
 
 Production: `https://oxycrm-production.up.railway.app`
-Repo: `https://github.com/oxyscale/oxycrm` (on the user's machine at `/Users/<user>/oxyscale/internal/CRMdialler`)
+Repo: `https://github.com/oxyscale/oxycrm` — clone it wherever you keep your projects. All paths in this doc are **relative to the repo root** (the folder containing `CLAUDE.md`, `client/`, `server/`).
 
 ---
 
@@ -17,9 +17,9 @@ In this order:
 4. **`docs/PROJECT_CONTEXT.md`** — deep architecture + feature inventory (some sections may be stale; this file is the authoritative summary).
 5. **`docs/HANDOVER.md`** — narrative session-to-session handover from the engineer who shipped auth + the major hardening pass.
 6. **`docs/REBRAND-NOTES.md`** — light-editorial rebrand decisions if you're touching visual surfaces.
-7. **`~/.claude/projects/-Users-<user>-oxyscale-internal-CRMdialler/memory/MEMORY.md`** — auto-memory with the user's preferences. Read it; don't print it.
+7. **Your auto-memory file** — Claude Code stores per-project memory under `~/.claude/projects/` (the subfolder name encodes the absolute path of the repo, so it varies per machine). Look for a `memory/MEMORY.md` inside the folder that matches this project. Read it; don't print it. Update it via the Write tool when you learn lasting facts about the user, their workflow, or the project.
 
-Brand source of truth lives outside this repo at `/Users/<user>/oxyscale/internal/brand/BRAND-GUIDELINES.md`. CLAUDE.md mirrors the relevant bits but the brand guide wins on conflict.
+Brand source of truth (`BRAND-GUIDELINES.md`) lives **outside this repo** in a sibling brand folder owned by the OxyScale team. It may not be present on every machine. `CLAUDE.md` in the repo mirrors the relevant brand rules — treat that as authoritative when the standalone brand file isn't available. If you have access to it, the brand guide wins on conflict; otherwise rely on `CLAUDE.md`.
 
 ---
 
