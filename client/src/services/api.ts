@@ -72,10 +72,12 @@ async function request<T>(
 export async function getLeads(params?: {
   leadType?: LeadType;
   status?: string;
+  category?: string;
 }): Promise<Lead[]> {
   const searchParams = new URLSearchParams();
   if (params?.leadType) searchParams.set('leadType', params.leadType);
   if (params?.status) searchParams.set('status', params.status);
+  if (params?.category) searchParams.set('category', params.category);
   const query = searchParams.toString();
   return request<Lead[]>(`/leads${query ? `?${query}` : ''}`);
 }
