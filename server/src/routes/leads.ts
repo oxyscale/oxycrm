@@ -253,6 +253,152 @@ router.post('/categories/rename', (req, res, next) => {
 });
 
 /**
+ * POST /api/leads/dedupe
+ * Finds and merges duplicate leads.
+ *
+ * Strategy:
+ *   - Group by normalised phone number when phone is present.
+ *   - Group by lowercased name+company when phone is missing/empty.
+ *   - In each group with >1 lead, pick a survivor (most call_logs, then oldest).
+ *   - Reassign all child rows (call_logs, notes, activities, emails_sent,
+ *     callbacks, projects) to the survivor, then delete the duplicates.
+ *
+ * Body: { dryRun?: boolean } — defaults to false. When true, returns the
+ *       groups that WOULD be merged without changing any data.
+ */
+const dedupeSchema = z.object({
+  dryRun: z.boolean().optional().default(false),
+});
+
+interface DedupeGroupRow {
+  group_key: string;
+  ids: string;
+  names: string;
+  phones: string;
+}
+
+router.post('/dedupe', (req, res, next) => {
+  try {
+    const db = getDb();
+    const { dryRun } = dedupeSchema.parse(req.body || {});
+
+    // Build a per-lead "match key" then group:
+    //   - phone-key when phone has 4+ digits (after stripping non-digits)
+    //   - otherwise namekey: lower(trim(name)) + '|' + lower(trim(company))
+    // We do it in two passes to keep the SQL readable.
+    const phoneGroups = db.prepare(`
+      SELECT
+        'phone:' || REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') AS group_key,
+        GROUP_CONCAT(id) AS ids,
+        GROUP_CONCAT(name, '||') AS names,
+        GROUP_CONCAT(phone, '||') AS phones
+      FROM leads
+      WHERE phone IS NOT NULL
+        AND LENGTH(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '')) >= 4
+      GROUP BY group_key
+      HAVING COUNT(*) > 1
+    `).all() as DedupeGroupRow[];
+
+    const nameGroups = db.prepare(`
+      SELECT
+        'name:' || LOWER(TRIM(name)) || '|' || LOWER(COALESCE(TRIM(company), '')) AS group_key,
+        GROUP_CONCAT(id) AS ids,
+        GROUP_CONCAT(name, '||') AS names,
+        GROUP_CONCAT(COALESCE(phone, ''), '||') AS phones
+      FROM leads
+      WHERE phone IS NULL
+         OR LENGTH(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '')) < 4
+      GROUP BY group_key
+      HAVING COUNT(*) > 1
+    `).all() as DedupeGroupRow[];
+
+    const allGroups = [...phoneGroups, ...nameGroups];
+
+    // For each group, pick the survivor: lead id with most call_logs then oldest id.
+    interface Plan {
+      groupKey: string;
+      survivorId: number;
+      duplicateIds: number[];
+      sample: { name: string; phone: string };
+    }
+
+    const pickSurvivor = db.prepare(`
+      SELECT l.id, COUNT(cl.id) AS call_count
+      FROM leads l
+      LEFT JOIN call_logs cl ON cl.lead_id = l.id
+      WHERE l.id IN (SELECT value FROM json_each(@ids))
+      GROUP BY l.id
+      ORDER BY call_count DESC, l.id ASC
+      LIMIT 1
+    `);
+
+    const plans: Plan[] = allGroups.map((g) => {
+      const ids = g.ids.split(',').map((s) => parseInt(s, 10)).filter((n) => !isNaN(n));
+      const survivor = pickSurvivor.get({ ids: JSON.stringify(ids) }) as { id: number } | undefined;
+      const survivorId = survivor?.id ?? ids[0];
+      const duplicateIds = ids.filter((id) => id !== survivorId);
+      const firstName = g.names.split('||')[0] || '';
+      const firstPhone = g.phones.split('||')[0] || '';
+      return {
+        groupKey: g.group_key,
+        survivorId,
+        duplicateIds,
+        sample: { name: firstName, phone: firstPhone },
+      };
+    });
+
+    if (dryRun) {
+      const totalDuplicates = plans.reduce((sum, p) => sum + p.duplicateIds.length, 0);
+      logger.info({ groups: plans.length, totalDuplicates }, 'Dedupe dry-run');
+      res.json({
+        dryRun: true,
+        groups: plans.length,
+        totalDuplicatesToDelete: totalDuplicates,
+        plans: plans.slice(0, 50), // cap response size
+      });
+      return;
+    }
+
+    // Execute the merge in a single transaction. For each plan: reassign all
+    // FK children to survivor, then delete duplicates.
+    const reassignAndDelete = db.transaction((planList: Plan[]) => {
+      const tables = ['call_logs', 'notes', 'activities', 'emails_sent', 'callbacks', 'projects'];
+      let leadsDeleted = 0;
+      let rowsReassigned = 0;
+
+      for (const plan of planList) {
+        for (const dupId of plan.duplicateIds) {
+          for (const table of tables) {
+            const r = db.prepare(`UPDATE ${table} SET lead_id = ? WHERE lead_id = ?`)
+              .run(plan.survivorId, dupId);
+            rowsReassigned += r.changes;
+          }
+          const del = db.prepare('DELETE FROM leads WHERE id = ?').run(dupId);
+          leadsDeleted += del.changes;
+        }
+      }
+
+      return { leadsDeleted, rowsReassigned };
+    });
+
+    const { leadsDeleted, rowsReassigned } = reassignAndDelete(plans);
+
+    logger.info(
+      { groups: plans.length, leadsDeleted, rowsReassigned },
+      'Dedupe complete'
+    );
+    res.json({
+      dryRun: false,
+      groups: plans.length,
+      leadsDeleted,
+      rowsReassigned,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /api/leads/search
  * Searches for leads by phone number (partial match) OR by general text query.
  *
