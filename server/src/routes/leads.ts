@@ -282,37 +282,46 @@ router.post('/dedupe', (req, res, next) => {
     const db = getDb();
     const { dryRun } = dedupeSchema.parse(req.body || {});
 
-    // Build a per-lead "match key" then group:
-    //   - phone-key when phone has 4+ digits (after stripping non-digits)
-    //   - otherwise namekey: lower(trim(name)) + '|' + lower(trim(company))
-    // We do it in two passes to keep the SQL readable.
-    const phoneGroups = db.prepare(`
-      SELECT
-        'phone:' || REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') AS group_key,
-        GROUP_CONCAT(id) AS ids,
-        GROUP_CONCAT(name, '||') AS names,
-        GROUP_CONCAT(phone, '||') AS phones
+    // Normalise every phone in JS: strip non-digits, then take the last 9 digits
+    // (AU mobiles are 9 digits after the leading 0 / +61, so this collapses
+    //  +61 409 136 833, 0409 136 833, 61409136833 etc to the same key).
+    const allLeads = db.prepare(`
+      SELECT id, name, COALESCE(company, '') AS company, COALESCE(phone, '') AS phone
       FROM leads
-      WHERE phone IS NOT NULL
-        AND LENGTH(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '')) >= 4
-      GROUP BY group_key
-      HAVING COUNT(*) > 1
-    `).all() as DedupeGroupRow[];
+    `).all() as { id: number; name: string; company: string; phone: string }[];
 
-    const nameGroups = db.prepare(`
-      SELECT
-        'name:' || LOWER(TRIM(name)) || '|' || LOWER(COALESCE(TRIM(company), '')) AS group_key,
-        GROUP_CONCAT(id) AS ids,
-        GROUP_CONCAT(name, '||') AS names,
-        GROUP_CONCAT(COALESCE(phone, ''), '||') AS phones
-      FROM leads
-      WHERE phone IS NULL
-         OR LENGTH(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '')) < 4
-      GROUP BY group_key
-      HAVING COUNT(*) > 1
-    `).all() as DedupeGroupRow[];
+    const buckets = new Map<string, { ids: number[]; names: string[]; phones: string[] }>();
+    for (const lead of allLeads) {
+      const digits = (lead.phone || '').replace(/\D/g, '');
+      let key: string;
+      if (digits.length >= 9) {
+        key = `phone:${digits.slice(-9)}`;
+      } else {
+        // No usable phone — fall back to name+company match
+        const name = (lead.name || '').trim().toLowerCase();
+        const company = (lead.company || '').trim().toLowerCase();
+        if (!name) continue; // nothing to match on
+        key = `name:${name}|${company}`;
+      }
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = { ids: [], names: [], phones: [] };
+        buckets.set(key, bucket);
+      }
+      bucket.ids.push(lead.id);
+      bucket.names.push(lead.name);
+      bucket.phones.push(lead.phone);
+    }
 
-    const allGroups = [...phoneGroups, ...nameGroups];
+    // Convert to the Plan-input shape and keep only groups with >1 lead.
+    const allGroups: DedupeGroupRow[] = Array.from(buckets.entries())
+      .filter(([, b]) => b.ids.length > 1)
+      .map(([key, b]) => ({
+        group_key: key,
+        ids: b.ids.join(','),
+        names: b.names.join('||'),
+        phones: b.phones.join('||'),
+      }));
 
     // For each group, pick the survivor: lead id with most call_logs then oldest id.
     interface Plan {
