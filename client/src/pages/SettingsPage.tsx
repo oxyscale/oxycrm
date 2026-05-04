@@ -10,6 +10,8 @@ import {
   MessageSquareText,
   Pen,
   Lock,
+  Wrench,
+  AlertTriangle,
 } from 'lucide-react';
 import * as api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -18,7 +20,7 @@ import SectionHeading from '../components/ui/SectionHeading';
 
 // ── Types ───────────────────────────────────────────────────
 
-type Tab = 'prompts' | 'company' | 'email' | 'signature' | 'account';
+type Tab = 'prompts' | 'company' | 'email' | 'signature' | 'cleanup' | 'account';
 
 // ── Main Component ──────────────────────────────────────────
 
@@ -182,6 +184,7 @@ export default function SettingsPage() {
     { key: 'company', label: 'Company Profile', icon: Building2 },
     { key: 'email', label: 'Email Preferences', icon: Mail },
     { key: 'signature', label: 'Email Signature', icon: Pen },
+    { key: 'cleanup', label: 'Lead Cleanup', icon: Wrench },
     { key: 'account', label: 'Account', icon: Lock },
   ];
 
@@ -572,8 +575,202 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {tab === 'cleanup' && <CleanupSection onChanged={loadCategories} />}
+
       {tab === 'account' && <AccountSection />}
 
+    </div>
+  );
+}
+
+// ── Cleanup section — merge categories + dedupe leads ──────────────
+
+function CleanupSection({ onChanged }: { onChanged: () => void }) {
+  const [renameFrom, setRenameFrom] = useState('Styling');
+  const [renameTo, setRenameTo] = useState('Property Styling');
+  const [renaming, setRenaming] = useState(false);
+  const [renameResult, setRenameResult] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
+
+  const [preview, setPreview] = useState<api.DedupeResult | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [dedupeResult, setDedupeResult] = useState<string | null>(null);
+  const [dedupeError, setDedupeError] = useState<string | null>(null);
+
+  const handleRename = async () => {
+    if (!renameFrom.trim() || !renameTo.trim()) return;
+    setRenaming(true);
+    setRenameError(null);
+    setRenameResult(null);
+    try {
+      const r = await api.renameCategory(renameFrom.trim(), renameTo.trim());
+      setRenameResult(`Moved ${r.updated} lead${r.updated === 1 ? '' : 's'} from "${r.from}" to "${r.to}".`);
+      onChanged();
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : 'Rename failed');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const handlePreview = async () => {
+    setPreviewing(true);
+    setDedupeError(null);
+    setDedupeResult(null);
+    try {
+      const r = await api.dedupeLeads(true);
+      setPreview(r);
+    } catch (err) {
+      setDedupeError(err instanceof Error ? err.message : 'Preview failed');
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const handleMerge = async () => {
+    if (!preview || !preview.totalDuplicatesToDelete) return;
+    const confirmed = window.confirm(
+      `Permanently delete ${preview.totalDuplicatesToDelete} duplicate lead${preview.totalDuplicatesToDelete === 1 ? '' : 's'}?\n\n` +
+      `Their call logs, notes, and emails will be reassigned to the survivor lead in each group.\n\n` +
+      `This cannot be undone.`
+    );
+    if (!confirmed) return;
+    setMerging(true);
+    setDedupeError(null);
+    try {
+      const r = await api.dedupeLeads(false);
+      setDedupeResult(`Deleted ${r.leadsDeleted ?? 0} duplicate leads. Reassigned ${r.rowsReassigned ?? 0} child rows to survivors.`);
+      setPreview(null);
+      onChanged();
+    } catch (err) {
+      setDedupeError(err instanceof Error ? err.message : 'Merge failed');
+    } finally {
+      setMerging(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Merge categories */}
+      <div className="bg-paper border border-hair-soft rounded-xl p-6">
+        <h3 className="text-ink font-medium text-base mb-1">Merge a category</h3>
+        <p className="text-ink-muted text-sm mb-4">
+          Move every lead from one category into another. The "from" category will disappear from the dialler tabs once empty.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 max-w-xl">
+          <div>
+            <label className="text-ink-dim text-xs font-medium uppercase tracking-wider block mb-1.5">From</label>
+            <input
+              type="text"
+              value={renameFrom}
+              onChange={(e) => setRenameFrom(e.target.value)}
+              className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all"
+            />
+          </div>
+          <div>
+            <label className="text-ink-dim text-xs font-medium uppercase tracking-wider block mb-1.5">Into</label>
+            <input
+              type="text"
+              value={renameTo}
+              onChange={(e) => setRenameTo(e.target.value)}
+              className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={handleRename}
+          disabled={renaming || !renameFrom.trim() || !renameTo.trim()}
+          className="mt-4 bg-ink text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {renaming ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
+          {renaming ? 'Merging...' : 'Merge category'}
+        </button>
+
+        {renameResult && (
+          <div className="mt-4 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
+            <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />{renameResult}</p>
+          </div>
+        )}
+        {renameError && (
+          <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
+            <p className="text-risk text-sm">{renameError}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Dedupe */}
+      <div className="bg-paper border border-hair-soft rounded-xl p-6">
+        <h3 className="text-ink font-medium text-base mb-1">Find &amp; merge duplicate leads</h3>
+        <p className="text-ink-muted text-sm mb-4">
+          Groups leads by phone number (last 9 digits, so +61 / 0 prefix variants match). For each group, the lead with the most call history is kept; the others are deleted and their call logs, notes, and emails are reassigned to the survivor.
+        </p>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handlePreview}
+            disabled={previewing || merging}
+            className="border border-hair-strong text-ink text-sm font-medium rounded-full px-5 py-2 hover:bg-[rgba(11,13,14,0.03)] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {previewing ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
+            {previewing ? 'Scanning...' : 'Preview duplicates'}
+          </button>
+
+          {preview && (preview.totalDuplicatesToDelete ?? 0) > 0 && (
+            <button
+              onClick={handleMerge}
+              disabled={merging}
+              className="bg-ink text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {merging ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {merging ? 'Merging...' : `Merge ${preview.totalDuplicatesToDelete} duplicate${preview.totalDuplicatesToDelete === 1 ? '' : 's'}`}
+            </button>
+          )}
+        </div>
+
+        {preview && (
+          <div className="mt-4">
+            {(preview.totalDuplicatesToDelete ?? 0) === 0 ? (
+              <div className="bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
+                <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />No duplicates found.</p>
+              </div>
+            ) : (
+              <div className="bg-cream border border-hair-soft rounded-lg p-3">
+                <p className="text-ink-muted text-sm mb-2 flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-warn" />
+                  Found {preview.groups} duplicate group{preview.groups === 1 ? '' : 's'} — {preview.totalDuplicatesToDelete} lead{preview.totalDuplicatesToDelete === 1 ? '' : 's'} would be deleted.
+                </p>
+                {preview.plans && preview.plans.length > 0 && (
+                  <div className="max-h-64 overflow-y-auto mt-2 space-y-1">
+                    {preview.plans.slice(0, 30).map((p) => (
+                      <div key={p.groupKey} className="text-ink-muted text-xs flex items-center justify-between py-1 border-b border-hair-soft last:border-b-0">
+                        <span className="truncate">{p.sample.name}</span>
+                        <span className="text-ink-dim ml-3 flex-shrink-0">{p.sample.phone || 'no phone'} · {p.duplicateIds.length + 1} copies</span>
+                      </div>
+                    ))}
+                    {preview.plans.length > 30 && (
+                      <p className="text-ink-dim text-xs italic pt-2">…and {preview.plans.length - 30} more groups</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {dedupeResult && (
+          <div className="mt-4 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
+            <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />{dedupeResult}</p>
+          </div>
+        )}
+        {dedupeError && (
+          <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
+            <p className="text-risk text-sm">{dedupeError}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

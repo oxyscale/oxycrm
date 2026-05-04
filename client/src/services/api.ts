@@ -128,6 +128,34 @@ export async function getCategories(): Promise<string[]> {
   return request<string[]>('/leads/categories');
 }
 
+export async function renameCategory(from: string, to: string): Promise<{ from: string; to: string; updated: number }> {
+  return request<{ from: string; to: string; updated: number }>('/leads/categories/rename', {
+    method: 'POST',
+    body: JSON.stringify({ from, to }),
+  });
+}
+
+export interface DedupeResult {
+  dryRun: boolean;
+  groups: number;
+  totalDuplicatesToDelete?: number;
+  leadsDeleted?: number;
+  rowsReassigned?: number;
+  plans?: Array<{
+    groupKey: string;
+    survivorId: number;
+    duplicateIds: number[];
+    sample: { name: string; phone: string };
+  }>;
+}
+
+export async function dedupeLeads(dryRun: boolean): Promise<DedupeResult> {
+  return request<DedupeResult>('/leads/dedupe', {
+    method: 'POST',
+    body: JSON.stringify({ dryRun }),
+  });
+}
+
 export async function updateLead(
   id: number,
   data: Partial<Lead>
