@@ -22,6 +22,7 @@ import {
   Send,
   Mic,
   MicOff,
+  PhoneCall,
 } from 'lucide-react';
 import * as api from '../services/api';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
@@ -285,6 +286,17 @@ export default function LeadProfilePage() {
   // Status toggle (not_called <-> called)
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
+  // Manual call logger (records a call_log + runs the disposition flow for
+  // calls made outside the dialler, e.g. on a personal mobile)
+  const [showLogCall, setShowLogCall] = useState(false);
+  const [logCallDisposition, setLogCallDisposition] = useState<
+    'no_answer' | 'voicemail' | 'not_interested' | 'interested'
+  >('interested');
+  const [logCallNote, setLogCallNote] = useState('');
+  const [logCallDuration, setLogCallDuration] = useState<string>('');
+  const [loggingCall, setLoggingCall] = useState(false);
+  const [logCallError, setLogCallError] = useState<string | null>(null);
+
   // ── Load lead ──────────────────────────────────────────────
 
   useEffect(() => {
@@ -418,6 +430,49 @@ export default function LeadProfilePage() {
       console.error('Failed to update temperature:', err);
     } finally {
       setUpdatingTemp(false);
+    }
+  };
+
+  // Log a manual call — calls the existing disposition endpoint, which
+  // creates a real call_log entry, increments call counts, updates the
+  // lead's pipeline stage based on disposition, and runs all the same
+  // downstream logic the dialler uses.
+  const handleLogManualCall = async () => {
+    if (!lead || loggingCall) return;
+    setLoggingCall(true);
+    setLogCallError(null);
+    try {
+      const durationSeconds = logCallDuration.trim()
+        ? Math.max(0, Math.round(parseFloat(logCallDuration) * 60)) // minutes -> seconds
+        : 0;
+      const transcript = logCallNote.trim()
+        ? `[Manually logged call]\n${logCallNote.trim()}`
+        : '[Manually logged call — no notes]';
+
+      await api.disposeLead({
+        leadId: lead.id,
+        disposition: logCallDisposition,
+        callDuration: durationSeconds,
+        transcript,
+      });
+
+      // Reload the lead to pick up status / pipeline changes
+      const refreshed = await api.getLeadById(lead.id);
+      setLead(refreshed);
+
+      // Reset form
+      setLogCallDisposition('interested');
+      setLogCallNote('');
+      setLogCallDuration('');
+      setShowLogCall(false);
+
+      if (tab === 'activity') loadActivities();
+      if (tab === 'calls') loadCalls();
+    } catch (err) {
+      console.error('Failed to log manual call:', err);
+      setLogCallError(err instanceof Error ? err.message : 'Failed to log call');
+    } finally {
+      setLoggingCall(false);
     }
   };
 
@@ -684,6 +739,19 @@ export default function LeadProfilePage() {
           Add Note
         </button>
 
+        {/* Log Manual Call button — for calls made outside the dialler */}
+        <button
+          onClick={() => setShowLogCall((v) => !v)}
+          className={`flex items-center gap-2 border rounded-lg px-4 py-2.5 text-sm transition-all ${
+            showLogCall
+              ? 'bg-sky-wash border-sky-hair text-sky-ink'
+              : 'bg-transparent text-ink-muted border-hair-soft hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
+          }`}
+        >
+          <PhoneCall size={15} />
+          Log Call
+        </button>
+
         {/* Spacer */}
         <div className="flex-1" />
 
@@ -798,6 +866,105 @@ export default function LeadProfilePage() {
           ))}
         </div>
       </div>
+
+      {/* ── Log Manual Call panel ────────────────────────────── */}
+      {showLogCall && (
+        <div className="bg-paper border border-sky-hair rounded-xl p-5 mb-8 -mt-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-ink font-medium text-base flex items-center gap-2">
+                <PhoneCall size={16} className="text-sky-ink" />
+                Log a manual call
+              </h3>
+              <p className="text-ink-muted text-sm mt-0.5">
+                For calls made outside the dialler. Creates a real call record and updates the lead status.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowLogCall(false)}
+              className="text-ink-dim hover:text-ink transition-all"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Disposition pills */}
+          <div className="mb-4">
+            <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-2">What happened?</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {([
+                { value: 'no_answer', label: "Didn't Answer" },
+                { value: 'voicemail', label: 'Left Voicemail' },
+                { value: 'not_interested', label: 'Not Interested' },
+                { value: 'interested', label: 'Interested' },
+              ] as const).map((d) => (
+                <button
+                  key={d.value}
+                  onClick={() => setLogCallDisposition(d.value)}
+                  className={`px-3 py-1.5 rounded-full text-sm border transition-all ${
+                    logCallDisposition === d.value
+                      ? 'bg-ink text-white border-ink'
+                      : 'bg-paper text-ink-muted border-hair-soft hover:border-hair-strong'
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Duration + Note */}
+          <div className="grid grid-cols-[120px_1fr] gap-3 mb-4">
+            <div>
+              <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Duration (min)</p>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={logCallDuration}
+                onChange={(e) => setLogCallDuration(e.target.value)}
+                placeholder="0"
+                className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all"
+              />
+            </div>
+            <div>
+              <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Notes (optional)</p>
+              <textarea
+                value={logCallNote}
+                onChange={(e) => setLogCallNote(e.target.value)}
+                placeholder="What was discussed? Who did you speak to?"
+                rows={3}
+                className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all resize-none"
+              />
+            </div>
+          </div>
+
+          {logCallError && (
+            <div className="mb-3 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg px-3 py-2">
+              <p className="text-risk text-sm">{logCallError}</p>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleLogManualCall}
+              disabled={loggingCall}
+              className="bg-ink text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loggingCall ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {loggingCall ? 'Saving...' : 'Save call'}
+            </button>
+            <button
+              onClick={() => setShowLogCall(false)}
+              disabled={loggingCall}
+              className="text-ink-muted text-sm rounded-full px-4 py-2 hover:bg-[rgba(11,13,14,0.03)] transition-all disabled:opacity-40"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Main content: tabs + sidebar ────────────────────── */}
       <div className="flex gap-8">
