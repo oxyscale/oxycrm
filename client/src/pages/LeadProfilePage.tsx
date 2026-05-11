@@ -282,6 +282,9 @@ export default function LeadProfilePage() {
   // Temperature
   const [updatingTemp, setUpdatingTemp] = useState(false);
 
+  // Status toggle (not_called <-> called)
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+
   // ── Load lead ──────────────────────────────────────────────
 
   useEffect(() => {
@@ -415,6 +418,27 @@ export default function LeadProfilePage() {
       console.error('Failed to update temperature:', err);
     } finally {
       setUpdatingTemp(false);
+    }
+  };
+
+  // Manually toggle the call status — useful when a call happened outside the
+  // dialler (e.g. inbound on the user's mobile) or you want to take a lead
+  // out of the cycler without dispositioning it.
+  const handleToggleStatus = async () => {
+    if (!lead || updatingStatus) return;
+    const next = lead.status === 'called' ? 'not_called' : 'called';
+    setUpdatingStatus(true);
+    try {
+      const updated = await api.updateLead(lead.id, { status: next } as Partial<Lead>);
+      setLead(updated);
+      if (tab === 'activity') loadActivities();
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      const msg = err instanceof Error ? err.message : 'Failed to update status';
+      setFieldUpdateError(msg);
+      setTimeout(() => setFieldUpdateError(null), 4000);
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -1357,18 +1381,24 @@ export default function LeadProfilePage() {
                 <p className="text-ink-muted text-sm capitalize">{lead.leadType}</p>
               </div>
 
-              {/* Status */}
+              {/* Status — clickable to toggle between Not Called and Called */}
               <div>
                 <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Status</p>
-                <span
-                  className={`inline-block text-xs px-2 py-0.5 rounded-full ${
+                <button
+                  onClick={handleToggleStatus}
+                  disabled={updatingStatus}
+                  title={lead.status === 'called'
+                    ? 'Click to mark as Not Called (puts back in cycler)'
+                    : 'Click to mark as Called (removes from cycler)'}
+                  className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full transition-all hover:opacity-80 disabled:opacity-50 ${
                     lead.status === 'called'
-                      ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink'
-                      : 'bg-tray text-ink-muted'
+                      ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink hover:bg-[rgba(10,156,212,0.22)]'
+                      : 'bg-tray text-ink-muted hover:bg-[rgba(11,13,14,0.06)]'
                   }`}
                 >
+                  {updatingStatus && <Loader2 size={10} className="animate-spin" />}
                   {lead.status === 'called' ? 'Called' : 'Not Called'}
-                </span>
+                </button>
               </div>
 
               {/* Pipeline stage */}
