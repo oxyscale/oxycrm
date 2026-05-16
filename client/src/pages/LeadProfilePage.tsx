@@ -132,6 +132,24 @@ function activityColorBar(type: ActivityType) {
   }
 }
 
+// Replace any "YYYY-MM-DD" substrings in human-readable strings with
+// "17th of May 2026" style. Used so the activity timeline reads like a
+// sentence regardless of when the row was written.
+function humaniseDates(text: string): string {
+  return text.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_, y, m, d) => {
+    const day = parseInt(d, 10);
+    const monthName = new Date(Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, day))
+      .toLocaleDateString('en-AU', { month: 'long', timeZone: 'UTC' });
+    const suffix =
+      day % 100 >= 11 && day % 100 <= 13 ? 'th'
+      : day % 10 === 1 ? 'st'
+      : day % 10 === 2 ? 'nd'
+      : day % 10 === 3 ? 'rd'
+      : 'th';
+    return `${day}${suffix} of ${monthName} ${y}`;
+  });
+}
+
 function stageLabel(stage: PipelineStage) {
   return PIPELINE_STAGES.find((s) => s.value === stage)?.label || stage;
 }
@@ -902,7 +920,7 @@ export default function LeadProfilePage() {
                           <p className="text-ink text-sm font-medium">{act.title}</p>
                           {act.description && (
                             <p className="text-ink-muted text-sm mt-1 leading-relaxed">
-                              {act.description}
+                              {humaniseDates(act.description)}
                             </p>
                           )}
                         </div>

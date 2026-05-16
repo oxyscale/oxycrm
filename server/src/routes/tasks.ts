@@ -20,6 +20,25 @@ import pino from 'pino';
 const logger = pino({ name: 'tasks-routes' });
 const router = Router();
 
+// Format a YYYY-MM-DD date as "17th of May 2026" — used in activity
+// timeline descriptions so it reads like a sentence, not a SQL date.
+function formatDueDateLong(yyyymmdd: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(yyyymmdd);
+  if (!match) return yyyymmdd;
+  const [, year, month, day] = match;
+  const d = parseInt(day, 10);
+  const monthName = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, d))
+    .toLocaleDateString('en-AU', { month: 'long', timeZone: 'UTC' });
+  // Ordinal suffix for the day number (1st, 2nd, 3rd, 4th ... 21st ... 31st).
+  const suffix =
+    d % 100 >= 11 && d % 100 <= 13 ? 'th'
+    : d % 10 === 1 ? 'st'
+    : d % 10 === 2 ? 'nd'
+    : d % 10 === 3 ? 'rd'
+    : 'th';
+  return `${d}${suffix} of ${monthName} ${year}`;
+}
+
 // ============================================================
 // Types + mappers
 // ============================================================
@@ -193,7 +212,7 @@ router.post('/leads/:leadId/tasks', async (req, res, next) => {
     `).run(
       leadId,
       `Task scheduled: ${payload.label}`,
-      `Due ${payload.dueDate}${calendarEventId ? ' (added to Google Calendar)' : ''}`
+      `Due ${formatDueDateLong(payload.dueDate)}${calendarEventId ? ' (added to Google Calendar)' : ''}`
     );
 
     const row = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as TaskRow;

@@ -38,6 +38,13 @@ export default function ComposeEmailPage() {
   // AI draft
   const [drafting, setDrafting] = useState(false);
   const [drafted, setDrafted] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+
+  // Transcript context — set when the user arrives here by clicking
+  // "Save and draft email" from the Transcripts tab. We hand the actual
+  // transcript text to Claude so the draft is grounded in what was said.
+  const [transcriptContext, setTranscriptContext] = useState<string | null>(null);
+  const [showTranscriptText, setShowTranscriptText] = useState(false);
 
   // Email fields
   const [greetingName, setGreetingName] = useState('');
@@ -63,12 +70,35 @@ export default function ComposeEmailPage() {
         setLead(data);
         if (data.email) setToEmail(data.email);
         setGreetingName(getContactFirstName(data.name));
+
+        // If the user arrived here from the Transcripts tab via
+        // "Save and draft email" / "Send email based on this", a transcript
+        // is stashed in sessionStorage. Pull it out, remember it for the
+        // draft request, then auto-trigger the draft so the email body is
+        // already in place when the page settles.
+        let transcript: string | null = null;
+        try {
+          transcript = sessionStorage.getItem(`transcript-context-${data.id}`);
+          if (transcript) {
+            sessionStorage.removeItem(`transcript-context-${data.id}`);
+          }
+        } catch {
+          // sessionStorage can throw in private/incognito mode — ignore.
+        }
+        if (transcript && transcript.trim()) {
+          setTranscriptContext(transcript);
+          // Fire and forget; handleDraft handles its own error state.
+          handleDraft({ transcript });
+        }
       } catch {
         // Lead not found
       } finally {
         setLoadingLead(false);
       }
     })();
+    // We intentionally only run this once per leadId — handleDraft is fresh
+    // each render but we want the load -> auto-draft sequence to fire once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId]);
 
   // Set up speech recognition
@@ -125,11 +155,17 @@ export default function ComposeEmailPage() {
     }
   };
 
-  // Draft email from instructions using Claude
-  const handleDraft = async () => {
-    if (!lead || !instructions.trim()) return;
+  // Draft email from instructions using Claude. Accepts optional overrides
+  // so callers (like the auto-draft useEffect) don't have to wait for React
+  // state to settle before kicking off the request.
+  const handleDraft = async (override?: { instructions?: string; transcript?: string | null }) => {
+    if (!lead) return;
+    const instructionsToUse = (override?.instructions ?? instructions).trim();
+    const transcriptToUse = override?.transcript ?? transcriptContext;
+    if (!instructionsToUse && !transcriptToUse) return;
 
     setDrafting(true);
+    setDraftError(null);
     try {
       // Fetch previously sent emails for style learning
       let existingContext = '';
@@ -146,8 +182,26 @@ export default function ComposeEmailPage() {
         // Non-critical — proceed without context
       }
 
+      // If we have a transcript, prepend it to existingContext so Claude
+      // grounds the draft in what was actually said on the call.
+      if (transcriptToUse) {
+        const transcriptBlock =
+          `Here is the transcript of the call Jordan just had with this lead. ` +
+          `Use it as the primary source of what was discussed, agreed, or promised. ` +
+          `Reference specific points naturally so the email sounds like a real human follow-up:\n\n` +
+          transcriptToUse;
+        existingContext = existingContext
+          ? `${transcriptBlock}\n\n---\n\n${existingContext}`
+          : transcriptBlock;
+      }
+
+      // If the user came via a transcript and didn't add their own
+      // instructions, fall back to a sensible default instruction.
+      const finalInstructions = instructionsToUse
+        || 'Write a short, warm follow-up email recapping the call above. Confirm any next steps that were discussed and offer to help with anything outstanding.';
+
       const result = await api.composeEmailFromInstructions({
-        instructions: instructions.trim(),
+        instructions: finalInstructions,
         leadId: lead.id,
         leadName: lead.name,
         leadCompany: lead.company,
@@ -160,6 +214,7 @@ export default function ComposeEmailPage() {
       setDrafted(true);
     } catch (err) {
       console.error('Draft failed:', err);
+      setDraftError(err instanceof Error ? err.message : 'Draft failed');
     } finally {
       setDrafting(false);
     }
@@ -298,21 +353,66 @@ export default function ComposeEmailPage() {
         <div className={`flex-1 flex flex-col overflow-y-auto ${showPreview ? 'border-r border-hair-soft' : ''}`}>
           <div className="p-6 space-y-4 flex-1">
 
+            {/* Transcript context banner — only when we arrived here
+                via "Save and draft email" from the Transcripts tab. */}
+            {transcriptContext && (
+              <div className="bg-sky-wash border border-sky-hair rounded-xl p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <Sparkles size={16} className="text-sky-ink mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-ink text-sm font-medium">
+                        {drafting
+                          ? 'Drafting email from your transcript...'
+                          : drafted
+                            ? 'Draft built from your transcript'
+                            : 'Transcript ready'}
+                      </p>
+                      <p className="text-ink-muted text-xs mt-0.5">
+                        {drafting
+                          ? "Claude is reading what was said and writing a follow-up. Hang on a second."
+                          : 'You can edit the email below, or refine your instructions and re-draft.'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowTranscriptText((v) => !v)}
+                    className="text-sky-ink text-xs hover:underline flex-shrink-0"
+                  >
+                    {showTranscriptText ? 'Hide transcript' : 'Show transcript'}
+                  </button>
+                </div>
+                {showTranscriptText && (
+                  <div className="mt-3 bg-paper border border-hair-soft rounded-lg p-3 max-h-48 overflow-y-auto">
+                    <p className="text-ink-muted text-sm whitespace-pre-wrap leading-relaxed">
+                      {transcriptContext}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Voice instructions panel — shown before draft */}
             {!drafted && (
               <div className="bg-tray border border-hair-soft rounded-xl p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <Sparkles size={16} className="text-sky-ink" />
-                  <p className="text-ink text-sm font-medium">What do you want to say?</p>
+                  <p className="text-ink text-sm font-medium">
+                    {transcriptContext ? 'Refine the draft (optional)' : 'What do you want to say?'}
+                  </p>
                 </div>
                 <p className="text-ink-dim text-xs mb-3">
-                  Type your instructions or hit the mic to dictate. Claude will draft the email for you.
+                  {transcriptContext
+                    ? "Claude is using the transcript above. Add anything extra here (tone, things to emphasise, things to leave out), or just wait."
+                    : 'Type your instructions or hit the mic to dictate. Claude will draft the email for you.'}
                 </p>
 
                 <textarea
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
-                  placeholder='e.g. "Send David an email checking in on the project timeline, ask if he needs anything from us before Friday"'
+                  placeholder={transcriptContext
+                    ? 'e.g. "Keep it short. Confirm the meeting time. Mention I will send the deck on Monday."'
+                    : 'e.g. "Send David an email checking in on the project timeline, ask if he needs anything from us before Friday"'}
                   rows={4}
                   className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed mb-3"
                 />
@@ -331,10 +431,10 @@ export default function ComposeEmailPage() {
                     {isListening ? 'Stop Recording' : 'Dictate'}
                   </button>
 
-                  {/* Draft button */}
+                  {/* Draft button — enabled when we have either instructions OR a transcript */}
                   <button
-                    onClick={handleDraft}
-                    disabled={!instructions.trim() || drafting}
+                    onClick={() => handleDraft()}
+                    disabled={(!instructions.trim() && !transcriptContext) || drafting}
                     className="bg-ink text-white font-bold text-sm rounded-lg px-5 py-2.5 hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {drafting ? (
@@ -345,16 +445,23 @@ export default function ComposeEmailPage() {
                     ) : (
                       <>
                         <Sparkles size={14} />
-                        Draft Email
+                        {transcriptContext ? 'Re-draft' : 'Draft Email'}
                       </>
                     )}
                   </button>
                 </div>
+
+                {draftError && (
+                  <div className="mt-3 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg px-3 py-2">
+                    <p className="text-risk text-sm">{draftError}</p>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Re-draft button when already drafted */}
-            {drafted && (
+            {/* Re-draft button when already drafted (no transcript path
+                already shows its own banner above). */}
+            {drafted && !transcriptContext && (
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setDrafted(false)}
@@ -362,6 +469,17 @@ export default function ComposeEmailPage() {
                 >
                   <Sparkles size={14} />
                   Re-draft with new instructions
+                </button>
+              </div>
+            )}
+            {drafted && transcriptContext && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setDrafted(false)}
+                  className="flex items-center gap-2 text-ink-muted text-sm hover:text-sky-ink transition-colors"
+                >
+                  <Sparkles size={14} />
+                  Refine and re-draft
                 </button>
               </div>
             )}
