@@ -199,6 +199,25 @@ export function initializeDatabase(db: Database.Database): void {
       FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
     );
 
+    -- Tasks table: scheduled follow-ups attached to leads. Each task can
+    -- optionally mirror to a Google Calendar event (so Jordan / George
+    -- see the work in their normal day-view). The calendar event id is
+    -- stored so we can update / delete the event when the task changes.
+    CREATE TABLE IF NOT EXISTS tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lead_id INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      due_date TEXT NOT NULL,             -- YYYY-MM-DD (date-only)
+      google_calendar_event_id TEXT,
+      completed INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tasks_lead       ON tasks(lead_id, due_date);
+    CREATE INDEX IF NOT EXISTS idx_tasks_due        ON tasks(due_date) WHERE completed = 0;
+
     -- Projects table: leads that converted into active projects
     CREATE TABLE IF NOT EXISTS projects (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

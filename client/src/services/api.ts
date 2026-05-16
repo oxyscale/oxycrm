@@ -128,6 +128,63 @@ export async function getCategories(): Promise<string[]> {
   return request<string[]>('/leads/categories');
 }
 
+// ── Tasks ─────────────────────────────────────────────────────
+
+export interface LeadTask {
+  id: number;
+  leadId: number;
+  label: string;
+  dueDate: string;
+  googleCalendarEventId: string | null;
+  completed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getLeadTasks(leadId: number): Promise<LeadTask[]> {
+  return request<LeadTask[]>(`/leads/${leadId}/tasks`);
+}
+
+export async function createLeadTask(
+  leadId: number,
+  data: { label: string; dueDate: string },
+): Promise<LeadTask & { calendarLink: string | null }> {
+  return request<LeadTask & { calendarLink: string | null }>(
+    `/leads/${leadId}/tasks`,
+    { method: 'POST', body: JSON.stringify(data) },
+  );
+}
+
+export async function updateLeadTask(
+  taskId: number,
+  data: { label?: string; dueDate?: string; completed?: boolean },
+): Promise<LeadTask> {
+  return request<LeadTask>(`/tasks/${taskId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteLeadTask(taskId: number): Promise<void> {
+  return request<void>(`/tasks/${taskId}`, { method: 'DELETE' });
+}
+
+// ── Transcripts ───────────────────────────────────────────────
+
+/**
+ * Saves a manually-dictated transcript on a lead. Returns the new
+ * call_log id so the client can refresh its transcript list.
+ */
+export async function saveLeadTranscript(
+  leadId: number,
+  data: { transcript: string; durationMinutes?: number },
+): Promise<{ callLogId: number; leadId: number }> {
+  return request<{ callLogId: number; leadId: number }>(
+    `/leads/${leadId}/transcripts`,
+    { method: 'POST', body: JSON.stringify(data) },
+  );
+}
+
 export async function renameCategory(from: string, to: string): Promise<{ from: string; to: string; updated: number }> {
   return request<{ from: string; to: string; updated: number }>('/leads/categories/rename', {
     method: 'POST',

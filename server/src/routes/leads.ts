@@ -1161,6 +1161,66 @@ router.delete('/:id', (req, res, next) => {
 });
 
 /**
+ * POST /api/leads/:id/transcripts
+ * Saves a manually-dictated call transcript onto a lead. Inserts a
+ * call_log row with disposition='interested' and the dictated content
+ * as the transcript. Bypasses the disposition state-machine entirely
+ * (no tier change, no status change, no strike counter, no queue
+ * reordering) — this is just a record of "I had a conversation,
+ * here's what was said".
+ */
+const transcriptSchema = z.object({
+  transcript: z.string().min(1, 'Transcript text is required'),
+  durationMinutes: z.number().min(0).optional(),
+});
+
+router.post('/:id/transcripts', (req, res, next) => {
+  try {
+    const db = getDb();
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      throw new ApiError(400, 'Invalid lead ID');
+    }
+
+    const payload = transcriptSchema.parse(req.body);
+    const lead = db.prepare('SELECT id, name FROM leads WHERE id = ?').get(id) as
+      | { id: number; name: string } | undefined;
+    if (!lead) {
+      throw new ApiError(404, 'Lead not found');
+    }
+
+    const durationSeconds = payload.durationMinutes
+      ? Math.max(0, Math.round(payload.durationMinutes * 60))
+      : 0;
+    const now = new Date().toISOString();
+
+    const result = db.prepare(`
+      INSERT INTO call_logs (lead_id, duration, transcript, disposition, created_at)
+      VALUES (?, ?, ?, 'interested', ?)
+    `).run(id, durationSeconds, payload.transcript, now);
+
+    // Update last_called_at so the profile reflects "I just spoke to them"
+    db.prepare("UPDATE leads SET last_called_at = ?, updated_at = ? WHERE id = ?")
+      .run(now, now, id);
+
+    // Activity timeline entry
+    db.prepare(`
+      INSERT INTO activities (lead_id, type, title, description, created_at)
+      VALUES (?, 'call', 'Transcript saved', ?, ?)
+    `).run(id, payload.transcript.slice(0, 200), now);
+
+    logger.info({ leadId: id, callLogId: result.lastInsertRowid }, 'Manual transcript saved');
+
+    res.status(201).json({
+      callLogId: result.lastInsertRowid,
+      leadId: id,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/leads/next
  * Returns the next uncalled lead from the queue (lowest queue_position with status='not_called').
  * Returns 404 if no uncalled leads remain.

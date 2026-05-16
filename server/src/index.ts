@@ -38,6 +38,7 @@ import projectsRouter from './routes/projects.js';
 import activitiesRouter from './routes/activities.js';
 import pipelineRouter from './routes/pipeline.js';
 import settingsRouter from './routes/settings.js';
+import tasksRouter from './routes/tasks.js';
 import { startGmailSync } from './services/gmail-sync.js';
 
 // Import error handling middleware
@@ -267,6 +268,9 @@ app.use('/api/activities', activitiesRouter);
 app.use('/api/pipeline', pipelineRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/webhooks', webhooksRouter);
+// tasksRouter mounts at /api root because it serves both
+// /api/leads/:leadId/tasks and /api/tasks/:id endpoints
+app.use('/api', tasksRouter);
 
 // --- Serve React frontend in production ---
 if (process.env.NODE_ENV === 'production') {

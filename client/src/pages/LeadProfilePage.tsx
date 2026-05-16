@@ -22,7 +22,6 @@ import {
   Send,
   Mic,
   MicOff,
-  PhoneCall,
 } from 'lucide-react';
 import * as api from '../services/api';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
@@ -34,7 +33,6 @@ import type {
   Activity,
   EmailSent,
   PipelineStage,
-  Temperature,
   ActivityType,
 } from '../types';
 
@@ -48,13 +46,11 @@ const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
   { value: 'lost', label: 'Lost' },
 ];
 
-const TEMPERATURES: Temperature[] = ['hot', 'warm', 'cold'];
-
 const ACTIVITY_LIMIT = 20;
 
 // ── Tabs ─────────────────────────────────────────────────────
 
-type Tab = 'activity' | 'calls' | 'notes' | 'emails';
+type Tab = 'activity' | 'transcripts' | 'notes' | 'emails';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -133,23 +129,6 @@ function activityColorBar(type: ActivityType) {
     case 'meeting': return 'border-l-sky-ink';
     case 'temperature_change': return 'border-l-orange-400';
     default: return 'border-l-ink-dim';
-  }
-}
-
-function temperatureColor(temp: Temperature | null) {
-  switch (temp) {
-    case 'hot': return 'bg-red-500/15 text-red-400 border-red-500/30';
-    case 'warm': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
-    case 'cold': return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
-    default: return 'bg-tray text-ink-dim border-hair-soft';
-  }
-}
-
-function temperatureActiveStyle(temp: Temperature) {
-  switch (temp) {
-    case 'hot': return 'bg-red-500/20 text-red-400 border-red-500/40';
-    case 'warm': return 'bg-amber-500/20 text-amber-400 border-amber-500/40';
-    case 'cold': return 'bg-blue-500/20 text-blue-400 border-blue-500/40';
   }
 }
 
@@ -277,22 +256,18 @@ export default function LeadProfilePage() {
   const [showStageDropdown, setShowStageDropdown] = useState(false);
   const [updatingStage, setUpdatingStage] = useState(false);
 
-  // Temperature
-  const [updatingTemp, setUpdatingTemp] = useState(false);
+  // Set Task — schedule a follow-up that lands on the lead and on Google Calendar.
+  const [showSetTask, setShowSetTask] = useState(false);
+  const [taskLabel, setTaskLabel] = useState('');
+  const [taskDate, setTaskDate] = useState('');
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [taskError, setTaskError] = useState<string | null>(null);
 
-  // Status toggle (not_called <-> called)
-  const [updatingStatus, setUpdatingStatus] = useState(false);
-
-  // Manual call logger (records a call_log + runs the disposition flow for
-  // calls made outside the dialler, e.g. on a personal mobile)
-  const [showLogCall, setShowLogCall] = useState(false);
-  const [logCallDisposition, setLogCallDisposition] = useState<
-    'no_answer' | 'voicemail' | 'not_interested' | 'interested'
-  >('interested');
-  const [logCallNote, setLogCallNote] = useState('');
-  const [logCallDuration, setLogCallDuration] = useState<string>('');
-  const [loggingCall, setLoggingCall] = useState(false);
-  const [logCallError, setLogCallError] = useState<string | null>(null);
+  // Manual transcript composer — Wispr Flow handles the dictation system-wide,
+  // we just give it a text field to land in.
+  const [transcriptDraft, setTranscriptDraft] = useState('');
+  const [savingTranscript, setSavingTranscript] = useState(false);
+  const [transcriptError, setTranscriptError] = useState<string | null>(null);
 
   // ── Load lead ──────────────────────────────────────────────
 
@@ -309,7 +284,7 @@ export default function LeadProfilePage() {
   useEffect(() => {
     if (!lead) return;
     if (tab === 'activity') loadActivities();
-    if (tab === 'calls') loadCalls();
+    if (tab === 'transcripts') loadCalls();
     if (tab === 'notes') loadNotes();
     if (tab === 'emails') loadEmails();
   }, [tab, lead?.id]);
@@ -416,81 +391,76 @@ export default function LeadProfilePage() {
     }
   };
 
-  const handleTemperatureChange = async (temp: Temperature) => {
-    if (!lead || lead.temperature === temp) return;
-    setUpdatingTemp(true);
+  // Save a dictated transcript on the lead. Bypasses the disposition flow —
+  // it's just a record of "here's what was said in this conversation".
+  const handleSaveTranscript = async (alsoDraftEmail: boolean) => {
+    if (!lead || savingTranscript || !transcriptDraft.trim()) return;
+    setSavingTranscript(true);
+    setTranscriptError(null);
     try {
-      const updated = await api.updateLeadTemperature(lead.id, temp);
-      setLead(updated);
+      await api.saveLeadTranscript(lead.id, { transcript: transcriptDraft.trim() });
+      const text = transcriptDraft.trim();
+      setTranscriptDraft('');
+
+      // Reload calls + activity to reflect the new transcript
+      await loadCalls();
+      const refreshed = await api.getLeadById(lead.id);
+      setLead(refreshed);
       if (tab === 'activity') loadActivities();
+
+      // If the user wanted an email draft from this transcript, jump to the
+      // composer with the transcript stashed in sessionStorage so the page
+      // can pick it up as AI context.
+      if (alsoDraftEmail) {
+        try {
+          sessionStorage.setItem(`transcript-context-${lead.id}`, text);
+        } catch {
+          // sessionStorage can fail in private mode — non-critical, the
+          // transcript is already saved.
+        }
+        navigate(`/compose/${lead.id}`);
+      }
     } catch (err) {
-      console.error('Failed to update temperature:', err);
+      console.error('Failed to save transcript:', err);
+      setTranscriptError(err instanceof Error ? err.message : 'Failed to save transcript');
     } finally {
-      setUpdatingTemp(false);
+      setSavingTranscript(false);
     }
   };
 
-  // Log a manual call — calls the existing disposition endpoint, which
-  // creates a real call_log entry, increments call counts, updates the
-  // lead's pipeline stage based on disposition, and runs all the same
-  // downstream logic the dialler uses.
-  const handleLogManualCall = async () => {
-    if (!lead || loggingCall) return;
-    setLoggingCall(true);
-    setLogCallError(null);
+  // Create a scheduled task on the lead. The server creates the task row,
+  // sets the lead's follow_up_date so it surfaces in Pipeline > Follow-ups,
+  // and (if Google is connected) drops a calendar event on the OxyScale
+  // calendar for that date.
+  const handleCreateTask = async () => {
+    if (!lead || creatingTask) return;
+    if (!taskLabel.trim() || !taskDate) {
+      setTaskError('Both task name and due date are required.');
+      return;
+    }
+    setCreatingTask(true);
+    setTaskError(null);
     try {
-      const durationSeconds = logCallDuration.trim()
-        ? Math.max(0, Math.round(parseFloat(logCallDuration) * 60)) // minutes -> seconds
-        : 0;
-      const transcript = logCallNote.trim()
-        ? `[Manually logged call]\n${logCallNote.trim()}`
-        : '[Manually logged call — no notes]';
-
-      await api.disposeLead({
-        leadId: lead.id,
-        disposition: logCallDisposition,
-        callDuration: durationSeconds,
-        transcript,
+      await api.createLeadTask(lead.id, {
+        label: taskLabel.trim(),
+        dueDate: taskDate,
       });
 
-      // Reload the lead to pick up status / pipeline changes
+      // Reload the lead to pick up follow_up_date and any related changes
       const refreshed = await api.getLeadById(lead.id);
       setLead(refreshed);
 
-      // Reset form
-      setLogCallDisposition('interested');
-      setLogCallNote('');
-      setLogCallDuration('');
-      setShowLogCall(false);
+      // Reset form + close panel
+      setTaskLabel('');
+      setTaskDate('');
+      setShowSetTask(false);
 
       if (tab === 'activity') loadActivities();
-      if (tab === 'calls') loadCalls();
     } catch (err) {
-      console.error('Failed to log manual call:', err);
-      setLogCallError(err instanceof Error ? err.message : 'Failed to log call');
+      console.error('Failed to create task:', err);
+      setTaskError(err instanceof Error ? err.message : 'Failed to create task');
     } finally {
-      setLoggingCall(false);
-    }
-  };
-
-  // Manually toggle the call status — useful when a call happened outside the
-  // dialler (e.g. inbound on the user's mobile) or you want to take a lead
-  // out of the cycler without dispositioning it.
-  const handleToggleStatus = async () => {
-    if (!lead || updatingStatus) return;
-    const next = lead.status === 'called' ? 'not_called' : 'called';
-    setUpdatingStatus(true);
-    try {
-      const updated = await api.updateLead(lead.id, { status: next } as Partial<Lead>);
-      setLead(updated);
-      if (tab === 'activity') loadActivities();
-    } catch (err) {
-      console.error('Failed to update status:', err);
-      const msg = err instanceof Error ? err.message : 'Failed to update status';
-      setFieldUpdateError(msg);
-      setTimeout(() => setFieldUpdateError(null), 4000);
-    } finally {
-      setUpdatingStatus(false);
+      setCreatingTask(false);
     }
   };
 
@@ -613,7 +583,7 @@ export default function LeadProfilePage() {
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'activity', label: 'Activity' },
-    { key: 'calls', label: 'Calls' },
+    { key: 'transcripts', label: 'Transcripts' },
     { key: 'notes', label: 'Notes' },
     { key: 'emails', label: 'Emails' },
   ];
@@ -694,15 +664,6 @@ export default function LeadProfilePage() {
 
       {/* ── Quick actions bar ───────────────────────────────── */}
       <div className="flex items-center gap-3 flex-wrap mb-8 pb-6 border-b border-hair-soft">
-        {/* Call button */}
-        <button
-          onClick={() => navigate('/dialler', { state: { loadLeadId: lead.id } })}
-          className="flex items-center gap-2 bg-ink text-white font-bold rounded-lg px-4 py-2.5 text-sm hover:bg-ink/90 transition-all"
-        >
-          <Phone size={15} />
-          Call
-        </button>
-
         {/* Email button */}
         <button
           onClick={() => navigate(`/compose/${lead.id}`)}
@@ -736,17 +697,17 @@ export default function LeadProfilePage() {
           Add Note
         </button>
 
-        {/* Log Manual Call button — for calls made outside the dialler */}
+        {/* Set Task button — schedule a follow-up that lands in your calendar */}
         <button
-          onClick={() => setShowLogCall((v) => !v)}
+          onClick={() => setShowSetTask((v) => !v)}
           className={`flex items-center gap-2 border rounded-lg px-4 py-2.5 text-sm transition-all ${
-            showLogCall
+            showSetTask
               ? 'bg-sky-wash border-sky-hair text-sky-ink'
               : 'bg-transparent text-ink-muted border-hair-soft hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
           }`}
         >
-          <PhoneCall size={15} />
-          Log Call
+          <CalendarDays size={15} />
+          Set Task
         </button>
 
         {/* Spacer */}
@@ -795,91 +756,23 @@ export default function LeadProfilePage() {
           )}
         </div>
 
-        {/* Follow-up date */}
-        <div className="flex items-center gap-2 bg-paper border border-hair-soft rounded-lg px-3 py-1.5">
-          <CalendarDays size={13} className="text-ink-dim flex-shrink-0" />
-          <input
-            type="date"
-            value={lead.followUpDate || ''}
-            onChange={async (e) => {
-              const val = e.target.value || null;
-              try {
-                // Tiers are user-controlled — setting a follow-up date no
-                // longer auto-moves the lead between tiers.
-                const updated = await api.updateLead(lead.id, {
-                  followUpDate: val,
-                } as Partial<Lead>);
-                setLead(updated);
-                if (tab === 'activity') loadActivities();
-              } catch (err) {
-                console.error('Failed to update follow-up date:', err);
-              }
-            }}
-            className="bg-transparent text-ink-muted text-xs focus:outline-none [color-scheme:light] cursor-pointer"
-            title="Follow-up date"
-          />
-          {lead.followUpDate && (() => {
-            const today = new Date().toISOString().split('T')[0];
-            const isOverdue = lead.followUpDate < today;
-            const isToday = lead.followUpDate === today;
-            return isOverdue ? (
-              <span className="text-red-400 text-[10px] font-medium">Overdue</span>
-            ) : isToday ? (
-              <span className="text-amber-400 text-[10px] font-medium">Today</span>
-            ) : null;
-          })()}
-          {lead.followUpDate && (
-            <button
-              onClick={async () => {
-                try {
-                  const updated = await api.updateLead(lead.id, { followUpDate: null } as Partial<Lead>);
-                  setLead(updated);
-                } catch (err) {
-                  console.error('Failed to clear follow-up date:', err);
-                }
-              }}
-              className="text-ink-dim hover:text-ink-muted transition-colors"
-              title="Clear follow-up date"
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-
-        {/* Temperature toggle */}
-        <div className="flex items-center gap-1 bg-paper border border-hair-soft rounded-lg p-1">
-          {TEMPERATURES.map((temp) => (
-            <button
-              key={temp}
-              onClick={() => handleTemperatureChange(temp)}
-              disabled={updatingTemp}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-all border ${
-                lead.temperature === temp
-                  ? temperatureActiveStyle(temp)
-                  : 'border-transparent text-ink-dim hover:text-ink-muted'
-              } disabled:opacity-50`}
-            >
-              {temp}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* ── Log Manual Call panel ────────────────────────────── */}
-      {showLogCall && (
+      {/* ── Set Task panel ───────────────────────────────────── */}
+      {showSetTask && (
         <div className="bg-paper border border-sky-hair rounded-xl p-5 mb-8 -mt-6">
           <div className="flex items-start justify-between mb-4">
             <div>
               <h3 className="text-ink font-medium text-base flex items-center gap-2">
-                <PhoneCall size={16} className="text-sky-ink" />
-                Log a manual call
+                <CalendarDays size={16} className="text-sky-ink" />
+                Set a task
               </h3>
               <p className="text-ink-muted text-sm mt-0.5">
-                For calls made outside the dialler. Creates a real call record and updates the lead status.
+                Schedule a follow-up. Lands on the lead and on your OxyScale Google Calendar so you don&apos;t forget.
               </p>
             </div>
             <button
-              onClick={() => setShowLogCall(false)}
+              onClick={() => { setShowSetTask(false); setTaskError(null); }}
               className="text-ink-dim hover:text-ink transition-all"
               aria-label="Close"
             >
@@ -887,75 +780,46 @@ export default function LeadProfilePage() {
             </button>
           </div>
 
-          {/* Disposition pills */}
-          <div className="mb-4">
-            <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-2">What happened?</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              {([
-                { value: 'no_answer', label: "Didn't Answer" },
-                { value: 'voicemail', label: 'Left Voicemail' },
-                { value: 'not_interested', label: 'Not Interested' },
-                { value: 'interested', label: 'Interested' },
-              ] as const).map((d) => (
-                <button
-                  key={d.value}
-                  onClick={() => setLogCallDisposition(d.value)}
-                  className={`px-3 py-1.5 rounded-full text-sm border transition-all ${
-                    logCallDisposition === d.value
-                      ? 'bg-ink text-white border-ink'
-                      : 'bg-paper text-ink-muted border-hair-soft hover:border-hair-strong'
-                  }`}
-                >
-                  {d.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Duration + Note */}
-          <div className="grid grid-cols-[120px_1fr] gap-3 mb-4">
+          <div className="grid grid-cols-[1fr_180px] gap-3 mb-4">
             <div>
-              <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Duration (min)</p>
+              <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Task</p>
               <input
-                type="number"
-                min="0"
-                step="0.5"
-                value={logCallDuration}
-                onChange={(e) => setLogCallDuration(e.target.value)}
-                placeholder="0"
+                type="text"
+                value={taskLabel}
+                onChange={(e) => setTaskLabel(e.target.value)}
+                placeholder="e.g. Call in July"
                 className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all"
               />
             </div>
             <div>
-              <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Notes (optional)</p>
-              <textarea
-                value={logCallNote}
-                onChange={(e) => setLogCallNote(e.target.value)}
-                placeholder="What was discussed? Who did you speak to?"
-                rows={3}
-                className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all resize-none"
+              <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Due date</p>
+              <input
+                type="date"
+                value={taskDate}
+                onChange={(e) => setTaskDate(e.target.value)}
+                className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all [color-scheme:light]"
               />
             </div>
           </div>
 
-          {logCallError && (
+          {taskError && (
             <div className="mb-3 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg px-3 py-2">
-              <p className="text-risk text-sm">{logCallError}</p>
+              <p className="text-risk text-sm">{taskError}</p>
             </div>
           )}
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleLogManualCall}
-              disabled={loggingCall}
+              onClick={handleCreateTask}
+              disabled={creatingTask || !taskLabel.trim() || !taskDate}
               className="bg-ink text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {loggingCall ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-              {loggingCall ? 'Saving...' : 'Save call'}
+              {creatingTask ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {creatingTask ? 'Saving...' : 'Save task'}
             </button>
             <button
-              onClick={() => setShowLogCall(false)}
-              disabled={loggingCall}
+              onClick={() => { setShowSetTask(false); setTaskError(null); }}
+              disabled={creatingTask}
               className="text-ink-muted text-sm rounded-full px-4 py-2 hover:bg-[rgba(11,13,14,0.03)] transition-all disabled:opacity-40"
             >
               Cancel
@@ -1069,25 +933,62 @@ export default function LeadProfilePage() {
             </>
           )}
 
-          {/* ── Calls tab ───────────────────────────────────── */}
-          {tab === 'calls' && (
+          {/* ── Transcripts tab ─────────────────────────────── */}
+          {tab === 'transcripts' && (
             <>
+              {/* Dictation composer — Wispr Flow / built-in macOS dictation
+                  drops voice into this textarea. No special integration needed. */}
+              <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-ink-dim text-xs font-medium uppercase tracking-wider">
+                    Dictate a transcript
+                  </h3>
+                  <span className="text-ink-faint text-[11px]">
+                    Tip: trigger Wispr Flow while focused here, then save.
+                  </span>
+                </div>
+                <textarea
+                  value={transcriptDraft}
+                  onChange={(e) => setTranscriptDraft(e.target.value)}
+                  placeholder="Click here, then dictate the call. Anything you say lands in this field — save when you're done."
+                  rows={6}
+                  className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all resize-y leading-relaxed"
+                />
+
+                {transcriptError && (
+                  <div className="mt-3 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg px-3 py-2">
+                    <p className="text-risk text-sm">{transcriptError}</p>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 mt-3">
+                  <button
+                    onClick={() => handleSaveTranscript(false)}
+                    disabled={savingTranscript || !transcriptDraft.trim()}
+                    className="bg-ink text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {savingTranscript ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    {savingTranscript ? 'Saving...' : 'Save transcript'}
+                  </button>
+                  <button
+                    onClick={() => handleSaveTranscript(true)}
+                    disabled={savingTranscript || !transcriptDraft.trim()}
+                    className="border border-hair-strong text-ink text-sm font-medium rounded-full px-5 py-2 hover:bg-[rgba(11,13,14,0.03)] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <Mail size={14} />
+                    Save and draft email
+                  </button>
+                </div>
+              </div>
+
               {loadingCalls ? (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 size={24} className="animate-spin text-ink-dim" />
                 </div>
               ) : callLogs.length === 0 ? (
-                <div className="text-center py-16">
-                  <Phone size={32} className="text-ink-dim mx-auto mb-3" />
-                  <p className="text-ink-muted text-sm mb-1">No calls recorded</p>
-                  <p className="text-ink-dim text-xs mb-4">Call this lead from the dialler to see call history here.</p>
-                  <button
-                    onClick={() => navigate('/dialler', { state: { loadLeadId: lead.id } })}
-                    className="bg-ink text-white font-bold rounded-lg px-5 py-2.5 text-sm hover:bg-ink/90 transition-all inline-flex items-center gap-2"
-                  >
-                    <Phone size={14} />
-                    Call Lead
-                  </button>
+                <div className="text-center py-12 bg-paper border border-hair-soft rounded-xl">
+                  <p className="text-ink-muted text-sm">No transcripts yet.</p>
+                  <p className="text-ink-dim text-xs mt-1">Dictate one above to get started.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1189,6 +1090,26 @@ export default function LeadProfilePage() {
                                     {call.transcript}
                                   </p>
                                 </div>
+                              </div>
+                            )}
+
+                            {/* Generate email from this transcript */}
+                            {call.transcript && (
+                              <div className="mt-3 flex items-center justify-end">
+                                <button
+                                  onClick={() => {
+                                    try {
+                                      sessionStorage.setItem(`transcript-context-${lead.id}`, call.transcript || '');
+                                    } catch {
+                                      // Non-critical — composer will still load.
+                                    }
+                                    navigate(`/compose/${lead.id}`);
+                                  }}
+                                  className="border border-hair-strong text-ink text-sm font-medium rounded-full px-4 py-1.5 hover:bg-[rgba(11,13,14,0.03)] transition-all flex items-center gap-2"
+                                >
+                                  <Mail size={13} />
+                                  Send email based on this
+                                </button>
                               </div>
                             )}
                           </div>
@@ -1546,61 +1467,11 @@ export default function LeadProfilePage() {
                 <p className="text-ink-muted text-sm capitalize">{lead.leadType}</p>
               </div>
 
-              {/* Status — clickable to toggle between Not Called and Called */}
+              {/* Pipeline tier */}
               <div>
-                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Status</p>
-                <button
-                  onClick={handleToggleStatus}
-                  disabled={updatingStatus}
-                  title={lead.status === 'called'
-                    ? 'Click to mark as Not Called (puts back in cycler)'
-                    : 'Click to mark as Called (removes from cycler)'}
-                  className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full transition-all hover:opacity-80 disabled:opacity-50 ${
-                    lead.status === 'called'
-                      ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink hover:bg-[rgba(10,156,212,0.22)]'
-                      : 'bg-tray text-ink-muted hover:bg-[rgba(11,13,14,0.06)]'
-                  }`}
-                >
-                  {updatingStatus && <Loader2 size={10} className="animate-spin" />}
-                  {lead.status === 'called' ? 'Called' : 'Not Called'}
-                </button>
-              </div>
-
-              {/* Pipeline stage */}
-              <div>
-                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Pipeline Stage</p>
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Tier</p>
                 <p className="text-ink-muted text-sm">{stageLabel(lead.pipelineStage)}</p>
               </div>
-
-              {/* Temperature */}
-              <div>
-                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Temperature</p>
-                {lead.temperature ? (
-                  <span className={`inline-block text-xs px-2 py-0.5 rounded-full border capitalize ${temperatureColor(lead.temperature)}`}>
-                    {lead.temperature}
-                  </span>
-                ) : (
-                  <span className="text-ink-dim text-sm italic">Not set</span>
-                )}
-              </div>
-
-              {/* Unanswered calls */}
-              {lead.unansweredCalls > 0 && (
-                <div>
-                  <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Unanswered Calls</p>
-                  <p className="text-amber-400 text-sm">{lead.unansweredCalls}</p>
-                </div>
-              )}
-
-              {/* Voicemail left */}
-              {lead.voicemailLeft && (
-                <div>
-                  <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Voicemail Left</p>
-                  <p className="text-blue-400 text-sm">
-                    {lead.voicemailDate ? formatShortDate(lead.voicemailDate) : 'Yes'}
-                  </p>
-                </div>
-              )}
 
               {/* Last called */}
               {lead.lastCalledAt && (
