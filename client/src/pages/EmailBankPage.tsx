@@ -536,7 +536,7 @@ export default function EmailBankPage() {
                       {selected.errorMessage || 'Unknown error'}
                     </p>
                     <p className="text-ink-dim text-xs mt-2">
-                      Usually means the Twilio recording never arrived or Claude hit an error. Click Retry to try again, or open the lead profile to write the email manually.
+                      Usually means Claude hit an error. Click Retry to try again, or open the lead profile to write the email manually.
                     </p>
                   </div>
                 </div>

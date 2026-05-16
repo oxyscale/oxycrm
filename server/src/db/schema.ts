@@ -148,14 +148,15 @@ export function initializeDatabase(db: Database.Database): void {
     db.exec('ALTER TABLE leads ADD COLUMN converted_to_project INTEGER DEFAULT 0');
   }
 
-  // Add twilio_call_sid column to call_logs for linking recordings
+  // Legacy: twilio_call_sid column on call_logs. Kept so historical rows
+  // aren't broken; new rows insert NULL. Safe to ignore.
   const callLogColumns = db.prepare("PRAGMA table_info(call_logs)").all() as { name: string }[];
   if (!callLogColumns.some((c) => c.name === 'twilio_call_sid')) {
     db.exec('ALTER TABLE call_logs ADD COLUMN twilio_call_sid TEXT');
   }
 
-  // Pending transcripts — holds transcripts from Twilio recordings
-  // that arrive before the call is dispositioned
+  // Legacy Twilio support tables — retained so historical rows / future
+  // schema migrations don't blow up. Not written to by current code.
   db.exec(`
     CREATE TABLE IF NOT EXISTS pending_transcripts (
       call_sid TEXT PRIMARY KEY,
@@ -163,10 +164,6 @@ export function initializeDatabase(db: Database.Database): void {
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
-
-  // Call sessions — maps Twilio CallSid to phone numbers
-  // Populated by the voice webhook (server-side, guaranteed accurate)
-  // Used to match recordings to call logs even when client-side CallSid capture fails
   db.exec(`
     CREATE TABLE IF NOT EXISTS call_sessions (
       call_sid TEXT PRIMARY KEY,
@@ -178,6 +175,12 @@ export function initializeDatabase(db: Database.Database): void {
   // Add follow_up_date column for scheduling follow-up calls
   if (!columns.some((c) => c.name === 'follow_up_date')) {
     db.exec('ALTER TABLE leads ADD COLUMN follow_up_date TEXT DEFAULT NULL');
+  }
+
+  // Add deal_value column — annual / lifetime dollar value of this lead.
+  // Used by the Reports page to surface pipeline value per tier.
+  if (!columns.some((c) => c.name === 'deal_value')) {
+    db.exec('ALTER TABLE leads ADD COLUMN deal_value REAL NOT NULL DEFAULT 0');
   }
 
   // Note: monday_item_id column is retained for backward compatibility but no longer used.

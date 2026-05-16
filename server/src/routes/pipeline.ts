@@ -37,6 +37,7 @@ interface LeadRow {
   temperature: string | null;
   converted_to_project: number;
   follow_up_date: string | null;
+  deal_value: number;
   queue_position: number;
   last_called_at: string | null;
   created_at: string;
@@ -64,6 +65,7 @@ function mapLeadRow(row: LeadRow): Lead {
     temperature: (row.temperature as Temperature) ?? null,
     convertedToProject: row.converted_to_project === 1,
     followUpDate: row.follow_up_date,
+    dealValue: row.deal_value ?? 0,
     queuePosition: row.queue_position,
     lastCalledAt: row.last_called_at,
     createdAt: row.created_at,

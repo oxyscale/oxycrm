@@ -169,6 +169,56 @@ export async function deleteLeadTask(taskId: number): Promise<void> {
   return request<void>(`/tasks/${taskId}`, { method: 'DELETE' });
 }
 
+// ── Reports ───────────────────────────────────────────────────
+
+export interface ReportTierBucket {
+  tier: 'tier_1' | 'tier_2' | 'tier_3' | 'won' | 'lost';
+  label: string;
+  count: number;
+  totalValue: number;
+}
+
+export interface ReportData {
+  window: { from: string; to: string; category: string | null };
+  categories: string[];
+  summary: {
+    totalPipelineCount: number;
+    totalPipelineValue: number;
+    newLeadCount: number;
+    wonCount: number;
+    wonValue: number;
+    lostCount: number;
+    lostValue: number;
+    tasksDueCount: number;
+  };
+  byTier: ReportTierBucket[];
+  newLeads: Array<{
+    id: number; name: string; company: string | null; category: string | null;
+    tier: string; dealValue: number; createdAt: string;
+  }>;
+  won: Array<{
+    id: number; name: string; company: string | null; category: string | null;
+    tier: string; dealValue: number; closedAt: string;
+  }>;
+  lost: Array<{
+    id: number; name: string; company: string | null; category: string | null;
+    tier: string; dealValue: number; closedAt: string;
+  }>;
+  tasksDue: Array<{
+    id: number; label: string; dueDate: string; completed: number;
+    leadId: number; leadName: string; leadCompany: string | null;
+  }>;
+}
+
+export async function getReport(params: { from?: string; to?: string; category?: string } = {}): Promise<ReportData> {
+  const search = new URLSearchParams();
+  if (params.from) search.set('from', params.from);
+  if (params.to) search.set('to', params.to);
+  if (params.category) search.set('category', params.category);
+  const qs = search.toString();
+  return request<ReportData>(`/reports${qs ? `?${qs}` : ''}`);
+}
+
 // ── Transcripts ───────────────────────────────────────────────
 
 /**
@@ -293,28 +343,6 @@ export async function changeCallDisposition(
   return request<CallLog>(`/calls/${callId}/disposition`, {
     method: 'PATCH',
     body: JSON.stringify({ disposition }),
-  });
-}
-
-// ── Twilio ─────────────────────────────────────────────────────
-
-export async function getTwilioToken(): Promise<{ token: string }> {
-  return request<{ token: string }>('/twilio/token');
-}
-
-// Fetch the real CallSid for a phone number from the server
-// (server captures it reliably in the voice webhook)
-export async function getTwilioCallSid(phone: string): Promise<string | null> {
-  const result = await request<{ callSid: string | null }>(`/twilio/call-sid?phone=${encodeURIComponent(phone)}`);
-  return result.callSid;
-}
-
-// Trigger server-side recording polling + Whisper transcription
-// Called after disposition to actively fetch the recording from Twilio
-export async function processRecording(callSid: string): Promise<void> {
-  await request('/twilio/process-recording', {
-    method: 'POST',
-    body: JSON.stringify({ callSid }),
   });
 }
 

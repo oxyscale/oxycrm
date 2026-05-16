@@ -287,6 +287,11 @@ export default function LeadProfilePage() {
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
 
+  // Tasks attached to this lead
+  const [tasks, setTasks] = useState<api.LeadTask[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [togglingTaskId, setTogglingTaskId] = useState<number | null>(null);
+
   // ── Load lead ──────────────────────────────────────────────
 
   useEffect(() => {
@@ -306,6 +311,13 @@ export default function LeadProfilePage() {
     if (tab === 'notes') loadNotes();
     if (tab === 'emails') loadEmails();
   }, [tab, lead?.id]);
+
+  // Tasks live in the sidebar — load alongside the lead, not per tab.
+  useEffect(() => {
+    if (!lead) return;
+    loadTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead?.id]);
 
   const loadLead = async () => {
     setLoading(true);
@@ -370,6 +382,44 @@ export default function LeadProfilePage() {
       console.error('Failed to load emails:', err);
     } finally {
       setLoadingEmails(false);
+    }
+  };
+
+  const loadTasks = async () => {
+    if (!leadId) return;
+    setLoadingTasks(true);
+    try {
+      const data = await api.getLeadTasks(leadId);
+      setTasks(data);
+    } catch (err) {
+      console.error('Failed to load tasks:', err);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
+  // Toggle a task's completed state
+  const handleToggleTask = async (task: api.LeadTask) => {
+    if (togglingTaskId) return;
+    setTogglingTaskId(task.id);
+    try {
+      const updated = await api.updateLeadTask(task.id, { completed: !task.completed });
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
+    } catch (err) {
+      console.error('Failed to toggle task:', err);
+    } finally {
+      setTogglingTaskId(null);
+    }
+  };
+
+  // Delete a task (with confirmation)
+  const handleDeleteTask = async (task: api.LeadTask) => {
+    if (!confirm(`Delete task "${task.label}"?`)) return;
+    try {
+      await api.deleteLeadTask(task.id);
+      setTasks((prev) => prev.filter((t) => t.id !== task.id));
+    } catch (err) {
+      console.error('Failed to delete task:', err);
     }
   };
 
@@ -473,6 +523,8 @@ export default function LeadProfilePage() {
       setTaskDate('');
       setShowSetTask(false);
 
+      // Refresh tasks list + activity timeline
+      loadTasks();
       if (tab === 'activity') loadActivities();
     } catch (err) {
       console.error('Failed to create task:', err);
@@ -1491,6 +1543,22 @@ export default function LeadProfilePage() {
                 <p className="text-ink-muted text-sm">{stageLabel(lead.pipelineStage)}</p>
               </div>
 
+              {/* Deal value — inline editable */}
+              <div>
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Deal Value</p>
+                <DealValueEditor
+                  value={lead.dealValue ?? 0}
+                  onSave={async (val) => {
+                    try {
+                      const updated = await api.updateLead(lead.id, { dealValue: val } as Partial<Lead>);
+                      setLead(updated);
+                    } catch (err) {
+                      console.error('Failed to update deal value:', err);
+                    }
+                  }}
+                />
+              </div>
+
               {/* Last called */}
               {lead.lastCalledAt && (
                 <div>
@@ -1505,6 +1573,81 @@ export default function LeadProfilePage() {
                 <p className="text-ink-muted text-sm">{formatShortDate(lead.createdAt)}</p>
               </div>
             </div>
+          </div>
+
+          {/* Tasks card — pending + completed tasks for this lead */}
+          <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-ink-dim text-xs font-medium uppercase tracking-wider">
+                Tasks
+              </h3>
+              <button
+                onClick={() => setShowSetTask(true)}
+                className="text-sky-ink text-xs hover:underline flex items-center gap-1"
+              >
+                <Plus size={12} />
+                Add
+              </button>
+            </div>
+
+            {loadingTasks ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 size={14} className="animate-spin text-ink-dim" />
+              </div>
+            ) : tasks.length === 0 ? (
+              <p className="text-ink-dim text-xs italic">No tasks scheduled.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {tasks.map((task) => {
+                  const today = new Date().toISOString().split('T')[0];
+                  const overdue = !task.completed && task.dueDate < today;
+                  const dueToday = !task.completed && task.dueDate === today;
+                  return (
+                    <li
+                      key={task.id}
+                      className={`flex items-start gap-2 group ${task.completed ? 'opacity-50' : ''}`}
+                    >
+                      <button
+                        onClick={() => handleToggleTask(task)}
+                        disabled={togglingTaskId === task.id}
+                        className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all ${
+                          task.completed
+                            ? 'bg-sky-ink border-sky-ink'
+                            : 'bg-paper border-hair-strong hover:border-sky-ink'
+                        }`}
+                        aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}
+                      >
+                        {togglingTaskId === task.id ? (
+                          <Loader2 size={9} className="animate-spin text-white" />
+                        ) : task.completed ? (
+                          <Check size={10} className="text-white" />
+                        ) : null}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm leading-snug ${task.completed ? 'text-ink-dim line-through' : 'text-ink-muted'}`}>
+                          {task.label}
+                        </p>
+                        <p className={`text-[11px] mt-0.5 ${
+                          overdue ? 'text-risk'
+                          : dueToday ? 'text-warn'
+                          : 'text-ink-dim'
+                        }`}>
+                          {overdue ? 'Overdue · ' : dueToday ? 'Due today · ' : ''}
+                          {humaniseDates(task.dueDate)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTask(task)}
+                        className="text-ink-faint hover:text-risk transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                        aria-label="Delete task"
+                      >
+                        <X size={12} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
 
           {/* Stats card */}
@@ -1555,5 +1698,79 @@ export default function LeadProfilePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Deal Value editor ────────────────────────────────────────
+// Click-to-edit AUD value with $ prefix. Empty = $0 / unset.
+
+function DealValueEditor({
+  value,
+  onSave,
+}: {
+  value: number;
+  onSave: (val: number) => Promise<void> | void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value > 0 ? String(value) : '');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setDraft(value > 0 ? String(value) : '');
+  }, [value]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commit = async () => {
+    const cleaned = draft.replace(/[^\d.]/g, '');
+    const num = cleaned ? Math.max(0, parseFloat(cleaned)) : 0;
+    if (!isNaN(num) && num !== value) {
+      await onSave(num);
+    }
+    setEditing(false);
+  };
+
+  const cancel = () => {
+    setDraft(value > 0 ? String(value) : '');
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <span className="text-ink-dim text-sm">$</span>
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="decimal"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') cancel();
+          }}
+          className="bg-cream border border-hair-soft rounded px-2 py-0.5 text-ink text-sm focus:outline-none focus:border-sky w-24"
+          placeholder="0"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      className="text-ink-muted text-sm hover:text-sky-ink transition-colors text-left"
+      title="Click to edit"
+    >
+      {value > 0
+        ? `$${value.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`
+        : <span className="text-ink-dim italic">Not set</span>}
+    </button>
   );
 }

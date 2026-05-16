@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { Home, Users, Phone, Kanban, FolderKanban, Brain, BarChart3, HelpCircle, Settings, Inbox, LogOut } from 'lucide-react';
+import { Home, Users, Phone, Kanban, FolderKanban, Brain, BarChart3, HelpCircle, Settings, Inbox, LogOut, FileText } from 'lucide-react';
 import SearchBar from './SearchBar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -16,6 +16,7 @@ const navItems = [
   { path: '/projects', icon: FolderKanban, label: 'Projects' },
   { path: '/intelligence', icon: Brain, label: 'Call Intelligence' },
   { path: '/dashboard', icon: BarChart3, label: 'Stats' },
+  { path: '/reports', icon: FileText, label: 'Reports' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 

@@ -29,6 +29,8 @@ export interface Lead {
   temperature: Temperature | null;
   convertedToProject: boolean;
   followUpDate: string | null;
+  /** Annual / lifetime $ value for this lead. 0 = unset. Used by Reports. */
+  dealValue: number;
   queuePosition: number;
   lastCalledAt: string | null;
   createdAt: string;
@@ -77,7 +79,6 @@ export interface DispositionPayload {
   disposition: Disposition;
   callDuration: number;
   transcript: string;
-  twilioCallSid?: string;
   callbackDate?: string;
   callbackNotes?: string;
   followUpDate?: string;

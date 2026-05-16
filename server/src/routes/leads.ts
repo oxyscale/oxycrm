@@ -11,7 +11,8 @@ import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import type { Lead, CallLog, ImportResult, DispositionPayload, DuplicateLead, PipelineStage, Temperature } from '../../../shared/types.js';
 import pino from 'pino';
-import { summariseAndPersistCall, draftAndStoreEmailForCall } from '../services/ai-summary.js';
+// summariseAndPersistCall / draftAndStoreEmailForCall were used for the
+// Whisper-on-Twilio-recording path. Manual transcript flow doesn't need them.
 
 const logger = pino({ name: 'leads-routes' });
 const router = Router();
@@ -48,6 +49,7 @@ interface LeadRow {
   temperature: string | null;
   converted_to_project: number;
   follow_up_date: string | null;
+  deal_value: number;
   queue_position: number;
   last_called_at: string | null;
   created_at: string;
@@ -89,6 +91,7 @@ function mapLeadRow(row: LeadRow): Lead {
     temperature: (row.temperature as Temperature) ?? null,
     convertedToProject: row.converted_to_project === 1,
     followUpDate: row.follow_up_date,
+    dealValue: row.deal_value ?? 0,
     queuePosition: row.queue_position,
     lastCalledAt: row.last_called_at,
     createdAt: row.created_at,
@@ -131,7 +134,6 @@ const dispositionSchema = z.object({
   disposition: z.enum(['no_answer', 'voicemail', 'not_interested', 'interested', 'wrong_number']),
   callDuration: z.number().int().min(0),
   transcript: z.string(),
-  twilioCallSid: z.string().optional(),
   callbackDate: z.string().refine(
     (val) => !isNaN(Date.parse(val)),
     { message: 'callbackDate must be a valid date string' }
@@ -164,6 +166,7 @@ const updateLeadSchema = z.object({
   pipelineStage: z.enum(['tier_1', 'tier_2', 'tier_3', 'won', 'lost']).optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   followUpDate: z.string().nullable().optional(),
+  dealValue: z.number().min(0).optional(),
 });
 
 // ============================================================
@@ -764,7 +767,6 @@ router.post('/:id/disposition', (req, res, next) => {
     // Captures the inserted call_log id so the client can PATCH the AI summary back
     // onto this specific call row once Claude returns.
     let createdCallLogId: number | null = null;
-    let usedPendingTranscript = false;
     const processDisposition = db.transaction(() => {
       // Re-fetch lead inside transaction for data consistency
       const leadRow = db.prepare('SELECT * FROM leads WHERE id = ?').get(id) as LeadRow | undefined;
@@ -772,53 +774,19 @@ router.post('/:id/disposition', (req, res, next) => {
         throw new ApiError(404, 'Lead not found');
       }
 
-      // Always create a call log record (with Twilio CallSid for transcript matching)
-      // If client didn't capture CallSid, look it up from call_sessions by phone number
-      let callSid = payload.twilioCallSid || null;
-      if (!callSid && leadRow.phone) {
-        // Try to find CallSid from call_sessions using the lead's phone number
-        const phone = leadRow.phone;
-        const e164Phone = phone.startsWith('+61') ? phone
-          : phone.startsWith('0') ? '+61' + phone.substring(1)
-          : phone.startsWith('61') ? '+' + phone
-          : '+61' + phone;
-
-        const session = db.prepare(`
-          SELECT call_sid FROM call_sessions
-          WHERE phone_to = ?
-          AND created_at >= datetime('now', '-10 minutes')
-          ORDER BY created_at DESC
-          LIMIT 1
-        `).get(e164Phone) as { call_sid: string } | undefined;
-
-        if (session) {
-          callSid = session.call_sid;
-          logger.info({ leadId: id, callSid, phone: e164Phone }, 'Resolved CallSid from call_sessions');
-        }
-      }
-
-      // Check if there's a pending transcript from Twilio recording
-      // (Whisper finished before the rep clicked a disposition — race-winner path)
-      let transcript = payload.transcript;
-      if (callSid) {
-        const pending = db.prepare('SELECT transcript FROM pending_transcripts WHERE call_sid = ?').get(callSid) as { transcript: string } | undefined;
-        if (pending && pending.transcript) {
-          transcript = pending.transcript;
-          usedPendingTranscript = true;
-          db.prepare('DELETE FROM pending_transcripts WHERE call_sid = ?').run(callSid);
-          logger.info({ leadId: id, callSid }, 'Used pending transcript from Twilio recording');
-        }
-      }
-
       // Tag the call (and the pending draft) with whoever's logged in.
-      // The post-Whisper draftAndStoreEmailForCall later reads this to
-      // decide whose voice and signature the email should be in.
+      // The post-call AI draft path later reads this to decide whose
+      // voice and signature the email should be in.
       const userId = req.user?.id ?? null;
+      const transcript = payload.transcript;
 
+      // call_sessions / pending_transcripts / twilio_call_sid were legacy
+      // Twilio plumbing. We still pass NULL for the column so the existing
+      // schema is preserved, but no lookup happens anymore.
       const insertResult = db.prepare(`
         INSERT INTO call_logs (lead_id, user_id, duration, transcript, disposition, twilio_call_sid, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(id, userId, payload.callDuration, transcript, payload.disposition, callSid, now);
+      `).run(id, userId, payload.callDuration, transcript, payload.disposition, null, now);
       createdCallLogId = Number(insertResult.lastInsertRowid);
 
       // Email Bank: for dispositions that warrant a follow-up email, insert a
@@ -942,23 +910,6 @@ router.post('/:id/disposition', (req, res, next) => {
       return;
     }
 
-    // If Whisper beat us to it (pending_transcripts path), the call_log already
-    // has a real transcript. Fire the post-transcript chain now — summarise
-    // THEN draft the email bank entry. Non-blocking.
-    if (usedPendingTranscript && createdCallLogId) {
-      (async () => {
-        await summariseAndPersistCall(createdCallLogId!, id);
-        await draftAndStoreEmailForCall(createdCallLogId!, id);
-      })().catch((err) => {
-        // Surface the failure in logs so a stuck "pending" draft is
-        // diagnosable instead of silently abandoned.
-        logger.error(
-          { err, leadId: id, callLogId: createdCallLogId },
-          'Post-transcript chain failed (summarise -> draft) — email draft will stay pending until 15-min sweep marks it failed',
-        );
-      });
-    }
-
     // Return the updated lead + the id of the call_log we just created so the
     // client can PATCH the AI summary back onto this call after Claude returns.
     const updatedRow = db.prepare('SELECT * FROM leads WHERE id = ?').get(id) as LeadRow;
@@ -1040,6 +991,10 @@ router.patch('/:id', (req, res, next) => {
     if (updates.followUpDate !== undefined) {
       setClauses.push('follow_up_date = @followUpDate');
       params.followUpDate = updates.followUpDate;
+    }
+    if (updates.dealValue !== undefined) {
+      setClauses.push('deal_value = @dealValue');
+      params.dealValue = updates.dealValue;
     }
 
     if (setClauses.length === 0) {

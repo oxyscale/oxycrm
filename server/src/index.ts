@@ -1,6 +1,6 @@
 // ============================================================
 // OxyScale Dialler — Server Entry Point
-// Express API server with SQLite, Twilio, and AI integration
+// Express API server with SQLite + AI integration
 // ============================================================
 
 import dotenv from 'dotenv';
@@ -25,7 +25,6 @@ import authRouter from './routes/auth.js';
 // Import route handlers
 import leadsRouter from './routes/leads.js';
 import callbacksRouter from './routes/callbacks.js';
-import twilioRouter from './routes/twilio.js';
 import callsRouter from './routes/calls.js';
 import intelligenceRouter from './routes/intelligence.js';
 import emailRouter from './routes/email.js';
@@ -39,6 +38,7 @@ import activitiesRouter from './routes/activities.js';
 import pipelineRouter from './routes/pipeline.js';
 import settingsRouter from './routes/settings.js';
 import tasksRouter from './routes/tasks.js';
+import reportsRouter from './routes/reports.js';
 import { startGmailSync } from './services/gmail-sync.js';
 
 // Import error handling middleware
@@ -101,8 +101,7 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 // Trust Railway's proxy so req.ip + x-forwarded-proto resolve correctly.
-// Required for the rate limiter (which keys off IP) and the Twilio
-// signature middleware (which rebuilds the original URL).
+// Required for the rate limiter (which keys off IP).
 app.set('trust proxy', 1);
 
 // --- Middleware ---
@@ -120,8 +119,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Security headers via helmet. CSP is intentionally relaxed because
-// the React build inlines small Vite runtime scripts and Twilio's
-// Voice SDK requires its own connect-src + media-src origins.
+// the React build inlines small Vite runtime scripts.
 app.use(
   helmet({
     contentSecurityPolicy: process.env.NODE_ENV === 'production'
@@ -129,15 +127,12 @@ app.use(
           useDefaults: true,
           directives: {
             'default-src': ["'self'"],
-            'script-src': ["'self'", "'unsafe-inline'"], // Vite runtime + Twilio SDK
+            'script-src': ["'self'", "'unsafe-inline'"], // Vite runtime
             'style-src': ["'self'", "'unsafe-inline'"],
             'img-src': ["'self'", 'data:', 'https:'],
             'font-src': ["'self'", 'data:'],
             'connect-src': [
               "'self'",
-              'https://*.twilio.com',
-              'wss://*.twilio.com',
-              'https://eventgw.twilio.com',
               'https://api.anthropic.com',
             ],
             'media-src': ["'self'", 'blob:'],
@@ -145,7 +140,7 @@ app.use(
           },
         }
       : false, // CSP off in dev — Vite hot reload + websocket would break
-    crossOriginEmbedderPolicy: false, // Twilio iframe + audio won't load with this
+    crossOriginEmbedderPolicy: false,
     // HSTS: tell the browser "always use https for this domain for the
     // next 6 months". Only meaningful in prod where we actually serve over HTTPS.
     hsts: process.env.NODE_ENV === 'production'
@@ -178,7 +173,7 @@ app.use(express.json({
   },
 }));
 
-// Parse URL-encoded bodies (for Twilio webhook callbacks)
+// Parse URL-encoded bodies (used by some auth flows)
 app.use(express.urlencoded({ extended: true }));
 
 // Cookie parser — required by the auth middleware to read the
@@ -234,16 +229,11 @@ const emailDraftsLimiter = rateLimit({
 app.use('/api/auth', authLimiter, authRouter);
 
 // Public-by-design routes that need to bypass session-cookie auth:
-//   - Twilio webhooks (called by Twilio's servers, not a browser).
-//     Signature verification protects them — separate blocker.
 //   - Google OAuth callback (called by the user's browser after
 //     Google redirects). The OAuth `code` itself is the credential.
 //   - Resend webhooks (email engagement events). Svix-style HMAC
 //     signature verification inside the route protects them.
 const PUBLIC_API_PATHS = new Set<string>([
-  '/twilio/voice',
-  '/twilio/incoming',
-  '/twilio/recording-status',
   '/google/callback',
   '/webhooks/resend',
 ]);
@@ -255,7 +245,6 @@ app.use('/api', (req, res, next) => {
 
 app.use('/api/leads', leadsRouter);
 app.use('/api/callbacks', callbacksRouter);
-app.use('/api/twilio', twilioRouter);
 app.use('/api/calls', callsRouter);
 app.use('/api/intelligence', expensiveLimiter, intelligenceRouter);
 app.use('/api/email', expensiveLimiter, emailRouter);
@@ -271,6 +260,7 @@ app.use('/api/webhooks', webhooksRouter);
 // tasksRouter mounts at /api root because it serves both
 // /api/leads/:leadId/tasks and /api/tasks/:id endpoints
 app.use('/api', tasksRouter);
+app.use('/api/reports', reportsRouter);
 
 // --- Serve React frontend in production ---
 if (process.env.NODE_ENV === 'production') {
@@ -317,7 +307,7 @@ const server = app.listen(PORT, () => {
 });
 
 // Graceful shutdown. Railway sends SIGTERM on every redeploy; without
-// this, in-flight requests (AI summarisation, email sends, Twilio
+// this, in-flight requests (AI summarisation, email sends,
 // recording downloads) would be killed mid-flight. We stop accepting
 // new connections, give existing ones up to 25s to finish, then exit.
 function shutdown(signal: string): void {

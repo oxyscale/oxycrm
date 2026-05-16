@@ -20,6 +20,7 @@ import ComposeEmailPage from './pages/ComposeEmailPage';
 import BookMeetingPage from './pages/BookMeetingPage';
 import SettingsPage from './pages/SettingsPage';
 import EmailBankPage from './pages/EmailBankPage';
+import ReportsPage from './pages/ReportsPage';
 
 // Gate that redirects unauthenticated users to /login while preserving
 // the page they were trying to reach as ?next=.
@@ -68,6 +69,7 @@ export default function App() {
                   <Route path="/projects/:id" element={<ProjectDetailPage />} />
                   <Route path="/email-bank" element={<EmailBankPage />} />
                   <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/reports" element={<ReportsPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Route>
               </Routes>

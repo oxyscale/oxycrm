@@ -47,6 +47,7 @@ interface CallbackWithLeadRow extends CallbackRow {
   l_temperature: string | null;
   l_converted_to_project: number;
   l_follow_up_date: string | null;
+  l_deal_value: number;
   l_queue_position: number;
   l_last_called_at: string | null;
   l_created_at: string;
@@ -106,6 +107,7 @@ function mapCallbackWithLeadRow(row: CallbackWithLeadRow): CallbackWithLead {
     temperature: (row.l_temperature as Lead['temperature']) ?? null,
     convertedToProject: row.l_converted_to_project === 1,
     followUpDate: row.l_follow_up_date,
+    dealValue: row.l_deal_value ?? 0,
     queuePosition: row.l_queue_position,
     lastCalledAt: row.l_last_called_at,
     createdAt: row.l_created_at,
@@ -186,6 +188,8 @@ router.get('/today', (req, res, next) => {
         l.monday_item_id as l_monday_item_id,
         l.pipeline_stage as l_pipeline_stage, l.temperature as l_temperature,
         l.converted_to_project as l_converted_to_project,
+        l.follow_up_date as l_follow_up_date,
+        l.deal_value as l_deal_value,
         l.queue_position as l_queue_position,
         l.last_called_at as l_last_called_at, l.created_at as l_created_at,
         l.updated_at as l_updated_at,

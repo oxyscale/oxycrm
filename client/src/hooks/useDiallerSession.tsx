@@ -34,8 +34,6 @@ interface DiallerSessionState {
   aiProcessing: boolean;
   draftEmailSubject: string | null;
   draftEmailBody: string | null;
-  // Twilio call metadata
-  twilioCallSid: string | null;
   // Email prep (filled in during the call)
   emailTo: string;
   emailCc: string;
@@ -61,7 +59,6 @@ interface DiallerSessionActions {
   loadTodaysCallbacks: () => Promise<void>;
   refreshStats: () => void;
   resetSession: () => void;
-  setTwilioCallSid: (sid: string | null) => void;
   setEmailTo: (to: string) => void;
   setEmailCc: (cc: string) => void;
 }
@@ -99,7 +96,6 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
   const [aiProcessing, setAiProcessing] = useState(false);
   const [draftEmailSubject, setDraftEmailSubject] = useState<string | null>(null);
   const [draftEmailBody, setDraftEmailBody] = useState<string | null>(null);
-  const [twilioCallSid, setTwilioCallSid] = useState<string | null>(null);
   const [emailTo, setEmailTo] = useState('');
   const [emailCc, setEmailCc] = useState('');
 
@@ -127,7 +123,6 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
       setCallDuration(0);
       setCallStartTime(null);
       setTranscript('');
-      setTwilioCallSid(null);
       setEmailTo(lead?.email || '');
       setEmailCc('');
     } catch (err) {
@@ -163,7 +158,6 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
           disposition,
           callDuration,
           transcript: callTranscript,
-          twilioCallSid: twilioCallSid || undefined,
           callbackDate,
           callbackNotes,
           followUpDate,
@@ -171,15 +165,6 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
         // wrong_number returns { deleted: true, id } — no callLogId in that case.
         const callLogId =
           'callLogId' in disposeResult ? disposeResult.callLogId : null;
-
-        // Trigger recording download + Whisper transcription in the background.
-        // This polls Twilio's API directly for the recording (more reliable than webhooks).
-        // The server will download the MP3, send to Whisper, and update the call log.
-        if (twilioCallSid) {
-          api.processRecording(twilioCallSid).catch((err) => {
-            console.warn('Recording processing request failed (non-blocking):', err);
-          });
-        }
 
         // Update stats based on disposition
         setStats((prev) => ({
@@ -276,7 +261,7 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [currentLead, callDuration, leadType, twilioCallSid]
+    [currentLead, callDuration, leadType]
   );
 
   const loadTodaysCallbacks = useCallback(async () => {
@@ -307,7 +292,6 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
     setAiProcessing(false);
     setDraftEmailSubject(null);
     setDraftEmailBody(null);
-    setTwilioCallSid(null);
     setEmailTo('');
     setEmailCc('');
   }, []);
@@ -329,7 +313,6 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
     aiProcessing,
     draftEmailSubject,
     draftEmailBody,
-    twilioCallSid,
     emailTo,
     emailCc,
     startSession,
@@ -345,7 +328,6 @@ export function DiallerProvider({ children }: { children: ReactNode }) {
     loadTodaysCallbacks,
     refreshStats,
     resetSession,
-    setTwilioCallSid,
     setEmailTo,
     setEmailCc,
   };
