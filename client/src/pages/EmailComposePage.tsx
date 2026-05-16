@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useDialler } from '../hooks/useDiallerSession';
 import { getContactFirstName } from '../utils/names';
-import { sendEmail, updateLeadStage, updateLead } from '../services/api';
+import { sendEmail, updateLead } from '../services/api';
 import { buildEmailText } from '../utils/emailTemplate';
 
 const FOLLOW_UP_SUBJECT = 'Great speaking with you today';
@@ -52,7 +52,10 @@ export default function EmailComposePage() {
   const [subject, setSubject] = useState(FOLLOW_UP_SUBJECT);
   const [body, setBody] = useState(FOLLOW_UP_BODY);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [pipelineStage, setPipelineStage] = useState<'follow_up' | 'call_booked'>(
+  // Template choice — picks which email body template to use. Used to
+  // double as a pipeline stage selector but tiers are now user-controlled,
+  // so this is purely a template key now.
+  const [templateChoice, setTemplateChoice] = useState<'follow_up' | 'call_booked'>(
     'follow_up'
   );
   const [sending, setSending] = useState(false);
@@ -67,7 +70,7 @@ export default function EmailComposePage() {
   }, [draftEmailSubject, draftEmailBody, draftApplied]);
 
   const handleGroupChange = (group: 'follow_up' | 'call_booked') => {
-    setPipelineStage(group);
+    setTemplateChoice(group);
     if (group === 'call_booked') {
       setSubject(CALL_BOOKED_SUBJECT);
       setBody(CALL_BOOKED_BODY);
@@ -103,7 +106,8 @@ export default function EmailComposePage() {
         bcc: bccEmail || undefined,
         subject,
         body: fullBody,
-        pipelineStage,
+        // Tiers are user-controlled — sending an email no longer auto-moves
+        // the lead between tiers.
       });
 
       // Update the lead's email if the user typed one that differs from what's on file
@@ -113,13 +117,6 @@ export default function EmailComposePage() {
         } catch {
           // Non-critical — email was sent, lead update is secondary
         }
-      }
-
-      // Update the lead's pipeline stage
-      try {
-        await updateLeadStage(currentLead.id, pipelineStage);
-      } catch {
-        // Non-critical — email was sent, stage update is secondary
       }
 
       navigate('/dialler');
@@ -323,10 +320,10 @@ export default function EmailComposePage() {
           <div className="px-6 py-4 border-t border-hair-soft flex items-center">
             <div className="flex items-center gap-3">
               <label className="text-ink-dim text-xs uppercase tracking-wider">
-                Move to pipeline stage:
+                Email template:
               </label>
               <select
-                value={pipelineStage}
+                value={templateChoice}
                 onChange={(e) =>
                   handleGroupChange(e.target.value as 'follow_up' | 'call_booked')
                 }

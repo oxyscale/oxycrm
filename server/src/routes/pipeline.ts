@@ -76,7 +76,7 @@ function mapLeadRow(row: LeadRow): Lead {
 // ============================================================
 
 const PIPELINE_STAGES: [PipelineStage, ...PipelineStage[]] = [
-  'new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested', 'five_strikes',
+  'tier_1', 'tier_2', 'tier_3', 'won', 'lost',
 ];
 
 const TEMPERATURES: [Temperature, ...Temperature[]] = ['hot', 'warm', 'cold'];
@@ -94,14 +94,11 @@ const updateTemperatureSchema = z.object({
 // ============================================================
 
 const stageLabels: Record<PipelineStage, string> = {
-  new_lead: 'New Lead',
-  follow_up: 'Follow Up',
-  call_booked: 'Call Booked',
-  negotiation: 'Negotiation',
+  tier_1: 'Tier 1',
+  tier_2: 'Tier 2',
+  tier_3: 'Tier 3',
   won: 'Won',
   lost: 'Lost',
-  not_interested: 'Not Interested',
-  five_strikes: 'Five Strikes',
 };
 
 // ============================================================
@@ -168,7 +165,8 @@ router.get('/', (req, res, next) => {
 
 /**
  * GET /api/pipeline/follow-ups
- * Returns all leads in follow_up stage, sorted by follow-up date.
+ * Returns every lead with a follow_up_date set, regardless of tier
+ * (excluding 'won' and 'lost' since those are closed). Sorted by date.
  * Includes an isOverdue flag for dates in the past.
  */
 router.get('/follow-ups', (_req, res, next) => {
@@ -180,9 +178,9 @@ router.get('/follow-ups', (_req, res, next) => {
       SELECT *,
         CASE WHEN follow_up_date IS NOT NULL AND follow_up_date < ? THEN 1 ELSE 0 END as is_overdue
       FROM leads
-      WHERE pipeline_stage = 'follow_up'
+      WHERE follow_up_date IS NOT NULL
+        AND pipeline_stage NOT IN ('won', 'lost')
       ORDER BY
-        CASE WHEN follow_up_date IS NULL THEN 1 ELSE 0 END,
         follow_up_date ASC,
         updated_at DESC
     `).all(today) as (LeadRow & { is_overdue: number })[];
@@ -340,12 +338,13 @@ router.get('/stats', (req, res, next) => {
     const closedTotal = wonCount + lostCount;
     const conversionRate = closedTotal > 0 ? Math.round((wonCount / closedTotal) * 100) : 0;
 
-    // Total pipeline value — sum of project values for leads in negotiation or won
+    // Total pipeline value — sum of project values for leads in tier_1 (close
+    // to closing) or won. Tier 1 maps to the legacy 'negotiation' bucket.
     const valueRow = db.prepare(`
       SELECT COALESCE(SUM(p.value), 0) AS total_value
       FROM projects p
       JOIN leads l ON l.id = p.lead_id
-      WHERE l.pipeline_stage IN ('negotiation', 'won')
+      WHERE l.pipeline_stage IN ('tier_1', 'won')
     `).get() as { total_value: number };
 
     // Temperature breakdown

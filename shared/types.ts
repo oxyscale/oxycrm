@@ -3,8 +3,8 @@
 // Used by both client and server
 // ============================================================
 
-// Pipeline stages
-export type PipelineStage = 'new_lead' | 'follow_up' | 'call_booked' | 'negotiation' | 'won' | 'lost' | 'not_interested' | 'five_strikes';
+// Pipeline stages — three working tiers + two outcomes
+export type PipelineStage = 'tier_1' | 'tier_2' | 'tier_3' | 'won' | 'lost';
 
 // Temperature
 export type Temperature = 'hot' | 'warm' | 'cold';
@@ -147,7 +147,7 @@ export interface SendEmailPayload {
   bcc?: string;
   subject: string;
   body: string;
-  pipelineStage: 'follow_up' | 'call_booked';
+  pipelineStage?: PipelineStage;
   attachments?: string[];
 }
 
@@ -243,7 +243,10 @@ export interface EmailDraft {
   ccEmail: string | null;
   subject: string | null;
   body: string | null;
-  suggestedStage: 'follow_up' | 'call_booked';
+  // Template hint left over from the old pipeline ('follow_up' or 'call_booked').
+  // No longer maps to a real PipelineStage value — kept as a free-form string
+  // so legacy drafts still load. Email send no longer auto-moves leads.
+  suggestedStage: string;
   status: EmailDraftStatus;
   generatedAt: string | null;
   sentAt: string | null;

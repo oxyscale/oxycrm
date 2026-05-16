@@ -61,7 +61,7 @@ function mapDraft(row: DraftRow) {
     ccEmail: row.cc_email,
     subject: row.subject,
     body: row.body,
-    suggestedStage: (row.suggested_stage || 'follow_up') as 'follow_up' | 'call_booked',
+    suggestedStage: row.suggested_stage || 'follow_up',
     status: row.status as 'pending' | 'ready' | 'sent' | 'discarded' | 'failed',
     generatedAt: row.generated_at,
     sentAt: row.sent_at,

@@ -114,10 +114,29 @@ export function initializeDatabase(db: Database.Database): void {
   // CRM Migration — new columns on leads table
   // ============================================================
 
-  // Add pipeline_stage column
+  // Add pipeline_stage column. Default for new installs is 'tier_3' (cold/intro).
   if (!columns.some((c) => c.name === 'pipeline_stage')) {
-    db.exec("ALTER TABLE leads ADD COLUMN pipeline_stage TEXT NOT NULL DEFAULT 'new_lead'");
+    db.exec("ALTER TABLE leads ADD COLUMN pipeline_stage TEXT NOT NULL DEFAULT 'tier_3'");
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Pipeline simplification (May 2026): collapse 7+ stages into
+  // three tiers + two outcomes (won, lost). Idempotent — runs every
+  // boot but only touches rows still on the legacy values.
+  //   new_lead       -> tier_3   (cold / freshly imported, never engaged)
+  //   follow_up      -> tier_2   (we're working on them)
+  //   call_booked    -> tier_1   (close to closing)
+  //   negotiation    -> tier_1   (close to closing)
+  //   not_interested -> lost
+  //   five_strikes   -> lost     (couldn't reach after N attempts)
+  //   won / lost     -> unchanged
+  // ─────────────────────────────────────────────────────────────────
+  db.exec(`
+    UPDATE leads SET pipeline_stage = 'tier_3' WHERE pipeline_stage = 'new_lead';
+    UPDATE leads SET pipeline_stage = 'tier_2' WHERE pipeline_stage = 'follow_up';
+    UPDATE leads SET pipeline_stage = 'tier_1' WHERE pipeline_stage IN ('call_booked', 'negotiation');
+    UPDATE leads SET pipeline_stage = 'lost'   WHERE pipeline_stage IN ('not_interested', 'five_strikes');
+  `);
 
   // Add temperature column
   if (!columns.some((c) => c.name === 'temperature')) {
@@ -257,10 +276,13 @@ export function initializeDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_leads_pipeline_stage
       ON leads(pipeline_stage);
 
-    -- Index for follow-up date queries
+    -- Index for follow-up date queries (stage filter removed in May 2026
+    -- pipeline simplification — any active tier can have a follow-up date).
+    -- Drop the legacy partial index that filtered on the old 'follow_up' stage.
+    DROP INDEX IF EXISTS idx_leads_follow_up_date;
     CREATE INDEX IF NOT EXISTS idx_leads_follow_up_date
       ON leads(follow_up_date)
-      WHERE pipeline_stage = 'follow_up' AND follow_up_date IS NOT NULL;
+      WHERE follow_up_date IS NOT NULL;
 
     -- Settings table: key-value pairs for app configuration
     CREATE TABLE IF NOT EXISTS settings (

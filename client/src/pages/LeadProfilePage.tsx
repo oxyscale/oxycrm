@@ -41,14 +41,11 @@ import type {
 // ── Constants ────────────────────────────────────────────────
 
 const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
-  { value: 'new_lead', label: 'New Lead' },
-  { value: 'follow_up', label: 'Follow Up' },
-  { value: 'call_booked', label: 'Call Booked' },
-  { value: 'negotiation', label: 'Negotiation' },
+  { value: 'tier_1', label: 'Tier 1' },
+  { value: 'tier_2', label: 'Tier 2' },
+  { value: 'tier_3', label: 'Tier 3' },
   { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
-  { value: 'not_interested', label: 'Not Interested' },
-  { value: 'five_strikes', label: 'Five Strikes' },
 ];
 
 const TEMPERATURES: Temperature[] = ['hot', 'warm', 'cold'];
@@ -807,9 +804,10 @@ export default function LeadProfilePage() {
             onChange={async (e) => {
               const val = e.target.value || null;
               try {
+                // Tiers are user-controlled — setting a follow-up date no
+                // longer auto-moves the lead between tiers.
                 const updated = await api.updateLead(lead.id, {
                   followUpDate: val,
-                  ...(val && lead.pipelineStage !== 'follow_up' ? { pipelineStage: 'follow_up' } : {}),
                 } as Partial<Lead>);
                 setLead(updated);
                 if (tab === 'activity') loadActivities();

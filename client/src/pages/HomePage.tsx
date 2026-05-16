@@ -36,14 +36,11 @@ import type { ImportResult, DuplicateLead, Activity, Lead } from '../types';
 
 // ── Pipeline stage display config ────────────────────────────
 const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
-  new_lead: { label: 'New Lead', color: '#55606a' },
-  follow_up: { label: 'Follow Up', color: '#0a9cd4' },
-  call_booked: { label: 'Call Booked', color: '#0b0d0e' },
-  negotiation: { label: 'Negotiation', color: '#f59e0b' },
+  tier_1: { label: 'Tier 1', color: '#0a9cd4' },
+  tier_2: { label: 'Tier 2', color: '#f59e0b' },
+  tier_3: { label: 'Tier 3', color: '#8a95a0' },
   won: { label: 'Won', color: '#10b981' },
   lost: { label: 'Lost', color: '#ef4444' },
-  not_interested: { label: 'Not Interested', color: '#8a95a0' },
-  five_strikes: { label: 'Five Strikes', color: '#b8bfc6' },
 };
 
 const ACTIVITY_ICONS: Record<string, typeof Phone> = {
@@ -267,7 +264,9 @@ export default function HomePage() {
         website: newLead.website.trim() || undefined,
         category: newLead.category.trim() || undefined,
         temperature: createTemperature || undefined,
-        pipelineStage: createTemperature ? 'follow_up' : undefined,
+        // No auto-stage on create — defaults to tier_3 server-side. The user
+        // moves leads to tier_2 / tier_1 manually as the conversation matures.
+        pipelineStage: undefined,
       });
 
       setCreateResult({

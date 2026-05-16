@@ -102,7 +102,9 @@ export default function EmailBankPage() {
       setEditBody(selected.body || '');
       setEditTo(selected.toEmail || '');
       setEditCc(selected.ccEmail || '');
-      setEditStage(selected.suggestedStage || 'follow_up');
+      // suggestedStage is now a free-form string (legacy template hint).
+      // Coerce back to the two known template choices, defaulting to follow_up.
+      setEditStage(selected.suggestedStage === 'call_booked' ? 'call_booked' : 'follow_up');
       setEditIncludeHeader(selected.includeAfterCallHeader);
       setEditIncludeCapabilities(selected.includeCapabilities);
       setEditIncludeBookACall(selected.includeBookACall);

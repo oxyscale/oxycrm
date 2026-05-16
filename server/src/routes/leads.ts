@@ -148,7 +148,7 @@ const createLeadSchema = z.object({
   website: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
-  pipelineStage: z.enum(['new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested', 'five_strikes']).optional(),
+  pipelineStage: z.enum(['tier_1', 'tier_2', 'tier_3', 'won', 'lost']).optional(),
 });
 
 const updateLeadSchema = z.object({
@@ -161,7 +161,7 @@ const updateLeadSchema = z.object({
   category: z.string().nullable().optional(),
   consolidatedSummary: z.string().nullable().optional(),
   companyInfo: z.string().nullable().optional(),
-  pipelineStage: z.enum(['new_lead', 'follow_up', 'call_booked', 'negotiation', 'won', 'lost', 'not_interested', 'five_strikes']).optional(),
+  pipelineStage: z.enum(['tier_1', 'tier_2', 'tier_3', 'won', 'lost']).optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   followUpDate: z.string().nullable().optional(),
 });
@@ -584,7 +584,7 @@ router.post('/', (req, res, next) => {
         email: payload.email ?? null,
         website: payload.website ?? null,
         category: payload.category ?? null,
-        pipelineStage: payload.pipelineStage ?? 'new_lead',
+        pipelineStage: payload.pipelineStage ?? 'tier_3',
         temperature: payload.temperature ?? null,
         queuePosition: maxPosRow.max_pos + 1,
         now,
@@ -844,10 +844,12 @@ router.post('/:id/disposition', (req, res, next) => {
       db.prepare('UPDATE leads SET last_called_at = ?, updated_at = ? WHERE id = ?')
         .run(now, now, id);
 
-      // A lead is considered "active" once they've ever picked up and been dispositioned
-      // interested or not_interested. Active leads are never retired by the strike system —
-      // a long-term relationship that misses a few calls must stay in the cycler.
-      // Only leads who have never had an answered conversation can hit "five_strikes".
+      // Pipeline simplification (May 2026): the disposition flow no longer
+      // moves leads between stages — the user owns tier placement manually.
+      // The disposition still records the call, updates status, increments
+      // unanswered counters, and (for wrong_number) deletes the lead.
+      // Strike-system retirement now sends leads to 'lost' instead of the
+      // retired 'five_strikes' stage.
       const answeredRow = db.prepare(`
         SELECT COUNT(*) as c FROM call_logs
         WHERE lead_id = ? AND disposition IN ('interested', 'not_interested')
@@ -858,16 +860,13 @@ router.post('/:id/disposition', (req, res, next) => {
         case 'no_answer': {
           const newCount = leadRow.unanswered_calls + 1;
           if (!hasEverAnswered && newCount >= threshold) {
-            // Never-answered lead hit the strike limit — retire to five_strikes stage.
             db.prepare(
               `UPDATE leads
                SET unanswered_calls = ?, status = ?, pipeline_stage = ?, updated_at = ?
                WHERE id = ?`
-            ).run(newCount, 'called', 'five_strikes', now, id);
-            logger.info({ leadId: id, unansweredCalls: newCount, threshold }, 'Lead retired to five_strikes after hitting unanswered threshold');
+            ).run(newCount, 'called', 'lost', now, id);
+            logger.info({ leadId: id, unansweredCalls: newCount, threshold }, 'Lead moved to lost after unanswered threshold');
           } else {
-            // Either the lead has picked up before (immune to strikes) or they haven't hit the limit yet.
-            // Cycle them to the back of the queue so the rest of the list gets attention first.
             const maxPos = (db.prepare('SELECT COALESCE(MAX(queue_position), 0) as max_pos FROM leads').get() as { max_pos: number }).max_pos;
             db.prepare('UPDATE leads SET unanswered_calls = ?, status = ?, queue_position = ?, updated_at = ? WHERE id = ?')
               .run(newCount, 'not_called', maxPos + 1, now, id);
@@ -882,8 +881,8 @@ router.post('/:id/disposition', (req, res, next) => {
               `UPDATE leads
                SET unanswered_calls = ?, voicemail_left = 1, voicemail_date = ?, status = ?, pipeline_stage = ?, updated_at = ?
                WHERE id = ?`
-            ).run(newCount, now, 'called', 'five_strikes', now, id);
-            logger.info({ leadId: id, unansweredCalls: newCount, threshold }, 'Lead retired to five_strikes after hitting voicemail threshold');
+            ).run(newCount, now, 'called', 'lost', now, id);
+            logger.info({ leadId: id, unansweredCalls: newCount, threshold }, 'Lead moved to lost after voicemail threshold');
           } else {
             const maxPos = (db.prepare('SELECT COALESCE(MAX(queue_position), 0) as max_pos FROM leads').get() as { max_pos: number }).max_pos;
             db.prepare(
@@ -897,15 +896,15 @@ router.post('/:id/disposition', (req, res, next) => {
 
         case 'not_interested': {
           db.prepare('UPDATE leads SET status = ?, pipeline_stage = ?, updated_at = ? WHERE id = ?')
-            .run('called', 'not_interested', now, id);
+            .run('called', 'lost', now, id);
           break;
         }
 
         case 'interested': {
+          // Don't change tier — let the user move them to Tier 1/2 manually.
           db.prepare('UPDATE leads SET status = ?, updated_at = ? WHERE id = ?')
             .run('called', now, id);
 
-          // If a callback was requested, create a callback record
           if (payload.callbackDate) {
             db.prepare('INSERT INTO callbacks (lead_id, callback_date, notes) VALUES (?, ?, ?)')
               .run(id, payload.callbackDate, payload.callbackNotes || null);
@@ -914,7 +913,6 @@ router.post('/:id/disposition', (req, res, next) => {
         }
 
         case 'wrong_number': {
-          // Delete the lead entirely — wrong number means it's useless
           db.prepare('DELETE FROM call_logs WHERE lead_id = ?').run(id);
           db.prepare('DELETE FROM leads WHERE id = ?').run(id);
           logger.info({ leadId: id }, 'Lead deleted — wrong number');
@@ -922,10 +920,11 @@ router.post('/:id/disposition', (req, res, next) => {
         }
       }
 
-      // If a follow-up date was provided, set it and move to follow_up stage
+      // Follow-up date is set as-is — pipeline stage no longer changes
+      // automatically (the auto-move to 'follow_up' is gone with the stage).
       if (payload.followUpDate && payload.disposition !== 'wrong_number') {
-        db.prepare('UPDATE leads SET follow_up_date = ?, pipeline_stage = ? WHERE id = ?')
-          .run(payload.followUpDate, 'follow_up', id);
+        db.prepare('UPDATE leads SET follow_up_date = ? WHERE id = ?')
+          .run(payload.followUpDate, id);
       }
     });
 

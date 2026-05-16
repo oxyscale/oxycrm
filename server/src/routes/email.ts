@@ -30,7 +30,9 @@ const sendEmailSchema = z.object({
   bcc: z.string().regex(NO_CRLF, 'BCC cannot contain line breaks').optional(),
   subject: z.string().min(1, 'Subject is required').max(998).regex(NO_CRLF, 'Subject cannot contain line breaks'),
   body: z.string().min(1, 'Email body is required'),
-  pipelineStage: z.enum(['follow_up', 'call_booked']),
+  // Optional — used for logging only. Pipeline simplification (May 2026)
+  // means email send no longer auto-moves leads between tiers.
+  pipelineStage: z.enum(['tier_1', 'tier_2', 'tier_3', 'won', 'lost']).optional(),
   attachments: z.array(z.string()).optional(),
 });
 

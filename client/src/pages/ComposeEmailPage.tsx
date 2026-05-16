@@ -177,7 +177,7 @@ export default function ComposeEmailPage() {
         cc: ccEmail || undefined,
         subject,
         body: buildEmailText(body, greetingName || 'there'),
-        pipelineStage: 'follow_up',
+        // Tiers are user-controlled — pipelineStage no longer auto-set on send.
       });
 
       // Auto-update lead's email if user entered a different one

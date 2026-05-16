@@ -32,14 +32,11 @@ interface StageColumn {
 }
 
 const STAGES: StageColumn[] = [
-  { key: 'new_lead', label: 'New Lead', color: 'bg-ink', bgTint: 'bg-[rgba(10,156,212,0.06)]' },
-  { key: 'follow_up', label: 'Follow Up', color: 'bg-amber-400', bgTint: 'bg-[rgba(251,191,36,0.06)]' },
-  { key: 'call_booked', label: 'Call Booked', color: 'bg-blue-400', bgTint: 'bg-[rgba(96,165,250,0.06)]' },
-  { key: 'negotiation', label: 'Negotiation', color: 'bg-purple-400', bgTint: 'bg-[rgba(192,132,252,0.06)]' },
-  { key: 'won', label: 'Won', color: 'bg-ink', bgTint: 'bg-[rgba(10,156,212,0.06)]' },
+  { key: 'tier_1', label: 'Tier 1', color: 'bg-sky-ink', bgTint: 'bg-[rgba(10,156,212,0.06)]' },
+  { key: 'tier_2', label: 'Tier 2', color: 'bg-amber-400', bgTint: 'bg-[rgba(245,158,11,0.06)]' },
+  { key: 'tier_3', label: 'Tier 3', color: 'bg-ink-dim', bgTint: 'bg-[rgba(138,149,160,0.06)]' },
+  { key: 'won', label: 'Won', color: 'bg-emerald-500', bgTint: 'bg-[rgba(16,185,129,0.06)]' },
   { key: 'lost', label: 'Lost', color: 'bg-red-400', bgTint: 'bg-[rgba(248,113,113,0.06)]' },
-  { key: 'not_interested', label: 'Not Interested', color: 'bg-ink-dim', bgTint: 'bg-[rgba(138,149,160,0.06)]' },
-  { key: 'five_strikes', label: 'Five Strikes', color: 'bg-ink-faint', bgTint: 'bg-[rgba(184,191,198,0.08)]' },
 ];
 
 const TEMPERATURE_CYCLE: (Temperature | null)[] = ['hot', 'warm', 'cold', null];
