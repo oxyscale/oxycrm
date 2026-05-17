@@ -231,6 +231,7 @@ export default function PipelinePage() {
           <div className="flex gap-4 min-w-max">
             {STAGES.map((stage) => {
               const leads = pipeline[stage.key] || [];
+              const columnValue = leads.reduce((sum, l) => sum + (l.dealValue || 0), 0);
               return (
                 <div
                   key={stage.key}
@@ -240,11 +241,16 @@ export default function PipelinePage() {
                   <div className={`${stage.bgTint} border-b border-hair-soft`}>
                     {/* Color strip */}
                     <div className={`h-1 ${stage.color}`} />
-                    <div className="px-4 py-3 flex items-center justify-between">
-                      <h3 className="text-ink text-sm font-bold">{stage.label}</h3>
-                      <span className="bg-tray text-ink-muted text-xs font-medium px-2 py-0.5 rounded-full">
-                        {leads.length}
-                      </span>
+                    <div className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="text-ink text-sm font-bold">{stage.label}</h3>
+                        <span className="bg-tray text-ink-muted text-xs font-medium px-2 py-0.5 rounded-full">
+                          {leads.length}
+                        </span>
+                      </div>
+                      <p className="text-ink-muted text-xs font-medium">
+                        {formatAUD(columnValue)}
+                      </p>
                     </div>
                   </div>
 
