@@ -11,9 +11,7 @@ import {
   Users,
   PhoneCall,
   ArrowRight,
-  Flame,
   Thermometer,
-  Snowflake,
   Clock,
   ChevronRight,
   FolderKanban,
@@ -57,7 +55,6 @@ export default function HomePage() {
   const {
     setLeads,
     leads,
-    startSession,
     todaysCallbacks: _todaysCallbacks,
     loadTodaysCallbacks,
   } = useDialler();
@@ -66,7 +63,6 @@ export default function HomePage() {
     byStage: Record<string, number>;
     conversionRate: number;
     totalPipelineValue: number;
-    byTemperature: Record<string, number>;
   } | null>(null);
   const [recentActivities, setRecentActivities] = useState<
     (Activity & { leadName: string; leadCompany: string | null })[]
@@ -111,11 +107,9 @@ export default function HomePage() {
     website: '',
     category: '',
   });
-  const [createTemperature, setCreateTemperature] = useState<'hot' | 'warm' | 'cold' | ''>('');
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState<{
     leadName: string;
-    temperature?: string;
   } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -263,7 +257,6 @@ export default function HomePage() {
         email: newLead.email.trim() || undefined,
         website: newLead.website.trim() || undefined,
         category: newLead.category.trim() || undefined,
-        temperature: createTemperature || undefined,
         // No auto-stage on create — defaults to tier_3 server-side. The user
         // moves leads to tier_2 / tier_1 manually as the conversation matures.
         pipelineStage: undefined,
@@ -271,11 +264,9 @@ export default function HomePage() {
 
       setCreateResult({
         leadName: created.name,
-        temperature: createTemperature || undefined,
       });
 
       setNewLead({ name: '', company: '', phone: '', email: '', website: '', category: '' });
-      setCreateTemperature('');
 
       const freshLeads = await api.getLeads({ status: 'not_called' });
       setLeads(freshLeads);
@@ -400,13 +391,10 @@ export default function HomePage() {
               <PillButton
                 variant="primary"
                 size="md"
-                icon={<Phone size={16} />}
-                onClick={() => {
-                  startSession('new');
-                  navigate('/dialler');
-                }}
+                icon={<Users size={16} />}
+                onClick={() => navigate('/leads')}
               >
-                Start Dialler ({leads.length})
+                Open Leads ({leads.length})
               </PillButton>
             )}
             <PillButton
@@ -458,13 +446,6 @@ export default function HomePage() {
                   <p className="text-sky-ink text-sm font-medium">
                     {createResult.leadName} added to queue
                   </p>
-                  {createResult.temperature && (
-                    <p className="text-ink-muted text-xs mt-0.5">
-                      Temperature:{' '}
-                      {createResult.temperature.charAt(0).toUpperCase() +
-                        createResult.temperature.slice(1)}
-                    </p>
-                  )}
                 </div>
               </div>
             )}
@@ -523,32 +504,6 @@ export default function HomePage() {
                   />
                 </div>
               ))}
-            </div>
-
-            <div className="flex items-center gap-4 mb-6">
-              <EyebrowLabel variant="bare">Temperature</EyebrowLabel>
-              <div className="flex gap-2">
-                {([
-                  { value: 'hot', label: 'Hot', accent: 'text-risk bg-[rgba(239,68,68,0.08)] border-[rgba(239,68,68,0.25)]' },
-                  { value: 'warm', label: 'Warm', accent: 'text-warn bg-[rgba(245,158,11,0.08)] border-[rgba(245,158,11,0.25)]' },
-                  { value: 'cold', label: 'Cold', accent: 'text-sky-ink bg-sky-wash border-sky-hair' },
-                ] as const).map(({ value, label, accent }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() =>
-                      setCreateTemperature(createTemperature === value ? '' : value)
-                    }
-                    className={`px-4 py-1.5 rounded-full border text-sm font-medium transition-all ${
-                      createTemperature === value
-                        ? accent
-                        : 'bg-paper border-hair-soft text-ink-dim hover:text-ink-muted hover:border-hair'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
             </div>
 
             <PillButton
@@ -754,55 +709,6 @@ export default function HomePage() {
               )}
             </PanelCard>
 
-            {/* Temperature */}
-            {pipelineStats && (
-              <PanelCard eyebrow="TEMPERATURE" title="Lead heat" elevated>
-                <div className="grid grid-cols-3 gap-3">
-                  {([
-                    {
-                      key: 'hot',
-                      label: 'Hot',
-                      Icon: Flame,
-                      tint: 'bg-[rgba(239,68,68,0.06)]',
-                      border: 'border-[rgba(239,68,68,0.18)]',
-                      text: 'text-risk',
-                    },
-                    {
-                      key: 'warm',
-                      label: 'Warm',
-                      Icon: Thermometer,
-                      tint: 'bg-[rgba(245,158,11,0.06)]',
-                      border: 'border-[rgba(245,158,11,0.22)]',
-                      text: 'text-warn',
-                    },
-                    {
-                      key: 'cold',
-                      label: 'Cold',
-                      Icon: Snowflake,
-                      tint: 'bg-[rgba(94,197,230,0.22)]',
-                      border: 'border-[rgba(94,197,230,0.4)]',
-                      text: 'text-sky-ink',
-                    },
-                  ] as const).map(({ key, label, Icon, tint, border, text }) => (
-                    <div
-                      key={key}
-                      className={`${tint} ${border} border rounded-xl p-4 flex items-center justify-between`}
-                    >
-                      <div>
-                        <p className="font-mono text-[10px] font-semibold tracking-[0.22em] uppercase text-ink-dim">
-                          {label}
-                        </p>
-                        <p className="mt-1.5 text-ink font-medium text-[28px] leading-none tracking-tight">
-                          {pipelineStats.byTemperature[key] ?? 0}
-                        </p>
-                      </div>
-                      <Icon size={24} className={text} />
-                    </div>
-                  ))}
-                </div>
-              </PanelCard>
-            )}
-
             {/* Follow-Up Queue */}
             {followUpQueue.length > 0 && (
               <PanelCard
@@ -944,13 +850,13 @@ export default function HomePage() {
                                 variant="primary"
                                 size="sm"
                                 trailing="none"
-                                icon={<Phone size={13} />}
+                                icon={<ArrowRight size={13} />}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate('/dialler', { state: { loadLeadId: lead.id } });
+                                  navigate(`/leads/${lead.id}`);
                                 }}
                               >
-                                Call
+                                Open
                               </PillButton>
                               <PillButton
                                 variant="outline"

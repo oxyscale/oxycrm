@@ -7,16 +7,13 @@ import {
   Phone,
   Building2,
   ChevronDown,
-  Flame,
-  Thermometer,
-  Snowflake,
-  TrendingUp,
+  DollarSign,
   Users,
   Trophy,
   ArrowRight,
 } from 'lucide-react';
 import * as api from '../services/api';
-import type { Lead, PipelineStage, Temperature } from '../types';
+import type { Lead, PipelineStage } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
 import StatCard from '../components/ui/StatCard';
@@ -39,23 +36,6 @@ const STAGES: StageColumn[] = [
   { key: 'lost', label: 'Lost', color: 'bg-red-400', bgTint: 'bg-[rgba(248,113,113,0.06)]' },
 ];
 
-const TEMPERATURE_CYCLE: (Temperature | null)[] = ['hot', 'warm', 'cold', null];
-
-function getTemperatureStyle(temp: Temperature): { label: string; color: string; bg: string; Icon: typeof Flame } {
-  switch (temp) {
-    case 'hot':
-      return { label: 'Hot', color: 'text-red-400', bg: 'bg-red-500/15', Icon: Flame };
-    case 'warm':
-      return { label: 'Warm', color: 'text-amber-400', bg: 'bg-amber-500/15', Icon: Thermometer };
-    case 'cold':
-      return { label: 'Cold', color: 'text-blue-400', bg: 'bg-blue-500/15', Icon: Snowflake };
-    default: {
-      const _exhaustive: never = temp;
-      return _exhaustive;
-    }
-  }
-}
-
 // ── Component ───────────────────────────────────────────────────
 
 export default function PipelinePage() {
@@ -67,27 +47,24 @@ export default function PipelinePage() {
     byStage: Record<string, number>;
     conversionRate: number;
     totalPipelineValue: number;
-    byTemperature: Record<string, number>;
   } | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Filter state
-  const [filterTemperature, setFilterTemperature] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
 
   // Stage move dropdown state
   const [openMoveDropdown, setOpenMoveDropdown] = useState<number | null>(null);
   const [movingLead, setMovingLead] = useState<number | null>(null);
-  const [updatingTemp, setUpdatingTemp] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // ── Data loading ────────────────────────────────────────────
 
   useEffect(() => {
     loadData();
-  }, [filterTemperature, filterCategory]);
+  }, [filterCategory]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -104,8 +81,7 @@ export default function PipelinePage() {
     setLoading(true);
     setError(null);
     try {
-      const filters: { temperature?: string; category?: string } = {};
-      if (filterTemperature !== 'all') filters.temperature = filterTemperature;
+      const filters: { category?: string } = {};
       if (filterCategory !== 'all') filters.category = filterCategory;
 
       const [pipelineData, statsData, cats] = await Promise.all([
@@ -153,34 +129,18 @@ export default function PipelinePage() {
     }
   };
 
-  const handleTemperatureChange = async (lead: Lead) => {
-    setUpdatingTemp(lead.id);
-    try {
-      const currentIdx = TEMPERATURE_CYCLE.indexOf(lead.temperature);
-      const nextIdx = (currentIdx + 1) % TEMPERATURE_CYCLE.length;
-      const nextTemp = TEMPERATURE_CYCLE[nextIdx];
-
-      const updated = await api.updateLeadTemperature(lead.id, nextTemp);
-      // Update in local state
-      setPipeline((prev) => {
-        const next = { ...prev };
-        for (const key of Object.keys(next)) {
-          next[key] = next[key].map((l) => (l.id === lead.id ? updated : l));
-        }
-        return next;
-      });
-      // Refresh stats
-      api.getPipelineStats().then(setStats).catch(() => {});
-    } catch (err) {
-      console.error('Failed to update temperature:', err);
-    } finally {
-      setUpdatingTemp(null);
-    }
-  };
-
   // ── Derived data ────────────────────────────────────────────
 
   const totalLeads = Object.values(pipeline).reduce((sum, leads) => sum + leads.length, 0);
+
+  // Sum deal values across active tiers (Tier 1/2/3 only — Won/Lost are closed)
+  const activePipelineValue = (['tier_1', 'tier_2', 'tier_3'] as const).reduce((sum, key) => {
+    const list = pipeline[key] || [];
+    return sum + list.reduce((s, l) => s + (l.dealValue || 0), 0);
+  }, 0);
+  const formatAUD = (n: number) => n
+    ? `$${n.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`
+    : '$0';
 
   // ── Render ──────────────────────────────────────────────────
 
@@ -199,7 +159,7 @@ export default function PipelinePage() {
 
       {/* Stats bar */}
       {stats && (
-        <div className="grid grid-cols-4 gap-4 mb-6 flex-shrink-0">
+        <div className="grid grid-cols-3 gap-4 mb-6 flex-shrink-0">
           <StatCard
             eyebrow="Total Leads"
             value={totalLeads}
@@ -207,15 +167,9 @@ export default function PipelinePage() {
             elevated
           />
           <StatCard
-            eyebrow="Conversion"
-            value={`${stats.conversionRate}%`}
-            icon={<TrendingUp size={16} />}
-            elevated
-          />
-          <StatCard
-            eyebrow="Hot"
-            value={stats.byTemperature?.hot || 0}
-            icon={<Flame size={16} />}
+            eyebrow="Active Pipeline Value"
+            value={formatAUD(activePipelineValue)}
+            icon={<DollarSign size={16} />}
             elevated
           />
           <StatCard
@@ -230,16 +184,6 @@ export default function PipelinePage() {
       {/* Filters */}
       <div className="flex items-center gap-3 mb-6 flex-shrink-0">
         <Filter size={14} className="text-ink-dim" />
-        <select
-          value={filterTemperature}
-          onChange={(e) => setFilterTemperature(e.target.value)}
-          className="bg-paper border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink-muted focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
-        >
-          <option value="all">All Temperatures</option>
-          <option value="hot">Hot</option>
-          <option value="warm">Warm</option>
-          <option value="cold">Cold</option>
-        </select>
         {categories.length > 0 && (
           <select
             value={filterCategory}
@@ -336,37 +280,12 @@ export default function PipelinePage() {
 
                           {/* Badges row */}
                           <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-                            {/* Temperature badge — clickable to cycle */}
-                            {lead.temperature ? (
-                              <button
-                                onClick={() => handleTemperatureChange(lead)}
-                                disabled={updatingTemp === lead.id}
-                                className={`${getTemperatureStyle(lead.temperature).bg} ${getTemperatureStyle(lead.temperature).color} text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 hover:opacity-80 transition-all disabled:opacity-40`}
-                                title="Click to change temperature"
-                              >
-                                {updatingTemp === lead.id ? (
-                                  <Loader2 size={8} className="animate-spin" />
-                                ) : (
-                                  (() => {
-                                    const { Icon } = getTemperatureStyle(lead.temperature!);
-                                    return <Icon size={8} />;
-                                  })()
-                                )}
-                                {getTemperatureStyle(lead.temperature).label}
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleTemperatureChange(lead)}
-                                disabled={updatingTemp === lead.id}
-                                className="text-ink-dim text-[10px] px-2 py-0.5 rounded-full border border-hair-soft hover:border-hair-strong hover:text-ink-muted transition-all opacity-0 group-hover:opacity-100 disabled:opacity-40"
-                                title="Set temperature"
-                              >
-                                {updatingTemp === lead.id ? (
-                                  <Loader2 size={8} className="animate-spin" />
-                                ) : (
-                                  '+ Temp'
-                                )}
-                              </button>
+                            {/* Deal value badge */}
+                            {lead.dealValue > 0 && (
+                              <span className="bg-[rgba(11,13,14,0.05)] text-ink text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                                <DollarSign size={8} />
+                                {lead.dealValue.toLocaleString('en-AU', { maximumFractionDigits: 0 })}
+                              </span>
                             )}
 
                             {/* Category badge */}

@@ -4,13 +4,9 @@ import {
   Search,
   ArrowUpDown,
   Filter,
-  Phone,
-  Flame,
-  Thermometer,
-  Snowflake,
+  ChevronRight,
   UserPlus,
 } from 'lucide-react';
-import { useDialler } from '../hooks/useDiallerSession';
 import * as api from '../services/api';
 import type { Lead } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
@@ -22,13 +18,11 @@ type SortDir = 'asc' | 'desc';
 
 export default function LeadsPage() {
   const navigate = useNavigate();
-  const { setCurrentLead, updateCallState, startSession } = useDialler();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [filterTemperature, setFilterTemperature] = useState<string>('all');
   const [lastCalledSort, setLastCalledSort] = useState<'default' | 'recent' | 'oldest'>('default');
   const [sortField, setSortField] = useState<SortField>('queuePosition');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -57,10 +51,6 @@ export default function LeadsPage() {
     .filter((lead) => {
       if (filterStatus !== 'all' && lead.status !== filterStatus) return false;
       if (filterCategory !== 'all' && lead.category !== filterCategory) return false;
-      if (filterTemperature !== 'all') {
-        if (filterTemperature === 'none' && lead.temperature) return false;
-        if (filterTemperature !== 'none' && lead.temperature !== filterTemperature) return false;
-      }
       if (search) {
         const q = search.toLowerCase();
         return (
@@ -124,59 +114,6 @@ export default function LeadsPage() {
     return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
   };
 
-  const temperatureCycle = (current: string | null): 'hot' | 'warm' | 'cold' | null => {
-    if (!current) return 'hot';
-    if (current === 'hot') return 'warm';
-    if (current === 'warm') return 'cold';
-    return null;
-  };
-
-  const handleTemperatureClick = async (lead: Lead) => {
-    const newTemp = temperatureCycle(lead.temperature);
-    // Optimistic update
-    setLeads((prev) =>
-      prev.map((l) => (l.id === lead.id ? { ...l, temperature: newTemp } : l))
-    );
-    try {
-      await api.updateLeadTemperature(lead.id, newTemp);
-    } catch (err) {
-      console.error('Failed to update temperature:', err);
-      // Revert on error
-      setLeads((prev) =>
-        prev.map((l) => (l.id === lead.id ? { ...l, temperature: lead.temperature } : l))
-      );
-    }
-  };
-
-  const renderTemperatureBadge = (lead: Lead) => {
-    const temp = lead.temperature;
-    if (!temp) {
-      return (
-        <button
-          onClick={(e) => { e.stopPropagation(); handleTemperatureClick(lead); }}
-          className="text-ink-dim text-sm hover:text-ink-muted transition-colors cursor-pointer"
-        >
-          —
-        </button>
-      );
-    }
-    const config = {
-      hot: { icon: Flame, color: 'text-red-400', bg: 'bg-red-500/10', label: 'Hot' },
-      warm: { icon: Thermometer, color: 'text-amber-400', bg: 'bg-amber-500/10', label: 'Warm' },
-      cold: { icon: Snowflake, color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'Cold' },
-    }[temp];
-    const Icon = config.icon;
-    return (
-      <button
-        onClick={(e) => { e.stopPropagation(); handleTemperatureClick(lead); }}
-        className={`${config.bg} ${config.color} text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity`}
-      >
-        <Icon size={11} />
-        {config.label}
-      </button>
-    );
-  };
-
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center h-full">
@@ -237,19 +174,6 @@ export default function LeadsPage() {
           </select>
         </div>
 
-        {/* Temperature filter */}
-        <select
-          value={filterTemperature}
-          onChange={(e) => setFilterTemperature(e.target.value)}
-          className="bg-paper border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink-muted focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
-        >
-          <option value="all">All Temperatures</option>
-          <option value="hot">Hot</option>
-          <option value="warm">Warm</option>
-          <option value="cold">Cold</option>
-          <option value="none">No temperature</option>
-        </select>
-
         {/* Last called sort */}
         <select
           value={lastCalledSort}
@@ -304,9 +228,6 @@ export default function LeadsPage() {
                   Status
                   {sortField === 'status' && <ArrowUpDown size={12} className="text-sky-ink" />}
                 </span>
-              </th>
-              <th className="w-[90px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3 select-none">
-                Temp
               </th>
               <th className="w-[110px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3 select-none cursor-pointer hover:text-ink-muted transition-colors" onClick={() => handleSort('lastCalledAt')}>
                 <span className="flex items-center gap-1">
@@ -363,24 +284,16 @@ export default function LeadsPage() {
                     {statusLabel(lead.status)}
                   </span>
                 </td>
-                <td className="px-3 py-3">
-                  {renderTemperatureBadge(lead)}
-                </td>
                 <td className="px-3 py-3 text-ink-muted text-xs whitespace-nowrap">
                   {formatLastCalled(lead.lastCalledAt)}
                 </td>
                 <td className="px-3 py-3">
                   <button
-                    onClick={() => {
-                      setCurrentLead(lead);
-                      startSession('new');
-                      updateCallState('idle');
-                      navigate('/dialler');
-                    }}
-                    className="bg-ink text-white font-bold text-xs rounded-lg px-3 py-1.5 hover:bg-ink/90 transition-all flex items-center gap-1.5"
+                    onClick={() => navigate(`/leads/${lead.id}`)}
+                    className="text-ink-muted hover:text-sky-ink transition-colors flex items-center gap-1 text-xs"
                   >
-                    <Phone size={12} />
-                    Call
+                    Open
+                    <ChevronRight size={12} />
                   </button>
                 </td>
               </tr>
