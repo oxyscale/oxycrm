@@ -126,10 +126,7 @@ export default function ReportsPage() {
           <EyebrowLabel variant="pill" className="mb-4">
             OPERATIONS · REPORTS
           </EyebrowLabel>
-          <SectionHeading size="section">Pulse check.</SectionHeading>
-          <p className="text-ink-muted text-sm mt-3 max-w-xl">
-            Snapshot of pipeline, new leads, closed deals, and tasks for any date range. Built for fortnightly investor catch-ups.
-          </p>
+          <SectionHeading size="section">Operations overview.</SectionHeading>
         </div>
         <button
           onClick={() => window.print()}
