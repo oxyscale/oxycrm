@@ -807,6 +807,21 @@ export default function LeadProfilePage() {
                 onClick={() => setShowStageDropdown(false)}
               />
               <div className="absolute right-0 top-full mt-1 z-20 bg-paper border border-hair-soft rounded-xl shadow-xl overflow-hidden min-w-[180px]">
+                {/* No Tier option */}
+                <button
+                  onClick={() => handleStageChange(null)}
+                  className={`w-full text-left px-4 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] transition-all flex items-center gap-2 ${
+                    !lead.pipelineStage
+                      ? 'text-sky-ink'
+                      : 'text-ink-muted'
+                  }`}
+                >
+                  {!lead.pipelineStage && <Check size={13} />}
+                  <span className={!lead.pipelineStage ? '' : 'ml-[21px]'}>
+                    No Tier
+                  </span>
+                </button>
+                <div className="border-t border-hair-soft" />
                 {PIPELINE_STAGES.map((s) => (
                   <button
                     key={s.value}
@@ -823,15 +838,6 @@ export default function LeadProfilePage() {
                     </span>
                   </button>
                 ))}
-                {/* Remove from pipeline — only when lead is currently in a tier */}
-                {lead.pipelineStage && (
-                  <button
-                    onClick={() => handleStageChange(null)}
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] transition-all text-ink-dim border-t border-hair-soft"
-                  >
-                    <span className="ml-[21px]">Remove from pipeline</span>
-                  </button>
-                )}
               </div>
             </>
           )}
