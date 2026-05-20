@@ -114,9 +114,58 @@ export function initializeDatabase(db: Database.Database): void {
   // CRM Migration — new columns on leads table
   // ============================================================
 
-  // Add pipeline_stage column. Default for new installs is 'tier_3' (cold/intro).
+  // Add pipeline_stage column. Default for new installs is NULL (no tier).
   if (!columns.some((c) => c.name === 'pipeline_stage')) {
-    db.exec("ALTER TABLE leads ADD COLUMN pipeline_stage TEXT NOT NULL DEFAULT 'tier_3'");
+    db.exec("ALTER TABLE leads ADD COLUMN pipeline_stage TEXT DEFAULT NULL");
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Migration (May 2026): drop NOT NULL constraint from pipeline_stage.
+  // NULL = "lead is in /leads but not placed on the kanban". The reset
+  // endpoint and CSV import both rely on being able to write NULL here.
+  //
+  // SQLite has no ALTER COLUMN. We rewrite the table's CREATE statement
+  // in-place via PRAGMA writable_schema. Safer than the rename/recreate
+  // dance because no FK references from child tables need to be touched.
+  // ─────────────────────────────────────────────────────────────────
+  const pipelineStageInfo = (
+    db.prepare('PRAGMA table_info(leads)').all() as Array<{ name: string; notnull: number }>
+  ).find((c) => c.name === 'pipeline_stage');
+
+  if (pipelineStageInfo && pipelineStageInfo.notnull === 1) {
+    const tableSqlRow = db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'leads'"
+    ).get() as { sql: string } | undefined;
+
+    if (tableSqlRow?.sql) {
+      // Match "pipeline_stage TEXT NOT NULL" with any surrounding whitespace /
+      // quoting variants and strip the NOT NULL.
+      const newSql = tableSqlRow.sql.replace(
+        /(["']?pipeline_stage["']?\s+TEXT)\s+NOT\s+NULL/i,
+        '$1',
+      );
+
+      if (newSql !== tableSqlRow.sql) {
+        db.exec('PRAGMA foreign_keys = OFF');
+        db.exec('PRAGMA writable_schema = ON');
+        db.prepare(
+          "UPDATE sqlite_master SET sql = ? WHERE type = 'table' AND name = 'leads'"
+        ).run(newSql);
+        db.exec('PRAGMA writable_schema = OFF');
+        db.exec('PRAGMA foreign_keys = ON');
+
+        const integrity = (
+          db.prepare('PRAGMA integrity_check').get() as { integrity_check: string }
+        ).integrity_check;
+        if (integrity !== 'ok') {
+          // eslint-disable-next-line no-console
+          console.error('[schema] integrity_check failed after relaxing pipeline_stage:', integrity);
+        } else {
+          // eslint-disable-next-line no-console
+          console.log('[schema] Dropped NOT NULL constraint from leads.pipeline_stage');
+        }
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────
