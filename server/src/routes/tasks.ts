@@ -170,6 +170,30 @@ router.post('/leads/:leadId/tasks', async (req, res, next) => {
       if (lead.company) descLines.push(`Company: ${lead.company}`);
       if (lead.phone) descLines.push(`Phone: ${lead.phone}`);
       if (lead.email) descLines.push(`Email: ${lead.email}`);
+
+      // Pull the most recent note so Jordan has context when the calendar
+      // reminder fires — no need to open the CRM to remember what the
+      // call is about.
+      const latestNote = db.prepare(
+        'SELECT content FROM notes WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1'
+      ).get(leadId) as { content: string } | undefined;
+      if (latestNote?.content) {
+        descLines.push('');
+        descLines.push('--- Latest note ---');
+        descLines.push(latestNote.content);
+      }
+
+      // Also include the consolidated call summary if there is one — gives
+      // a broader picture of the relationship beyond the latest note.
+      const leadSummary = db.prepare(
+        'SELECT consolidated_summary FROM leads WHERE id = ?'
+      ).get(leadId) as { consolidated_summary: string | null } | undefined;
+      if (leadSummary?.consolidated_summary) {
+        descLines.push('');
+        descLines.push('--- Call summary ---');
+        descLines.push(leadSummary.consolidated_summary);
+      }
+
       descLines.push('');
       descLines.push(`Open in OxyCRM: https://oxycrm-production.up.railway.app/leads/${leadId}`);
 
