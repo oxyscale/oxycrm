@@ -146,6 +146,7 @@ export function initializeDatabase(db: Database.Database): void {
       );
 
       if (newSql !== tableSqlRow.sql) {
+        db.unsafeMode(true);
         db.exec('PRAGMA foreign_keys = OFF');
         db.exec('PRAGMA writable_schema = ON');
         db.prepare(
@@ -153,6 +154,13 @@ export function initializeDatabase(db: Database.Database): void {
         ).run(newSql);
         db.exec('PRAGMA writable_schema = OFF');
         db.exec('PRAGMA foreign_keys = ON');
+        db.unsafeMode(false);
+
+        // Bump schema_version so SQLite reloads its cached schema —
+        // without this, subsequent ALTER TABLE ADD COLUMN can fail
+        // because the in-memory schema still holds the pre-rewrite DDL.
+        const sv = db.pragma('schema_version', { simple: true }) as number;
+        db.pragma(`schema_version = ${sv + 1}`);
 
         const integrity = (
           db.prepare('PRAGMA integrity_check').get() as { integrity_check: string }
