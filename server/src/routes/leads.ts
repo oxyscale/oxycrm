@@ -150,7 +150,7 @@ const createLeadSchema = z.object({
   website: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
-  pipelineStage: z.enum(['tier_1', 'tier_2', 'tier_3', 'won', 'lost']).optional(),
+  pipelineStage: z.enum(['unsorted', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost']).optional(),
 });
 
 const updateLeadSchema = z.object({
@@ -163,7 +163,7 @@ const updateLeadSchema = z.object({
   category: z.string().nullable().optional(),
   consolidatedSummary: z.string().nullable().optional(),
   companyInfo: z.string().nullable().optional(),
-  pipelineStage: z.enum(['tier_1', 'tier_2', 'tier_3', 'won', 'lost']).optional(),
+  pipelineStage: z.enum(['unsorted', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost']).optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   followUpDate: z.string().nullable().optional(),
   dealValue: z.number().min(0).optional(),
@@ -250,6 +250,58 @@ router.post('/categories/rename', (req, res, next) => {
 
     logger.info({ from, to, updated: result.changes }, 'Category renamed in bulk');
     res.json({ from, to, updated: result.changes });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/leads/reset-pipeline
+ * Bulk-moves leads to the 'unsorted' pipeline stage so the kanban can be
+ * cleared in one click. Won/Lost rows are preserved by default (they're
+ * completed deals — Jordan probably doesn't want to lose that history).
+ *
+ * Body: { preserveWonLost?: boolean } — defaults to true.
+ *
+ * Returns { updated: number } so the UI can confirm what happened.
+ */
+const resetPipelineSchema = z.object({
+  preserveWonLost: z.boolean().optional().default(true),
+});
+
+router.post('/reset-pipeline', (req, res, next) => {
+  try {
+    const db = getDb();
+    const { preserveWonLost } = resetPipelineSchema.parse(req.body ?? {});
+
+    // Pre-count what we're about to touch so we can return a useful number
+    // even when nothing actually changes.
+    const where = preserveWonLost
+      ? "pipeline_stage NOT IN ('won', 'lost')"
+      : '1=1';
+
+    const beforeRow = db.prepare(
+      `SELECT COUNT(*) AS n FROM leads WHERE ${where}`
+    ).get() as { n: number };
+
+    const result = db.prepare(
+      `UPDATE leads
+       SET pipeline_stage = 'unsorted',
+           updated_at = datetime('now')
+       WHERE ${where}
+         AND pipeline_stage != 'unsorted'`
+    ).run();
+
+    logger.info(
+      { affected: result.changes, preserveWonLost, eligible: beforeRow.n },
+      'Pipeline bulk reset',
+    );
+
+    res.json({
+      updated: result.changes,
+      eligible: beforeRow.n,
+      preserveWonLost,
+    });
   } catch (err) {
     next(err);
   }

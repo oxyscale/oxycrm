@@ -77,8 +77,11 @@ function mapLeadRow(row: LeadRow): Lead {
 // Validation schemas
 // ============================================================
 
+// All accepted pipeline stages (used for validation). 'unsorted' is the
+// triage bucket that the kanban hides — it lives here so leads can still
+// be PATCHed in/out of it via the existing stage endpoint.
 const PIPELINE_STAGES: [PipelineStage, ...PipelineStage[]] = [
-  'tier_1', 'tier_2', 'tier_3', 'won', 'lost',
+  'unsorted', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost',
 ];
 
 const TEMPERATURES: [Temperature, ...Temperature[]] = ['hot', 'warm', 'cold'];
@@ -96,6 +99,7 @@ const updateTemperatureSchema = z.object({
 // ============================================================
 
 const stageLabels: Record<PipelineStage, string> = {
+  unsorted: 'Unsorted',
   tier_1: 'Tier 1',
   tier_2: 'Tier 2',
   tier_3: 'Tier 3',

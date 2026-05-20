@@ -263,6 +263,22 @@ export async function dedupeLeads(dryRun: boolean): Promise<DedupeResult> {
   });
 }
 
+/**
+ * Bulk-move leads to 'unsorted' so the pipeline kanban is empty.
+ * Won/Lost are preserved by default.
+ */
+export async function resetPipeline(
+  preserveWonLost: boolean,
+): Promise<{ updated: number; eligible: number; preserveWonLost: boolean }> {
+  return request<{ updated: number; eligible: number; preserveWonLost: boolean }>(
+    '/leads/reset-pipeline',
+    {
+      method: 'POST',
+      body: JSON.stringify({ preserveWonLost }),
+    },
+  );
+}
+
 export async function updateLead(
   id: number,
   data: Partial<Lead>

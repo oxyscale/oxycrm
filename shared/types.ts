@@ -4,7 +4,10 @@
 // ============================================================
 
 // Pipeline stages — three working tiers + two outcomes
-export type PipelineStage = 'tier_1' | 'tier_2' | 'tier_3' | 'won' | 'lost';
+// 'unsorted' is the triage bucket — leads sit here until Jordan manually
+// places them in a tier. The Pipeline kanban hides it; the Lead profile
+// dropdown surfaces it so leads can be moved in / out.
+export type PipelineStage = 'unsorted' | 'tier_1' | 'tier_2' | 'tier_3' | 'won' | 'lost';
 
 // Temperature
 export type Temperature = 'hot' | 'warm' | 'cold';
