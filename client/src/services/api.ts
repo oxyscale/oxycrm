@@ -279,6 +279,10 @@ export async function resetPipeline(
   );
 }
 
+export async function deleteAllLeads(): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>('/leads/delete-all', { method: 'POST' });
+}
+
 export async function updateLead(
   id: number,
   data: Partial<Lead>

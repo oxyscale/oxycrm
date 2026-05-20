@@ -604,6 +604,11 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
   const [resetResult, setResetResult] = useState<string | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
+  // Delete all leads
+  const [deleting, setDeleting] = useState(false);
+  const [deleteResult, setDeleteResult] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const handleRename = async () => {
     if (!renameFrom.trim() || !renameTo.trim()) return;
     setRenaming(true);
@@ -656,6 +661,26 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
     }
   };
 
+  const handleDeleteAll = async () => {
+    const confirmed = window.confirm(
+      'PERMANENTLY delete every lead and all associated data?\n\n' +
+      'This removes all leads, call logs, transcripts, notes, tasks, emails, and activities. Nothing is recoverable.\n\n' +
+      'Type-to-confirm is not required — just click OK if you are sure.'
+    );
+    if (!confirmed) return;
+    setDeleting(true);
+    setDeleteError(null);
+    setDeleteResult(null);
+    try {
+      const r = await api.deleteAllLeads();
+      setDeleteResult(`Deleted ${r.deleted} lead${r.deleted === 1 ? '' : 's'} and all associated data.`);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleMerge = async () => {
     if (!preview || !preview.totalDuplicatesToDelete) return;
     const confirmed = window.confirm(
@@ -680,6 +705,36 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
 
   return (
     <div className="space-y-6">
+      {/* Delete all leads */}
+      <div className="bg-paper border border-[rgba(239,68,68,0.25)] rounded-xl p-6">
+        <h3 className="text-risk font-medium text-base mb-1 flex items-center gap-2">
+          <AlertTriangle size={16} /> Delete all leads
+        </h3>
+        <p className="text-ink-muted text-sm mb-4">
+          Permanently delete every lead and all associated data — call logs, transcripts, notes, tasks, emails, activities. Use this to start completely fresh.
+        </p>
+
+        <button
+          onClick={handleDeleteAll}
+          disabled={deleting}
+          className="bg-risk text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-red-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+          {deleting ? 'Deleting...' : 'Delete all leads'}
+        </button>
+
+        {deleteResult && (
+          <div className="mt-4 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
+            <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />{deleteResult}</p>
+          </div>
+        )}
+        {deleteError && (
+          <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
+            <p className="text-risk text-sm">{deleteError}</p>
+          </div>
+        )}
+      </div>
+
       {/* Clear pipeline */}
       <div className="bg-paper border border-hair-soft rounded-xl p-6">
         <h3 className="text-ink font-medium text-base mb-1">Clear the pipeline</h3>

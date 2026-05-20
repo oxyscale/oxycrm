@@ -314,6 +314,24 @@ router.post('/reset-pipeline', (req, res, next) => {
 });
 
 /**
+ * POST /api/leads/delete-all
+ * Permanently deletes every lead and all associated data (call logs,
+ * notes, tasks, activities, emails, projects). CASCADE FKs handle
+ * the child rows automatically.
+ */
+router.post('/delete-all', (req, res, next) => {
+  try {
+    const db = getDb();
+    const countRow = db.prepare('SELECT COUNT(*) AS n FROM leads').get() as { n: number };
+    db.prepare('DELETE FROM leads').run();
+    logger.info({ deleted: countRow.n }, 'All leads deleted (bulk wipe)');
+    res.json({ deleted: countRow.n });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/leads/dedupe
  * Finds and merges duplicate leads.
  *
