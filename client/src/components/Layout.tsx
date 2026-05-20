@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { Home, Users, Phone, Kanban, FolderKanban, Brain, BarChart3, HelpCircle, Settings, Inbox, LogOut, FileText } from 'lucide-react';
+import { Home, Users, Kanban, FolderKanban, HelpCircle, Settings, Inbox, LogOut, FileText } from 'lucide-react';
 import SearchBar from './SearchBar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -11,11 +11,8 @@ const navItems = [
   { path: '/', icon: Home, label: 'Home' },
   { path: '/pipeline', icon: Kanban, label: 'Pipeline' },
   { path: '/leads', icon: Users, label: 'Leads' },
-  { path: '/dialler', icon: Phone, label: 'Dialler' },
   { path: '/email-bank', icon: Inbox, label: 'Email Bank' },
   { path: '/projects', icon: FolderKanban, label: 'Projects' },
-  { path: '/intelligence', icon: Brain, label: 'Call Intelligence' },
-  { path: '/dashboard', icon: BarChart3, label: 'Stats' },
   { path: '/reports', icon: FileText, label: 'Reports' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
@@ -27,12 +24,10 @@ const shortcutEntries = [
   { label: '1', description: 'Go to Home' },
   { label: '2', description: 'Go to Pipeline' },
   { label: '3', description: 'Go to Leads' },
-  { label: '4', description: 'Go to Dialler' },
-  { label: '5', description: 'Go to Email Bank' },
-  { label: '6', description: 'Go to Projects' },
-  { label: '7', description: 'Go to Intelligence' },
-  { label: '8', description: 'Go to Stats' },
-  { label: '9', description: 'Go to Settings' },
+  { label: '4', description: 'Go to Email Bank' },
+  { label: '5', description: 'Go to Projects' },
+  { label: '6', description: 'Go to Reports' },
+  { label: '7', description: 'Go to Settings' },
 ];
 
 export default function Layout() {
@@ -76,12 +71,10 @@ export default function Layout() {
       { key: '1', handler: () => navigate('/'), description: 'Go to Home' },
       { key: '2', handler: () => navigate('/pipeline'), description: 'Go to Pipeline' },
       { key: '3', handler: () => navigate('/leads'), description: 'Go to Leads' },
-      { key: '4', handler: () => navigate('/dialler'), description: 'Go to Dialler' },
-      { key: '5', handler: () => navigate('/email-bank'), description: 'Go to Email Bank' },
-      { key: '6', handler: () => navigate('/projects'), description: 'Go to Projects' },
-      { key: '7', handler: () => navigate('/intelligence'), description: 'Go to Intelligence' },
-      { key: '8', handler: () => navigate('/dashboard'), description: 'Go to Stats' },
-      { key: '9', handler: () => navigate('/settings'), description: 'Go to Settings' },
+      { key: '4', handler: () => navigate('/email-bank'), description: 'Go to Email Bank' },
+      { key: '5', handler: () => navigate('/projects'), description: 'Go to Projects' },
+      { key: '6', handler: () => navigate('/reports'), description: 'Go to Reports' },
+      { key: '7', handler: () => navigate('/settings'), description: 'Go to Settings' },
     ],
     [navigate]
   );

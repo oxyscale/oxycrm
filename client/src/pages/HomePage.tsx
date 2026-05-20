@@ -2,14 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Upload,
-  Phone,
   Loader2,
   CheckCircle,
   AlertCircle,
   UserPlus,
   TrendingUp,
   Users,
-  PhoneCall,
   ArrowRight,
   Thermometer,
   Clock,
@@ -28,7 +26,6 @@ import SectionHeading from '../components/ui/SectionHeading';
 import StatCard from '../components/ui/StatCard';
 import PanelCard from '../components/ui/PanelCard';
 import PriorityRow from '../components/ui/PriorityRow';
-import { useDialler } from '../hooks/useDiallerSession';
 import * as api from '../services/api';
 import type { ImportResult, DuplicateLead, Activity, Lead } from '../types';
 
@@ -41,8 +38,8 @@ const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
   lost: { label: 'Lost', color: '#ef4444' },
 };
 
-const ACTIVITY_ICONS: Record<string, typeof Phone> = {
-  call: PhoneCall,
+const ACTIVITY_ICONS: Record<string, typeof Mail> = {
+  call: Clock,
   email: Mail,
   note: MessageSquare,
   stage_change: TrendingUp,
@@ -52,12 +49,7 @@ const ACTIVITY_ICONS: Record<string, typeof Phone> = {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const {
-    setLeads,
-    leads,
-    todaysCallbacks: _todaysCallbacks,
-    loadTodaysCallbacks,
-  } = useDialler();
+  const [leads, setLeads] = useState<Lead[]>([]);
 
   const [pipelineStats, setPipelineStats] = useState<{
     byStage: Record<string, number>;
@@ -67,14 +59,6 @@ export default function HomePage() {
   const [recentActivities, setRecentActivities] = useState<
     (Activity & { leadName: string; leadCompany: string | null })[]
   >([]);
-  const [callStats, setCallStats] = useState<{
-    totalCalls: number;
-    answered: number;
-    interested: number;
-    connectRate: number;
-    interestedRate: number;
-    avgDuration: number;
-  } | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [followUpQueue, setFollowUpQueue] = useState<(Lead & { isOverdue: boolean })[]>([]);
   const [queueFilter, setQueueFilter] = useState<'all' | 'overdue' | 'due_today' | 'upcoming'>('all');
@@ -162,21 +146,17 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    loadTodaysCallbacks();
-
     const loadDashboard = async () => {
       setDashboardLoading(true);
       try {
-        const [statsRes, activitiesRes, callStatsRes, followUpsRes] = await Promise.allSettled([
+        const [statsRes, activitiesRes, followUpsRes] = await Promise.allSettled([
           api.getPipelineStats(),
           api.getRecentActivities(),
-          fetch('/api/calls/stats?period=week', { credentials: 'include' }).then((r) => r.json()),
           api.getFollowUpQueue(),
         ]);
 
         if (statsRes.status === 'fulfilled') setPipelineStats(statsRes.value);
         if (activitiesRes.status === 'fulfilled') setRecentActivities(activitiesRes.value);
-        if (callStatsRes.status === 'fulfilled') setCallStats(callStatsRes.value);
         if (followUpsRes.status === 'fulfilled') setFollowUpQueue(followUpsRes.value);
       } catch {
         // Silently fail — dashboard still works with partial data
@@ -186,7 +166,7 @@ export default function HomePage() {
     };
 
     loadDashboard();
-  }, [loadTodaysCallbacks]);
+  }, []);
 
   // ── File handling ────────────────────────────────────────────
 
@@ -278,12 +258,6 @@ export default function HomePage() {
   };
 
   // ── Helpers ──────────────────────────────────────────────────
-
-  const formatDuration = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}m ${secs.toString().padStart(2, '0')}s`;
-  };
 
   const formatTimeAgo = (dateStr: string): string => {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -628,39 +602,6 @@ export default function HomePage() {
             onClick={() => navigate('/pipeline')}
             elevated
           />
-          <StatCard
-            eyebrow="Calls this week"
-            value={callStats?.totalCalls ?? 0}
-            sub={
-              callStats ? `${callStats.answered} answered` : '—'
-            }
-            icon={<PhoneCall size={16} />}
-            onClick={() => navigate('/dashboard')}
-            elevated
-          />
-          <StatCard
-            eyebrow="Connect rate"
-            value={`${callStats?.connectRate ?? 0}%`}
-            sub={
-              callStats
-                ? `${callStats.interestedRate}% interested`
-                : '—'
-            }
-            subTone="sky"
-            icon={<TrendingUp size={16} />}
-            elevated
-          />
-          <StatCard
-            eyebrow="Avg call"
-            value={callStats?.avgDuration ? formatDuration(callStats.avgDuration) : '0m'}
-            sub={
-              callStats && callStats.totalCalls > 0
-                ? `across ${callStats.totalCalls} calls`
-                : 'no data'
-            }
-            icon={<Clock size={16} />}
-            elevated
-          />
         </div>
 
         {/* ── Main grid: Pipeline + Follow-ups | Activity ───────── */}
@@ -941,19 +882,6 @@ export default function HomePage() {
               <div className="flex-1 min-w-0">
                 <p className="text-ink text-[15px] font-medium">Projects</p>
                 <p className="text-ink-dim text-xs mt-0.5">Active jobs &amp; onboarding</p>
-              </div>
-              <ChevronRight size={16} className="text-sky-ink" />
-            </button>
-            <button
-              onClick={() => navigate('/intelligence')}
-              className="w-full bg-paper border border-sky-hair shadow-sky-elevated rounded-2xl p-5 flex items-center gap-4 hover:shadow-sky-strong transition-all group text-left"
-            >
-              <div className="w-10 h-10 rounded-xl bg-sky-wash text-sky-ink flex items-center justify-center">
-                <TrendingUp size={18} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-ink text-[15px] font-medium">Call intelligence</p>
-                <p className="text-ink-dim text-xs mt-0.5">AI patterns across every call</p>
               </div>
               <ChevronRight size={16} className="text-sky-ink" />
             </button>

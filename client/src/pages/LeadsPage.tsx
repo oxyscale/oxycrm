@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search,
   ArrowUpDown,
-  Filter,
   ChevronRight,
   UserPlus,
 } from 'lucide-react';
@@ -13,7 +12,7 @@ import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
 import PillButton from '../components/ui/PillButton';
 
-type SortField = 'name' | 'category' | 'queuePosition' | 'status' | 'lastCalledAt';
+type SortField = 'name' | 'category' | 'queuePosition';
 type SortDir = 'asc' | 'desc';
 
 export default function LeadsPage() {
@@ -21,9 +20,7 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [lastCalledSort, setLastCalledSort] = useState<'default' | 'recent' | 'oldest'>('default');
   const [sortField, setSortField] = useState<SortField>('queuePosition');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -43,13 +40,10 @@ export default function LeadsPage() {
     }
   };
 
-  // Get unique categories
   const categories = [...new Set(leads.map((l) => l.category).filter(Boolean))] as string[];
 
-  // Filter and sort
   const filtered = leads
     .filter((lead) => {
-      if (filterStatus !== 'all' && lead.status !== filterStatus) return false;
       if (filterCategory !== 'all' && lead.category !== filterCategory) return false;
       if (search) {
         const q = search.toLowerCase();
@@ -63,12 +57,6 @@ export default function LeadsPage() {
       return true;
     })
     .sort((a, b) => {
-      // "Last Called" override — takes precedence over column sort when active
-      if (lastCalledSort !== 'default') {
-        const aTime = a.lastCalledAt ? new Date(a.lastCalledAt).getTime() : 0;
-        const bTime = b.lastCalledAt ? new Date(b.lastCalledAt).getTime() : 0;
-        return lastCalledSort === 'recent' ? bTime - aTime : aTime - bTime;
-      }
       const aVal = a[sortField] ?? '';
       const bVal = b[sortField] ?? '';
       const cmp = typeof aVal === 'number' && typeof bVal === 'number'
@@ -84,34 +72,6 @@ export default function LeadsPage() {
       setSortField(field);
       setSortDir('asc');
     }
-  };
-
-  const statusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      not_called: 'bg-blue-500/15 text-blue-400',
-      called: 'bg-[rgba(10,156,212,0.15)] text-sky-ink',
-    };
-    return styles[status] || 'bg-tray text-ink-muted';
-  };
-
-  const statusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      not_called: 'Not Called',
-      called: 'Called',
-    };
-    return labels[status] || status;
-  };
-
-  const formatLastCalled = (dateStr: string | null) => {
-    if (!dateStr) return '—';
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
   };
 
   if (loading) {
@@ -132,7 +92,7 @@ export default function LeadsPage() {
           </EyebrowLabel>
           <SectionHeading size="section">All leads.</SectionHeading>
           <p className="text-ink-muted text-sm mt-3">
-            {leads.length} total &middot; {leads.filter((l) => l.status === 'not_called').length} not called &middot; {leads.filter((l) => l.status === 'called').length} called
+            {leads.length} total
           </p>
         </div>
         <PillButton
@@ -159,31 +119,6 @@ export default function LeadsPage() {
             className="w-full bg-paper border border-hair-soft rounded-lg pl-10 pr-4 py-2.5 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
           />
         </div>
-
-        {/* Status filter */}
-        <div className="flex items-center gap-2">
-          <Filter size={14} className="text-ink-dim" />
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="bg-paper border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink-muted focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
-          >
-            <option value="all">All Statuses</option>
-            <option value="not_called">Not Called</option>
-            <option value="called">Called</option>
-          </select>
-        </div>
-
-        {/* Last called sort */}
-        <select
-          value={lastCalledSort}
-          onChange={(e) => setLastCalledSort(e.target.value as 'default' | 'recent' | 'oldest')}
-          className="bg-paper border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink-muted focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
-        >
-          <option value="default">Last called: Default</option>
-          <option value="recent">Last called: Most recent</option>
-          <option value="oldest">Last called: Oldest first</option>
-        </select>
 
         {/* Category filter */}
         {categories.length > 0 && (
@@ -223,18 +158,6 @@ export default function LeadsPage() {
                   {sortField === 'category' && <ArrowUpDown size={12} className="text-sky-ink" />}
                 </span>
               </th>
-              <th className="w-[90px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3 select-none cursor-pointer hover:text-ink-muted transition-colors" onClick={() => handleSort('status')}>
-                <span className="flex items-center gap-1">
-                  Status
-                  {sortField === 'status' && <ArrowUpDown size={12} className="text-sky-ink" />}
-                </span>
-              </th>
-              <th className="w-[110px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3 select-none cursor-pointer hover:text-ink-muted transition-colors" onClick={() => handleSort('lastCalledAt')}>
-                <span className="flex items-center gap-1">
-                  Last Called
-                  {sortField === 'lastCalledAt' && <ArrowUpDown size={12} className="text-sky-ink" />}
-                </span>
-              </th>
               <th className="w-[85px] px-3 py-3" />
             </tr>
           </thead>
@@ -255,10 +178,10 @@ export default function LeadsPage() {
                     {lead.name}
                   </div>
                   <div className="text-ink-dim text-xs mt-0.5 truncate">
-                    {lead.company || ''}{lead.company && lead.phone ? ' \u00b7 ' : ''}{lead.phone}
+                    {lead.company || ''}{lead.company && lead.phone ? ' · ' : ''}{lead.phone}
                     {lead.website && (
                       <>
-                        {' \u00b7 '}
+                        {' · '}
                         <a
                           href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
                           target="_blank"
@@ -280,14 +203,6 @@ export default function LeadsPage() {
                   )}
                 </td>
                 <td className="px-3 py-3">
-                  <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${statusBadge(lead.status)}`}>
-                    {statusLabel(lead.status)}
-                  </span>
-                </td>
-                <td className="px-3 py-3 text-ink-muted text-xs whitespace-nowrap">
-                  {formatLastCalled(lead.lastCalledAt)}
-                </td>
-                <td className="px-3 py-3">
                   <button
                     onClick={() => navigate(`/leads/${lead.id}`)}
                     className="text-ink-muted hover:text-sky-ink transition-colors flex items-center gap-1 text-xs"
@@ -303,7 +218,7 @@ export default function LeadsPage() {
 
         {filtered.length === 0 && (
           <div className="text-center py-12 text-ink-dim">
-            {search || filterStatus !== 'all' || filterCategory !== 'all'
+            {search || filterCategory !== 'all'
               ? 'No leads match your filters'
               : 'No leads imported yet'}
           </div>

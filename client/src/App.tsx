@@ -1,17 +1,11 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { DiallerProvider } from './hooks/useDiallerSession';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import HomePage from './pages/HomePage';
 import LeadsPage from './pages/LeadsPage';
-import DiallerPage from './pages/DiallerPage';
-import DispositionPage from './pages/DispositionPage';
-import EmailComposePage from './pages/EmailComposePage';
-import DashboardPage from './pages/DashboardPage';
-import IntelligencePage from './pages/IntelligencePage';
 import PipelinePage from './pages/PipelinePage';
 import LeadProfilePage from './pages/LeadProfilePage';
 import ProjectsPage from './pages/ProjectsPage';
@@ -22,8 +16,6 @@ import SettingsPage from './pages/SettingsPage';
 import EmailBankPage from './pages/EmailBankPage';
 import ReportsPage from './pages/ReportsPage';
 
-// Gate that redirects unauthenticated users to /login while preserving
-// the page they were trying to reach as ?next=.
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -47,33 +39,25 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-      {/* Everything else requires a logged-in session */}
       <Route
         path="/*"
         element={
           <RequireAuth>
-            <DiallerProvider>
-              <Routes>
-                <Route element={<Layout />}>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/leads" element={<LeadsPage />} />
-                  <Route path="/leads/:id" element={<LeadProfilePage />} />
-                  <Route path="/dialler" element={<DiallerPage />} />
-                  <Route path="/disposition" element={<DispositionPage />} />
-                  <Route path="/email" element={<EmailComposePage />} />
-                  <Route path="/compose/:leadId" element={<ComposeEmailPage />} />
-                  <Route path="/book-meeting/:leadId" element={<BookMeetingPage />} />
-                  <Route path="/pipeline" element={<PipelinePage />} />
-                  <Route path="/intelligence" element={<IntelligencePage />} />
-                  <Route path="/projects" element={<ProjectsPage />} />
-                  <Route path="/projects/:id" element={<ProjectDetailPage />} />
-                  <Route path="/email-bank" element={<EmailBankPage />} />
-                  <Route path="/dashboard" element={<DashboardPage />} />
-                  <Route path="/reports" element={<ReportsPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                </Route>
-              </Routes>
-            </DiallerProvider>
+            <Routes>
+              <Route element={<Layout />}>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/leads" element={<LeadsPage />} />
+                <Route path="/leads/:id" element={<LeadProfilePage />} />
+                <Route path="/compose/:leadId" element={<ComposeEmailPage />} />
+                <Route path="/book-meeting/:leadId" element={<BookMeetingPage />} />
+                <Route path="/pipeline" element={<PipelinePage />} />
+                <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/projects/:id" element={<ProjectDetailPage />} />
+                <Route path="/email-bank" element={<EmailBankPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
+            </Routes>
           </RequireAuth>
         }
       />
