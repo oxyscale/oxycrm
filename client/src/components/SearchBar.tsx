@@ -143,7 +143,8 @@ export default function SearchBar() {
 
   // ── Pipeline stage label ─────────────────────────────────
 
-  function stageLabel(stage: string): string {
+  function stageLabel(stage: string | null): string {
+    if (!stage) return 'No tier';
     const labels: Record<string, string> = {
       new_lead: 'New Lead',
       follow_up: 'Follow Up',

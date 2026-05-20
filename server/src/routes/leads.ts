@@ -45,7 +45,7 @@ interface LeadRow {
   consolidated_summary: string | null;
   company_info: string | null;
   monday_item_id: string | null;
-  pipeline_stage: string;
+  pipeline_stage: string | null;
   temperature: string | null;
   converted_to_project: number;
   follow_up_date: string | null;
@@ -87,7 +87,7 @@ function mapLeadRow(row: LeadRow): Lead {
     consolidatedSummary: row.consolidated_summary,
     companyInfo: row.company_info,
     mondayItemId: row.monday_item_id,
-    pipelineStage: row.pipeline_stage as PipelineStage,
+    pipelineStage: (row.pipeline_stage as PipelineStage | null) ?? null,
     temperature: (row.temperature as Temperature) ?? null,
     convertedToProject: row.converted_to_project === 1,
     followUpDate: row.follow_up_date,
@@ -150,7 +150,8 @@ const createLeadSchema = z.object({
   website: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
-  pipelineStage: z.enum(['unsorted', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost']).optional(),
+  // null = no tier assigned; lead lives in Leads only, hidden from kanban.
+  pipelineStage: z.enum(['tier_1', 'tier_2', 'tier_3', 'won', 'lost']).nullable().optional(),
 });
 
 const updateLeadSchema = z.object({
@@ -163,7 +164,8 @@ const updateLeadSchema = z.object({
   category: z.string().nullable().optional(),
   consolidatedSummary: z.string().nullable().optional(),
   companyInfo: z.string().nullable().optional(),
-  pipelineStage: z.enum(['unsorted', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost']).optional(),
+  // null = no tier assigned; lead lives in Leads only, hidden from kanban.
+  pipelineStage: z.enum(['tier_1', 'tier_2', 'tier_3', 'won', 'lost']).nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   followUpDate: z.string().nullable().optional(),
   dealValue: z.number().min(0).optional(),
@@ -257,13 +259,16 @@ router.post('/categories/rename', (req, res, next) => {
 
 /**
  * POST /api/leads/reset-pipeline
- * Bulk-moves leads to the 'unsorted' pipeline stage so the kanban can be
- * cleared in one click. Won/Lost rows are preserved by default (they're
- * completed deals — Jordan probably doesn't want to lose that history).
+ * Bulk-clears leads from the kanban by setting pipeline_stage = NULL.
+ * Won/Lost rows are preserved by default (they're completed deals).
  *
  * Body: { preserveWonLost?: boolean } — defaults to true.
  *
  * Returns { updated: number } so the UI can confirm what happened.
+ *
+ * Cleared leads still exist — they're visible in /leads, just hidden
+ * from the kanban. Jordan re-places them via the lead profile tier
+ * dropdown.
  */
 const resetPipelineSchema = z.object({
   preserveWonLost: z.boolean().optional().default(true),
@@ -277,24 +282,25 @@ router.post('/reset-pipeline', (req, res, next) => {
     // Pre-count what we're about to touch so we can return a useful number
     // even when nothing actually changes.
     const where = preserveWonLost
-      ? "pipeline_stage NOT IN ('won', 'lost')"
+      ? "(pipeline_stage IS NULL OR pipeline_stage NOT IN ('won', 'lost'))"
       : '1=1';
 
     const beforeRow = db.prepare(
       `SELECT COUNT(*) AS n FROM leads WHERE ${where}`
     ).get() as { n: number };
 
+    // Only touch rows that actually have a stage — NULL ones are already cleared.
     const result = db.prepare(
       `UPDATE leads
-       SET pipeline_stage = 'unsorted',
+       SET pipeline_stage = NULL,
            updated_at = datetime('now')
        WHERE ${where}
-         AND pipeline_stage != 'unsorted'`
+         AND pipeline_stage IS NOT NULL`
     ).run();
 
     logger.info(
       { affected: result.changes, preserveWonLost, eligible: beforeRow.n },
-      'Pipeline bulk reset',
+      'Pipeline bulk reset (set NULL)',
     );
 
     res.json({
@@ -639,7 +645,9 @@ router.post('/', (req, res, next) => {
         email: payload.email ?? null,
         website: payload.website ?? null,
         category: payload.category ?? null,
-        pipelineStage: payload.pipelineStage ?? 'tier_3',
+        // null = no tier yet. Jordan places leads into a tier manually
+        // from the lead profile dropdown.
+        pipelineStage: payload.pipelineStage ?? null,
         temperature: payload.temperature ?? null,
         queuePosition: maxPosRow.max_pos + 1,
         now,

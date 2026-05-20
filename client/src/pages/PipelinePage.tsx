@@ -47,6 +47,7 @@ export default function PipelinePage() {
     byStage: Record<string, number>;
     conversionRate: number;
     totalPipelineValue: number;
+    unplaced?: number;
   } | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,9 +134,9 @@ export default function PipelinePage() {
 
   const totalLeads = Object.values(pipeline).reduce((sum, leads) => sum + leads.length, 0);
 
-  // 'unsorted' leads sit outside the kanban — surface the count so Jordan
-  // knows the pipeline isn't actually empty if it looks that way.
-  const unsortedCount = (pipeline.unsorted || []).length;
+  // Leads with no pipeline stage (NULL) don't appear in the kanban.
+  // Surface the count from /api/pipeline/stats so Jordan knows where they went.
+  const unplacedCount = stats?.unplaced ?? 0;
 
   // Sum deal values across active tiers (Tier 1/2/3 only — Won/Lost are closed)
   const activePipelineValue = (['tier_1', 'tier_2', 'tier_3'] as const).reduce((sum, key) => {
@@ -205,12 +206,12 @@ export default function PipelinePage() {
         </span>
       </div>
 
-      {/* Unsorted hint — only when leads are in the triage bucket */}
-      {unsortedCount > 0 && (
+      {/* Hint when leads exist but aren't placed on the kanban */}
+      {unplacedCount > 0 && (
         <div className="bg-sky-wash border border-sky-hair rounded-xl px-4 py-3 mb-6 flex items-center justify-between gap-3 flex-shrink-0">
           <p className="text-ink text-sm">
-            <span className="font-medium">{unsortedCount} lead{unsortedCount !== 1 ? 's' : ''}</span>
-            {' '}sitting in <span className="text-sky-ink">Unsorted</span>. Open them from Leads and set a tier to place them on the kanban.
+            <span className="font-medium">{unplacedCount} lead{unplacedCount !== 1 ? 's' : ''}</span>
+            {' '}not yet placed in a tier. Open them from Leads and set a tier to add them to the kanban.
           </p>
           <button
             onClick={() => navigate('/leads')}

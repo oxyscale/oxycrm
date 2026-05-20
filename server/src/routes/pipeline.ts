@@ -33,7 +33,7 @@ interface LeadRow {
   consolidated_summary: string | null;
   company_info: string | null;
   monday_item_id: string | null;
-  pipeline_stage: string;
+  pipeline_stage: string | null;
   temperature: string | null;
   converted_to_project: number;
   follow_up_date: string | null;
@@ -61,7 +61,7 @@ function mapLeadRow(row: LeadRow): Lead {
     consolidatedSummary: row.consolidated_summary,
     companyInfo: row.company_info,
     mondayItemId: row.monday_item_id,
-    pipelineStage: row.pipeline_stage as PipelineStage,
+    pipelineStage: (row.pipeline_stage as PipelineStage | null) ?? null,
     temperature: (row.temperature as Temperature) ?? null,
     convertedToProject: row.converted_to_project === 1,
     followUpDate: row.follow_up_date,
@@ -77,17 +77,15 @@ function mapLeadRow(row: LeadRow): Lead {
 // Validation schemas
 // ============================================================
 
-// All accepted pipeline stages (used for validation). 'unsorted' is the
-// triage bucket that the kanban hides — it lives here so leads can still
-// be PATCHed in/out of it via the existing stage endpoint.
 const PIPELINE_STAGES: [PipelineStage, ...PipelineStage[]] = [
-  'unsorted', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost',
+  'tier_1', 'tier_2', 'tier_3', 'won', 'lost',
 ];
 
 const TEMPERATURES: [Temperature, ...Temperature[]] = ['hot', 'warm', 'cold'];
 
 const updateStageSchema = z.object({
-  stage: z.enum(PIPELINE_STAGES),
+  // null = remove from kanban (lead stays in /leads but isn't placed in any tier)
+  stage: z.enum(PIPELINE_STAGES).nullable(),
 });
 
 const updateTemperatureSchema = z.object({
@@ -99,7 +97,6 @@ const updateTemperatureSchema = z.object({
 // ============================================================
 
 const stageLabels: Record<PipelineStage, string> = {
-  unsorted: 'Unsorted',
   tier_1: 'Tier 1',
   tier_2: 'Tier 2',
   tier_3: 'Tier 3',
@@ -157,7 +154,9 @@ router.get('/', (req, res, next) => {
     }
     for (const row of leadRows) {
       const lead = mapLeadRow(row);
-      if (stages[lead.pipelineStage]) {
+      // Skip leads with no pipeline stage — they're hidden from the kanban
+      // by design (live in /leads only).
+      if (lead.pipelineStage && stages[lead.pipelineStage]) {
         stages[lead.pipelineStage].push(lead);
       }
     }
@@ -238,13 +237,15 @@ router.patch('/:leadId/stage', (req, res, next) => {
       db.prepare('UPDATE leads SET pipeline_stage = ?, updated_at = ? WHERE id = ?')
         .run(newStage, now, leadId);
 
+      const newLabel = newStage ? (stageLabels[newStage] || newStage) : 'No tier';
+      const oldLabel = oldStage ? (stageLabels[oldStage as PipelineStage] || oldStage) : 'No tier';
       db.prepare(`
         INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
         VALUES (?, 'stage_change', ?, ?, ?, ?)
       `).run(
         leadId,
-        `Moved to ${stageLabels[newStage] || newStage}`,
-        `from ${stageLabels[oldStage as PipelineStage] || oldStage}`,
+        `Moved to ${newLabel}`,
+        `from ${oldLabel}`,
         now,
         actor,
       );
@@ -366,11 +367,19 @@ router.get('/stats', (req, res, next) => {
       temperatureBreakdown[row.temperature] = row.count;
     }
 
+    // Leads not currently placed in the kanban (pipeline_stage IS NULL).
+    // Surfaced on the Pipeline page so empty-looking kanbans don't read as
+    // "no leads exist".
+    const unplacedRow = db.prepare(
+      'SELECT COUNT(*) AS n FROM leads WHERE pipeline_stage IS NULL'
+    ).get() as { n: number };
+
     const stats = {
       byStage: leadsPerStage,
       conversionRate,
       totalPipelineValue: valueRow.total_value,
       byTemperature: temperatureBreakdown,
+      unplaced: unplacedRow.n,
     };
 
     logger.info({ totalLeads, conversionRate }, 'Fetched pipeline stats');

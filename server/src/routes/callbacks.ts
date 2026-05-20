@@ -43,7 +43,7 @@ interface CallbackWithLeadRow extends CallbackRow {
   l_consolidated_summary: string | null;
   l_company_info: string | null;
   l_monday_item_id: string | null;
-  l_pipeline_stage: string;
+  l_pipeline_stage: string | null;
   l_temperature: string | null;
   l_converted_to_project: number;
   l_follow_up_date: string | null;
@@ -103,7 +103,7 @@ function mapCallbackWithLeadRow(row: CallbackWithLeadRow): CallbackWithLead {
     consolidatedSummary: row.l_consolidated_summary,
     companyInfo: row.l_company_info,
     mondayItemId: row.l_monday_item_id,
-    pipelineStage: row.l_pipeline_stage as Lead['pipelineStage'],
+    pipelineStage: (row.l_pipeline_stage as Lead['pipelineStage']) ?? null,
     temperature: (row.l_temperature as Lead['temperature']) ?? null,
     convertedToProject: row.l_converted_to_project === 1,
     followUpDate: row.l_follow_up_date,

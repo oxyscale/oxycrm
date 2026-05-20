@@ -598,7 +598,7 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
   const [dedupeResult, setDedupeResult] = useState<string | null>(null);
   const [dedupeError, setDedupeError] = useState<string | null>(null);
 
-  // Clear pipeline (move everyone to 'unsorted' so the kanban is empty)
+  // Clear pipeline (set pipeline_stage = NULL so the kanban is empty)
   const [preserveWonLost, setPreserveWonLost] = useState(true);
   const [resetting, setResetting] = useState(false);
   const [resetResult, setResetResult] = useState<string | null>(null);
@@ -636,8 +636,8 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
 
   const handleResetPipeline = async () => {
     const confirmMsg = preserveWonLost
-      ? 'Move every Tier 1 / Tier 2 / Tier 3 lead to Unsorted?\n\nThe kanban will be empty (Won and Lost stay where they are). You can place leads back into tiers from the Leads page.\n\nThis is reversible — just edit each lead.'
-      : 'Move EVERY lead (including Won and Lost) to Unsorted?\n\nThe entire kanban will be empty. This is reversible but it will wipe historical Won/Lost positioning.';
+      ? 'Remove every Tier 1 / Tier 2 / Tier 3 lead from the pipeline?\n\nThe kanban will be empty (Won and Lost stay where they are). Leads still exist in the Leads page — you just place them back into tiers manually when you decide where they belong.\n\nThis is reversible — just edit each lead.'
+      : 'Remove EVERY lead (including Won and Lost) from the pipeline?\n\nThe entire kanban will be empty. Leads still exist in the Leads page. This is reversible but will wipe historical Won/Lost positioning.';
     if (!window.confirm(confirmMsg)) return;
     setResetting(true);
     setResetError(null);
@@ -647,7 +647,7 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
       setResetResult(
         r.updated === 0
           ? 'Pipeline was already empty.'
-          : `Moved ${r.updated} lead${r.updated === 1 ? '' : 's'} to Unsorted. Open Pipeline to confirm it's clear.`
+          : `Removed ${r.updated} lead${r.updated === 1 ? '' : 's'} from the pipeline. Open Pipeline to confirm it's clear, then place them back into tiers from the Leads page.`
       );
     } catch (err) {
       setResetError(err instanceof Error ? err.message : 'Reset failed');
@@ -684,7 +684,7 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
       <div className="bg-paper border border-hair-soft rounded-xl p-6">
         <h3 className="text-ink font-medium text-base mb-1">Clear the pipeline</h3>
         <p className="text-ink-muted text-sm mb-4">
-          Move every active lead to <span className="text-ink font-medium">Unsorted</span> so the kanban is empty. Then place leads into tiers manually from the Leads page or the lead profile.
+          Remove every active lead from the kanban so it's empty. Leads stay in the <span className="text-ink font-medium">Leads</span> page — you place them back into tiers manually from the lead profile.
         </p>
 
         <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">

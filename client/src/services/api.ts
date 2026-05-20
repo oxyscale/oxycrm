@@ -264,7 +264,7 @@ export async function dedupeLeads(dryRun: boolean): Promise<DedupeResult> {
 }
 
 /**
- * Bulk-move leads to 'unsorted' so the pipeline kanban is empty.
+ * Bulk-clear pipeline_stage (set to NULL) so the kanban is empty.
  * Won/Lost are preserved by default.
  */
 export async function resetPipeline(
@@ -683,7 +683,8 @@ export async function getPipeline(filters?: { temperature?: string; category?: s
   return data.stages;
 }
 
-export async function updateLeadStage(leadId: number, stage: string): Promise<Lead> {
+// stage = null removes the lead from the kanban (still visible in /leads)
+export async function updateLeadStage(leadId: number, stage: string | null): Promise<Lead> {
   return request<Lead>(`/pipeline/${leadId}/stage`, {
     method: 'PATCH',
     body: JSON.stringify({ stage }),

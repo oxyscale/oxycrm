@@ -39,7 +39,6 @@ import type {
 // ── Constants ────────────────────────────────────────────────
 
 const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
-  { value: 'unsorted', label: 'Unsorted' },
   { value: 'tier_1', label: 'Tier 1' },
   { value: 'tier_2', label: 'Tier 2' },
   { value: 'tier_3', label: 'Tier 3' },
@@ -151,7 +150,8 @@ function humaniseDates(text: string): string {
   });
 }
 
-function stageLabel(stage: PipelineStage) {
+function stageLabel(stage: PipelineStage | null): string {
+  if (!stage) return 'No tier';
   return PIPELINE_STAGES.find((s) => s.value === stage)?.label || stage;
 }
 
@@ -441,7 +441,8 @@ export default function LeadProfilePage() {
     }
   };
 
-  const handleStageChange = async (stage: PipelineStage) => {
+  // stage = null clears the lead from the kanban (still visible in /leads).
+  const handleStageChange = async (stage: PipelineStage | null) => {
     if (!lead || lead.pipelineStage === stage) {
       setShowStageDropdown(false);
       return;
@@ -822,6 +823,15 @@ export default function LeadProfilePage() {
                     </span>
                   </button>
                 ))}
+                {/* Remove from pipeline — only when lead is currently in a tier */}
+                {lead.pipelineStage && (
+                  <button
+                    onClick={() => handleStageChange(null)}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] transition-all text-ink-dim border-t border-hair-soft"
+                  >
+                    <span className="ml-[21px]">Remove from pipeline</span>
+                  </button>
+                )}
               </div>
             </>
           )}

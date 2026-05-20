@@ -4,10 +4,11 @@
 // ============================================================
 
 // Pipeline stages — three working tiers + two outcomes
-// 'unsorted' is the triage bucket — leads sit here until Jordan manually
-// places them in a tier. The Pipeline kanban hides it; the Lead profile
-// dropdown surfaces it so leads can be moved in / out.
-export type PipelineStage = 'unsorted' | 'tier_1' | 'tier_2' | 'tier_3' | 'won' | 'lost';
+// A lead either sits in one of these tiers, or has NO pipeline stage at all
+// (pipeline_stage IS NULL in the DB). NULL = not yet placed in the kanban.
+// The Lead profile dropdown includes a "Remove from pipeline" action that
+// nulls the stage.
+export type PipelineStage = 'tier_1' | 'tier_2' | 'tier_3' | 'won' | 'lost';
 
 // Temperature
 export type Temperature = 'hot' | 'warm' | 'cold';
@@ -28,7 +29,7 @@ export interface Lead {
   consolidatedSummary: string | null;
   companyInfo: string | null;
   mondayItemId: string | null;
-  pipelineStage: PipelineStage;
+  pipelineStage: PipelineStage | null;
   temperature: Temperature | null;
   convertedToProject: boolean;
   followUpDate: string | null;
