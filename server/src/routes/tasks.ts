@@ -372,4 +372,135 @@ router.delete('/tasks/:id', (req, res, next) => {
   }
 });
 
+// ============================================================
+// Calendar backfill — push unsync'd tasks to Google Calendar
+//
+// Called after an OAuth reconnect so tasks created while the
+// calendar was disconnected still make it onto the calendar.
+// Only processes incomplete tasks with a due date >= today that
+// have no google_calendar_event_id yet.
+// ============================================================
+
+export async function backfillCalendarEvents(): Promise<{ synced: number; failed: number }> {
+  const db = getDb();
+  const today = new Date().toISOString().split('T')[0];
+
+  // Find all incomplete tasks that never made it to Google Calendar.
+  const unsyncedTasks = db.prepare(`
+    SELECT t.id, t.lead_id, t.label, t.due_date,
+           l.name AS lead_name, l.company, l.phone, l.email
+    FROM tasks t
+    JOIN leads l ON l.id = t.lead_id
+    WHERE t.google_calendar_event_id IS NULL
+      AND t.completed = 0
+      AND t.due_date >= ?
+    ORDER BY t.due_date ASC
+  `).all(today) as Array<{
+    id: number;
+    lead_id: number;
+    label: string;
+    due_date: string;
+    lead_name: string;
+    company: string | null;
+    phone: string;
+    email: string | null;
+  }>;
+
+  if (unsyncedTasks.length === 0) {
+    logger.info('Calendar backfill: no unsynced tasks to push');
+    return { synced: 0, failed: 0 };
+  }
+
+  logger.info({ count: unsyncedTasks.length }, 'Calendar backfill: pushing unsynced tasks');
+
+  let synced = 0;
+  let failed = 0;
+
+  for (const task of unsyncedTasks) {
+    try {
+      const isTouchBase = task.label.toLowerCase() === 'touch base';
+
+      // Fetch the latest note for this lead.
+      const latestNote = db.prepare(
+        'SELECT content FROM notes WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1'
+      ).get(task.lead_id) as { content: string } | undefined;
+
+      if (isTouchBase) {
+        // ── Touch Base — consolidate into a single event per day ──
+        const leadBlock: string[] = [];
+        leadBlock.push(`--- ${task.lead_name}${task.company ? ` (${task.company})` : ''} ---`);
+        leadBlock.push(`Open in OxyCRM: https://oxycrm-production.up.railway.app/leads/${task.lead_id}`);
+        if (latestNote?.content) leadBlock.push(`Note: ${latestNote.content}`);
+        if (task.phone) leadBlock.push(`Phone: ${task.phone}`);
+        if (task.email) leadBlock.push(`Email: ${task.email}`);
+
+        const existing = await findEventByTitlePrefix(
+          task.due_date,
+          'Touch Base',
+          'Australia/Sydney'
+        );
+
+        if (existing) {
+          const existingBlocks = (existing.description.match(/^---\s/gm) || []).length;
+          const newCount = existingBlocks + 1;
+          await updateEvent(existing.eventId, {
+            summary: `Touch Base — ${newCount} leads`,
+            description: existing.description.trim() + '\n\n' + leadBlock.join('\n'),
+          });
+          db.prepare('UPDATE tasks SET google_calendar_event_id = ? WHERE id = ?')
+            .run(existing.eventId, task.id);
+        } else {
+          const event = await createEvent({
+            summary: `Touch Base — ${task.lead_name}`,
+            description: leadBlock.join('\n'),
+            startTime: `${task.due_date}T09:00:00`,
+            endTime: `${task.due_date}T09:30:00`,
+            timezone: 'Australia/Sydney',
+          });
+          if (event.eventId) {
+            db.prepare('UPDATE tasks SET google_calendar_event_id = ? WHERE id = ?')
+              .run(event.eventId, task.id);
+          }
+        }
+      } else {
+        // ── Regular task — one event per task ──
+        const descLines: string[] = [];
+        descLines.push(`Open in OxyCRM: https://oxycrm-production.up.railway.app/leads/${task.lead_id}`);
+        if (latestNote?.content) {
+          descLines.push('');
+          descLines.push(`Latest note: ${latestNote.content}`);
+        }
+        descLines.push('');
+        descLines.push(`Lead: ${task.lead_name}`);
+        if (task.company) descLines.push(`Company: ${task.company}`);
+        if (task.phone) descLines.push(`Phone: ${task.phone}`);
+        if (task.email) descLines.push(`Email: ${task.email}`);
+
+        const event = await createEvent({
+          summary: `${task.label} — ${task.lead_name}`,
+          description: descLines.join('\n'),
+          startTime: `${task.due_date}T09:00:00`,
+          endTime: `${task.due_date}T09:30:00`,
+          timezone: 'Australia/Sydney',
+        });
+        if (event.eventId) {
+          db.prepare('UPDATE tasks SET google_calendar_event_id = ? WHERE id = ?')
+            .run(event.eventId, task.id);
+        }
+      }
+
+      synced++;
+    } catch (err) {
+      failed++;
+      logger.warn(
+        { taskId: task.id, leadId: task.lead_id, err: err instanceof Error ? err.message : err },
+        'Calendar backfill: failed to push task'
+      );
+    }
+  }
+
+  logger.info({ synced, failed }, 'Calendar backfill complete');
+  return { synced, failed };
+}
+
 export default router;

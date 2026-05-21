@@ -8,6 +8,7 @@ import { z } from 'zod';
 import pino from 'pino';
 import * as googleCalendar from '../services/google-calendar.js';
 import { startGmailSync, isGmailSyncRunning } from '../services/gmail-sync.js';
+import { backfillCalendarEvents } from './tasks.js';
 import { ApiError } from '../middleware/errorHandler.js';
 
 const logger = pino({ name: 'google-routes' });
@@ -55,6 +56,20 @@ router.get('/callback', async (req, res, next) => {
       }
     } catch (syncErr) {
       logger.warn({ err: syncErr }, 'Failed to start Gmail sync after OAuth callback');
+    }
+
+    // Push any tasks that were created while Google was disconnected
+    // into the calendar now that we have valid tokens again.
+    try {
+      const result = await backfillCalendarEvents();
+      if (result.synced > 0) {
+        logger.info(
+          { synced: result.synced, failed: result.failed },
+          'Calendar backfill completed after OAuth reconnect'
+        );
+      }
+    } catch (backfillErr) {
+      logger.warn({ err: backfillErr }, 'Calendar backfill failed after OAuth callback');
     }
 
     // Redirect back to the app after successful auth.
