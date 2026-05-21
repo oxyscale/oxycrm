@@ -12,6 +12,7 @@ import {
   Lock,
   Wrench,
   AlertTriangle,
+  Tag,
 } from 'lucide-react';
 import * as api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -20,12 +21,12 @@ import SectionHeading from '../components/ui/SectionHeading';
 
 // ── Types ───────────────────────────────────────────────────
 
-type Tab = 'prompts' | 'company' | 'email' | 'signature' | 'cleanup' | 'account';
+type Tab = 'categories' | 'prompts' | 'company' | 'email' | 'signature' | 'cleanup' | 'account';
 
 // ── Main Component ──────────────────────────────────────────
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<Tab>('prompts');
+  const [tab, setTab] = useState<Tab>('categories');
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,12 +48,20 @@ export default function SettingsPage() {
   // Available categories from leads
   const [categories, setCategories] = useState<string[]>([]);
 
+  // Managed categories (Settings > Categories tab)
+  const [managedCategories, setManagedCategories] = useState<api.Category[]>([]);
+  const [loadingManagedCats, setLoadingManagedCats] = useState(true);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+
   // ── Load data ─────────────────────────────────────────────
 
   useEffect(() => {
     loadSettings();
     loadPrompts();
     loadCategories();
+    loadManagedCategories();
   }, []);
 
   const loadSettings = async () => {
@@ -85,6 +94,44 @@ export default function SettingsPage() {
       setCategories(cats);
     } catch {
       // Non-critical
+    }
+  };
+
+  const loadManagedCategories = async () => {
+    setLoadingManagedCats(true);
+    try {
+      const cats = await api.getManagedCategories();
+      setManagedCategories(cats);
+    } catch {
+      // Non-critical
+    } finally {
+      setLoadingManagedCats(false);
+    }
+  };
+
+  const handleAddManagedCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    setAddingCategory(true);
+    setCategoryError(null);
+    try {
+      const cat = await api.createCategory(name);
+      setManagedCategories((prev) => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewCategoryName('');
+    } catch (err) {
+      setCategoryError(err instanceof Error ? err.message : 'Failed to add category');
+    } finally {
+      setAddingCategory(false);
+    }
+  };
+
+  const handleDeleteManagedCategory = async (cat: api.Category) => {
+    if (!confirm(`Delete category "${cat.name}"? This won't remove it from existing leads.`)) return;
+    try {
+      await api.deleteCategory(cat.id);
+      setManagedCategories((prev) => prev.filter((c) => c.id !== cat.id));
+    } catch (err) {
+      console.error('Failed to delete category:', err);
     }
   };
 
@@ -180,6 +227,7 @@ export default function SettingsPage() {
   // ── Tabs ──────────────────────────────────────────────────
 
   const tabs: { key: Tab; label: string; icon: typeof Building2 }[] = [
+    { key: 'categories', label: 'Categories', icon: Tag },
     { key: 'prompts', label: 'Category Prompts', icon: MessageSquareText },
     { key: 'company', label: 'Company Profile', icon: Building2 },
     { key: 'email', label: 'Email Preferences', icon: Mail },
@@ -230,6 +278,70 @@ export default function SettingsPage() {
           );
         })}
       </div>
+
+      {/* ── Categories tab ─────────────────────────────────── */}
+      {tab === 'categories' && (
+        <div className="bg-paper border border-hair-soft rounded-xl p-6">
+          <h3 className="text-ink font-medium text-base mb-1">Manage categories</h3>
+          <p className="text-ink-muted text-sm mb-5">
+            These appear as dropdown options when creating or editing a lead. Add new industries here as you expand.
+          </p>
+
+          {/* Add category */}
+          <div className="flex items-center gap-3 mb-5">
+            <input
+              type="text"
+              value={newCategoryName}
+              onChange={(e) => { setNewCategoryName(e.target.value); setCategoryError(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAddManagedCategory(); }}
+              placeholder="New category name"
+              maxLength={80}
+              className="flex-1 bg-cream border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
+            />
+            <button
+              onClick={handleAddManagedCategory}
+              disabled={!newCategoryName.trim() || addingCategory}
+              className="bg-ink text-white text-sm font-medium rounded-full px-5 py-2.5 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {addingCategory ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              Add category
+            </button>
+          </div>
+
+          {categoryError && (
+            <div className="mb-4 bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.22)] rounded-lg px-4 py-2.5 text-red-500 text-sm">
+              {categoryError}
+            </div>
+          )}
+
+          {/* Category list */}
+          {loadingManagedCats ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={20} className="animate-spin text-ink-dim" />
+            </div>
+          ) : managedCategories.length === 0 ? (
+            <p className="text-ink-dim text-sm italic py-4">No categories yet. Add one above.</p>
+          ) : (
+            <div className="space-y-2">
+              {managedCategories.map((cat) => (
+                <div
+                  key={cat.id}
+                  className="flex items-center justify-between bg-cream border border-hair-soft rounded-lg px-4 py-3 group"
+                >
+                  <span className="text-ink text-sm font-medium">{cat.name}</span>
+                  <button
+                    onClick={() => handleDeleteManagedCategory(cat)}
+                    className="text-ink-dim hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                    title="Delete category"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Category Prompts tab ──────────────────────────── */}
       {tab === 'prompts' && (

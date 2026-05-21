@@ -128,6 +128,29 @@ export async function getCategories(): Promise<string[]> {
   return request<string[]>('/leads/categories');
 }
 
+// ── Managed categories (Settings) ────────────────────────────
+
+export interface Category {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
+export async function getManagedCategories(): Promise<Category[]> {
+  return request<Category[]>('/categories');
+}
+
+export async function createCategory(name: string): Promise<Category> {
+  return request<Category>('/categories', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteCategory(id: number): Promise<void> {
+  await request<void>(`/categories/${id}`, { method: 'DELETE' });
+}
+
 // ── Tasks ─────────────────────────────────────────────────────
 
 export interface LeadTask {

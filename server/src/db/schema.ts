@@ -370,6 +370,17 @@ export function initializeDatabase(db: Database.Database): void {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    -- Categories: managed list of lead categories (dropdown values).
+    -- Seeded with "Recruitment" — new categories added via Settings.
+    CREATE TABLE IF NOT EXISTS categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Seed default category if table is empty
+    INSERT OR IGNORE INTO categories (name) VALUES ('Recruitment');
+
     -- Category prompts: free-text AI context per industry category
     CREATE TABLE IF NOT EXISTS category_prompts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -97,6 +97,10 @@ export default function HomePage() {
   } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  // Managed categories for the dropdown
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+
   // Calendar status — checked on mount, on window focus, and on a slow
   // 5-min interval (matches the server's validity cache TTL so we are
   // not asking faster than the server can answer with fresh data).
@@ -144,6 +148,16 @@ export default function HomePage() {
       if (Date.now() - start > 120_000) clearInterval(id);
     }, 3000);
   };
+
+  // Load category options when the create lead form opens
+  useEffect(() => {
+    if (!showCreateLead) return;
+    setLoadingCategories(true);
+    api.getCategories()
+      .then((cats) => setCategoryOptions(cats))
+      .catch(() => { /* non-critical */ })
+      .finally(() => setLoadingCategories(false));
+  }, [showCreateLead]);
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -460,7 +474,6 @@ export default function HomePage() {
               {([
                 { key: 'email', label: 'Email', placeholder: 'john@acme.com', maxLength: 254 },
                 { key: 'website', label: 'Website', placeholder: 'acme.com', maxLength: 255 },
-                { key: 'category', label: 'Category', placeholder: 'e.g. Recruitment', maxLength: 80 },
               ] as const).map(({ key, label, placeholder, maxLength }) => (
                 <div key={key}>
                   <EyebrowLabel variant="bare" className="mb-2">
@@ -478,6 +491,24 @@ export default function HomePage() {
                   />
                 </div>
               ))}
+              <div>
+                <EyebrowLabel variant="bare" className="mb-2">
+                  Category
+                </EyebrowLabel>
+                <select
+                  value={newLead.category}
+                  onChange={(e) =>
+                    setNewLead((prev) => ({ ...prev, category: e.target.value }))
+                  }
+                  className={tempInputClass}
+                  disabled={loadingCategories}
+                >
+                  <option value="">Select category</option>
+                  {categoryOptions.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <PillButton

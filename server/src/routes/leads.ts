@@ -219,12 +219,23 @@ router.get('/', (req, res, next) => {
 router.get('/categories', (req, res, next) => {
   try {
     const db = getDb();
+    // Pull from the managed categories table (Settings > Categories).
+    // Falls back to DISTINCT from leads if the table is empty, so
+    // existing data isn't invisible before categories are set up.
+    const managed = db.prepare(
+      'SELECT name FROM categories ORDER BY name ASC'
+    ).all() as { name: string }[];
+
+    if (managed.length > 0) {
+      res.json(managed.map((r) => r.name));
+      return;
+    }
+
+    // Fallback: derive from existing lead data.
     const rows = db.prepare(
       "SELECT DISTINCT category FROM leads WHERE category IS NOT NULL AND category != '' ORDER BY category ASC"
     ).all() as { category: string }[];
-
-    const categories = rows.map((r) => r.category);
-    res.json(categories);
+    res.json(rows.map((r) => r.category));
   } catch (err) {
     next(err);
   }

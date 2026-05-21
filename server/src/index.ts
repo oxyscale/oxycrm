@@ -39,6 +39,7 @@ import pipelineRouter from './routes/pipeline.js';
 import settingsRouter from './routes/settings.js';
 import tasksRouter from './routes/tasks.js';
 import reportsRouter from './routes/reports.js';
+import categoriesRouter from './routes/categories.js';
 import { startGmailSync } from './services/gmail-sync.js';
 
 // Import error handling middleware
@@ -255,6 +256,7 @@ app.use('/api/webhooks', webhooksRouter);
 // /api/leads/:leadId/tasks and /api/tasks/:id endpoints
 app.use('/api', tasksRouter);
 app.use('/api/reports', reportsRouter);
+app.use('/api/categories', categoriesRouter);
 
 // --- Serve React frontend in production ---
 if (process.env.NODE_ENV === 'production') {
