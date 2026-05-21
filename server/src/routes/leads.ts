@@ -144,7 +144,7 @@ const dispositionSchema = z.object({
 
 const createLeadSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  phone: z.string().min(1, 'Phone is required'),
+  phone: z.string().nullable().optional(),
   company: z.string().nullable().optional(),
   email: z.string().email().nullable().optional(),
   website: z.string().nullable().optional(),

@@ -238,7 +238,7 @@ export default function HomePage() {
   };
 
   const handleCreateLead = async () => {
-    if (!newLead.name.trim() || !newLead.phone.trim()) return;
+    if (!newLead.name.trim()) return;
     setCreating(true);
     setCreateError(null);
     setCreateResult(null);
@@ -246,7 +246,7 @@ export default function HomePage() {
     try {
       const created = await api.createLead({
         name: newLead.name.trim(),
-        phone: newLead.phone.trim(),
+        phone: newLead.phone.trim() || undefined,
         company: newLead.company.trim() || undefined,
         email: newLead.email.trim() || undefined,
         website: newLead.website.trim() || undefined,
@@ -448,7 +448,7 @@ export default function HomePage() {
             <div className="grid grid-cols-3 gap-4 mb-4">
               {([
                 { key: 'name', label: 'Name', placeholder: 'John Smith', required: true, maxLength: 120 },
-                { key: 'phone', label: 'Phone', placeholder: '0412 345 678', required: true, maxLength: 32 },
+                { key: 'phone', label: 'Phone', placeholder: '0412 345 678', required: false, maxLength: 32 },
                 { key: 'company', label: 'Company', placeholder: 'Acme Corp', required: false, maxLength: 200 },
               ] as const).map(({ key, label, placeholder, required, maxLength }) => (
                 <div key={key}>
@@ -516,7 +516,7 @@ export default function HomePage() {
               size="md"
               icon={creating ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
               onClick={handleCreateLead}
-              disabled={!newLead.name.trim() || !newLead.phone.trim() || creating}
+              disabled={!newLead.name.trim() || creating}
             >
               {creating ? 'Creating…' : 'Add lead'}
             </PillButton>
