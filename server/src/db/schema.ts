@@ -177,6 +177,46 @@ export function initializeDatabase(db: Database.Database): void {
   }
 
   // ─────────────────────────────────────────────────────────────────
+  // Drop NOT NULL from leads.phone (if present) — phone is optional
+  // since leads can be created without a phone number.
+  // Uses the same writable_schema technique as pipeline_stage above.
+  // ─────────────────────────────────────────────────────────────────
+  const phoneInfo = (
+    db.prepare('PRAGMA table_info(leads)').all() as Array<{ name: string; notnull: number }>
+  ).find((c) => c.name === 'phone');
+
+  if (phoneInfo && phoneInfo.notnull === 1) {
+    const tableSqlRow = db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'leads'"
+    ).get() as { sql: string } | undefined;
+
+    if (tableSqlRow?.sql) {
+      const newSql = tableSqlRow.sql.replace(
+        /(["']?phone["']?\s+TEXT)\s+NOT\s+NULL/i,
+        '$1',
+      );
+
+      if (newSql !== tableSqlRow.sql) {
+        db.unsafeMode(true);
+        db.exec('PRAGMA foreign_keys = OFF');
+        db.exec('PRAGMA writable_schema = ON');
+        db.prepare(
+          "UPDATE sqlite_master SET sql = ? WHERE type = 'table' AND name = 'leads'"
+        ).run(newSql);
+        db.exec('PRAGMA writable_schema = OFF');
+        db.exec('PRAGMA foreign_keys = ON');
+        db.unsafeMode(false);
+
+        const sv = db.pragma('schema_version', { simple: true }) as number;
+        db.pragma(`schema_version = ${sv + 1}`);
+
+        // eslint-disable-next-line no-console
+        console.log('[schema] Dropped NOT NULL constraint from leads.phone');
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // Pipeline simplification (May 2026): collapse 7+ stages into
   // three tiers + two outcomes (won, lost). Idempotent — runs every
   // boot but only touches rows still on the legacy values.

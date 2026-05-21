@@ -873,8 +873,14 @@ router.post('/import', upload.single('file'), (req, res, next) => {
     logger.info({ imported: result.imported, skipped: result.skipped, duplicates: result.duplicates }, 'CSV import complete');
     res.status(201).json({ ...result, duplicateLeads });
   } catch (err) {
-    logger.error({ err, message: (err as Error).message, stack: (err as Error).stack }, 'CSV import failed');
-    next(err);
+    const msg = (err as Error).message || 'Unknown error';
+    logger.error({ err, message: msg, stack: (err as Error).stack }, 'CSV import failed');
+    // Surface the actual error to the client so Jordan can report it
+    if (err instanceof ApiError) {
+      next(err);
+    } else {
+      res.status(500).json({ error: `Import failed: ${msg}` });
+    }
   }
 });
 
