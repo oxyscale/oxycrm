@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search,
   ArrowUpDown,
-  ChevronRight,
   UserPlus,
 } from 'lucide-react';
 import * as api from '../services/api';
@@ -186,23 +185,20 @@ export default function LeadsPage() {
                 </span>
               </th>
               <th className="w-[120px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Status</th>
-              <th className="w-[85px] px-3 py-3" />
             </tr>
           </thead>
           <tbody>
             {filtered.map((lead) => (
               <tr
                 key={lead.id}
-                className="border-b border-hair-soft hover:bg-[rgba(10,156,212,0.04)] transition-colors"
+                onClick={() => navigate(`/leads/${lead.id}`)}
+                className="border-b border-hair-soft hover:bg-[rgba(10,156,212,0.04)] transition-colors cursor-pointer"
               >
                 <td className="px-3 py-3 text-ink-dim text-sm">
                   {lead.queuePosition}
                 </td>
                 <td className="px-3 py-3">
-                  <div
-                    className="text-ink text-sm font-medium hover:text-sky-ink cursor-pointer transition-colors truncate"
-                    onClick={() => navigate(`/leads/${lead.id}`)}
-                  >
+                  <div className="text-ink text-sm font-medium truncate">
                     {lead.name}
                   </div>
                   <div className="text-ink-dim text-xs mt-0.5 truncate">
@@ -240,15 +236,6 @@ export default function LeadsPage() {
                       Not Contacted
                     </span>
                   )}
-                </td>
-                <td className="px-3 py-3">
-                  <button
-                    onClick={() => navigate(`/leads/${lead.id}`)}
-                    className="text-ink-muted hover:text-sky-ink transition-colors flex items-center gap-1 text-xs"
-                  >
-                    Open
-                    <ChevronRight size={12} />
-                  </button>
                 </td>
               </tr>
             ))}
