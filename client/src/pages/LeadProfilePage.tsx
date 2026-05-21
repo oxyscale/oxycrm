@@ -152,7 +152,15 @@ function humaniseDates(text: string): string {
 
 function stageLabel(stage: PipelineStage | null): string {
   if (!stage) return 'No tier';
-  return PIPELINE_STAGES.find((s) => s.value === stage)?.label || stage;
+  // Map legacy stages to their new labels for display
+  const legacyMap: Record<string, string> = {
+    new_lead: 'No tier',
+    follow_up: 'Tier 2',
+    call_booked: 'Tier 1',
+    negotiation: 'Tier 1',
+    not_interested: 'Lost',
+  };
+  return PIPELINE_STAGES.find((s) => s.value === stage)?.label || legacyMap[stage] || stage;
 }
 
 // ── Inline Editable Field ────────────────────────────────────
@@ -293,6 +301,9 @@ export default function LeadProfilePage() {
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [togglingTaskId, setTogglingTaskId] = useState<number | null>(null);
 
+  // Managed categories for the category dropdown
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+
   // ── Load lead ──────────────────────────────────────────────
 
   useEffect(() => {
@@ -312,6 +323,13 @@ export default function LeadProfilePage() {
     if (tab === 'notes') loadNotes();
     if (tab === 'emails') loadEmails();
   }, [tab, lead?.id]);
+
+  // Load managed categories for the sidebar dropdown
+  useEffect(() => {
+    api.getManagedCategories()
+      .then((cats) => setCategoryOptions(cats.map((c) => c.name)))
+      .catch(() => {});
+  }, []);
 
   // Tasks live in the sidebar — load alongside the lead, not per tab.
   useEffect(() => {
@@ -1556,14 +1574,32 @@ export default function LeadProfilePage() {
             </h3>
 
             <div className="space-y-3">
-              {/* Category */}
+              {/* Category — editable dropdown */}
               <div>
                 <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Category</p>
-                <p className="text-ink-muted text-sm">
-                  {lead.category || (
-                    <span className="text-ink-dim italic">None</span>
+                <select
+                  value={lead.category || ''}
+                  onChange={async (e) => {
+                    const newCategory = e.target.value || null;
+                    try {
+                      const updated = await api.updateLead(lead.id, { category: newCategory } as Partial<Lead>);
+                      setLead(updated);
+                    } catch (err) {
+                      console.error('Failed to update category:', err);
+                    }
+                  }}
+                  className="w-full bg-transparent text-ink-muted text-sm py-1 -ml-0.5 px-0.5 border-none focus:outline-none focus:ring-0 cursor-pointer hover:text-sky-ink transition-colors appearance-none"
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a95a0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0 center', paddingRight: '16px' }}
+                >
+                  <option value="">None</option>
+                  {/* Ensure current category is always visible even if not in managed list */}
+                  {lead.category && !categoryOptions.includes(lead.category) && (
+                    <option value={lead.category}>{lead.category}</option>
                   )}
-                </p>
+                  {categoryOptions.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Lead type */}
