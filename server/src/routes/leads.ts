@@ -220,6 +220,21 @@ router.get('/', (req, res, next) => {
     const rows = db.prepare(query).all(params) as LeadRow[];
     const leads = rows.map(mapLeadRow);
 
+    // Compute "contacted" flag for each lead so the frontend can
+    // show a pill without making extra queries per lead.
+    const contactedStmt = db.prepare(`
+      SELECT CASE WHEN (
+        EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
+        OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = ?)
+        OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = ?)
+      ) THEN 1 ELSE 0 END AS contacted
+    `);
+
+    for (const lead of leads) {
+      const result = contactedStmt.get(lead.id, lead.id, lead.id) as { contacted: number };
+      lead.contacted = result.contacted === 1;
+    }
+
     logger.info({ count: leads.length, filters: { status, leadType, category } }, 'Fetched leads');
     res.json(leads);
   } catch (err) {

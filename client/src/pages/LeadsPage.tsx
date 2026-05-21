@@ -138,16 +138,28 @@ export default function LeadsPage() {
           </select>
         )}
 
-        {/* Contacted filter */}
-        <select
-          value={filterContacted}
-          onChange={(e) => setFilterContacted(e.target.value as 'all' | 'contacted' | 'not_contacted')}
-          className="bg-paper border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink-muted focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
+        {/* Contacted toggle — cycles: all → contacted → not_contacted → all */}
+        <button
+          type="button"
+          onClick={() =>
+            setFilterContacted((prev) =>
+              prev === 'all' ? 'contacted' : prev === 'contacted' ? 'not_contacted' : 'all'
+            )
+          }
+          className={`rounded-full px-4 py-2 text-sm font-medium border transition-all select-none ${
+            filterContacted === 'contacted'
+              ? 'bg-[rgba(16,185,129,0.1)] border-[rgba(16,185,129,0.3)] text-[#10b981]'
+              : filterContacted === 'not_contacted'
+                ? 'bg-[rgba(239,68,68,0.08)] border-[rgba(239,68,68,0.25)] text-[#ef4444]'
+                : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)]'
+          }`}
         >
-          <option value="all">All Leads</option>
-          <option value="contacted">Contacted</option>
-          <option value="not_contacted">Not Contacted</option>
-        </select>
+          {filterContacted === 'contacted'
+            ? 'Contacted'
+            : filterContacted === 'not_contacted'
+              ? 'Not Contacted'
+              : 'All Status'}
+        </button>
       </div>
 
       {/* Table */}
@@ -173,6 +185,7 @@ export default function LeadsPage() {
                   {sortField === 'category' && <ArrowUpDown size={12} className="text-sky-ink" />}
                 </span>
               </th>
+              <th className="w-[120px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Status</th>
               <th className="w-[85px] px-3 py-3" />
             </tr>
           </thead>
@@ -214,6 +227,17 @@ export default function LeadsPage() {
                   {lead.category && (
                     <span className="bg-[rgba(10,156,212,0.15)] text-sky-ink text-xs px-2.5 py-1 rounded-full whitespace-nowrap">
                       {lead.category}
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-3">
+                  {lead.contacted ? (
+                    <span className="bg-[rgba(16,185,129,0.1)] text-[#10b981] text-xs px-2.5 py-1 rounded-full whitespace-nowrap">
+                      Contacted
+                    </span>
+                  ) : (
+                    <span className="bg-[rgba(239,68,68,0.08)] text-[#ef4444] text-xs px-2.5 py-1 rounded-full whitespace-nowrap">
+                      Not Contacted
                     </span>
                   )}
                 </td>

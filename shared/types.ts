@@ -39,6 +39,8 @@ export interface Lead {
   lastCalledAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Computed — true if the lead has any notes, emails, or call logs */
+  contacted?: boolean;
 }
 
 export interface CallLog {
