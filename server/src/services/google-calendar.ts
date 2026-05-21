@@ -340,3 +340,61 @@ export async function createEvent(params: CreateEventParams): Promise<CreateEven
 
   return result;
 }
+
+// ── Find + update helpers (Touch Base consolidation) ────────
+
+/**
+ * Finds the first calendar event on `date` whose summary starts with
+ * `titlePrefix`. Returns the event ID and current description so the
+ * caller can append to it, or null if no match.
+ */
+export async function findEventByTitlePrefix(
+  date: string,
+  titlePrefix: string,
+  timezone?: string
+): Promise<{ eventId: string; summary: string; description: string } | null> {
+  const auth = getAuthenticatedClient();
+  const calendar = google.calendar({ version: 'v3', auth });
+  const tz = timezone || 'Australia/Sydney';
+
+  const response = await calendar.events.list({
+    calendarId: 'primary',
+    timeMin: `${date}T00:00:00+10:00`,
+    timeMax: `${date}T23:59:59+10:00`,
+    timeZone: tz,
+    singleEvents: true,
+    orderBy: 'startTime',
+    q: titlePrefix,
+  });
+
+  const match = (response.data.items || []).find((e) =>
+    e.summary?.startsWith(titlePrefix)
+  );
+
+  if (!match || !match.id) return null;
+
+  return {
+    eventId: match.id,
+    summary: match.summary || '',
+    description: match.description || '',
+  };
+}
+
+/**
+ * Updates an existing calendar event's summary and/or description.
+ */
+export async function updateEvent(
+  eventId: string,
+  updates: { summary?: string; description?: string }
+): Promise<void> {
+  const auth = getAuthenticatedClient();
+  const calendar = google.calendar({ version: 'v3', auth });
+
+  logger.info({ eventId, summaryUpdate: !!updates.summary }, 'Updating calendar event');
+
+  await calendar.events.patch({
+    calendarId: 'primary',
+    eventId,
+    requestBody: updates,
+  });
+}

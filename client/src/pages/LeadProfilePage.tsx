@@ -867,6 +867,24 @@ export default function LeadProfilePage() {
             </button>
           </div>
 
+          {/* Quick action — Touch Base fills the label and lets Jordan
+              just pick a date. Multiple leads on the same day get merged
+              into one calendar event. */}
+          <div className="mb-3">
+            <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Quick</p>
+            <button
+              type="button"
+              onClick={() => setTaskLabel('Touch Base')}
+              className={`text-sm rounded-full px-4 py-1.5 border transition-all ${
+                taskLabel === 'Touch Base'
+                  ? 'bg-sky-wash border-sky-hair text-sky-ink'
+                  : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
+              }`}
+            >
+              Touch Base
+            </button>
+          </div>
+
           <div className="grid grid-cols-[1fr_180px] gap-3 mb-4">
             <div>
               <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Task</p>
@@ -874,7 +892,7 @@ export default function LeadProfilePage() {
                 type="text"
                 value={taskLabel}
                 onChange={(e) => setTaskLabel(e.target.value)}
-                placeholder="e.g. Call in July"
+                placeholder="e.g. Follow up in July"
                 className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all"
               />
             </div>

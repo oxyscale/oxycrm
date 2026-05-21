@@ -14,7 +14,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
-import { createEvent } from '../services/google-calendar.js';
+import { createEvent, findEventByTitlePrefix, updateEvent } from '../services/google-calendar.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'tasks-routes' });
@@ -156,60 +156,114 @@ router.post('/leads/:leadId/tasks', async (req, res, next) => {
     `).run(leadId, payload.label, payload.dueDate);
     const taskId = insert.lastInsertRowid as number;
 
-    // Best-effort: create the calendar event. If Google isn't connected
-    // (or anything else fails) we just log — task creation still succeeds.
+    // Best-effort: create (or append to) a calendar event. If Google
+    // isn't connected or the API fails, the task still saves.
     let calendarEventId: string | null = null;
     let calendarLink: string | null = null;
     try {
-      // Anchor to 9am local Sydney time, 30-minute event window.
-      const startTime = `${payload.dueDate}T09:00:00`;
-      const endTime = `${payload.dueDate}T09:30:00`;
+      const isTouchBase = payload.label.toLowerCase() === 'touch base';
 
-      const descLines: string[] = [];
-      descLines.push(`Lead: ${lead.name}`);
-      if (lead.company) descLines.push(`Company: ${lead.company}`);
-      if (lead.phone) descLines.push(`Phone: ${lead.phone}`);
-      if (lead.email) descLines.push(`Email: ${lead.email}`);
-
-      // Pull the most recent note so Jordan has context when the calendar
-      // reminder fires — no need to open the CRM to remember what the
-      // call is about.
+      // Build a description block for this lead.
+      // Order: OxyCRM link → latest note → contact info.
       const latestNote = db.prepare(
         'SELECT content FROM notes WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1'
       ).get(leadId) as { content: string } | undefined;
+
+      const leadBlock: string[] = [];
+      leadBlock.push(`--- ${lead.name}${lead.company ? ` (${lead.company})` : ''} ---`);
+      leadBlock.push(`Open in OxyCRM: https://oxycrm-production.up.railway.app/leads/${leadId}`);
       if (latestNote?.content) {
-        descLines.push('');
-        descLines.push('--- Latest note ---');
-        descLines.push(latestNote.content);
+        leadBlock.push(`Note: ${latestNote.content}`);
       }
+      if (lead.phone) leadBlock.push(`Phone: ${lead.phone}`);
+      if (lead.email) leadBlock.push(`Email: ${lead.email}`);
 
-      // Also include the consolidated call summary if there is one — gives
-      // a broader picture of the relationship beyond the latest note.
-      const leadSummary = db.prepare(
-        'SELECT consolidated_summary FROM leads WHERE id = ?'
-      ).get(leadId) as { consolidated_summary: string | null } | undefined;
-      if (leadSummary?.consolidated_summary) {
+      // ── Touch Base consolidation ──────────────────────────
+      // If this is a Touch Base task, look for an existing Touch Base
+      // event on the same day. If found, append this lead to it instead
+      // of creating a second event.
+      if (isTouchBase) {
+        const existing = await findEventByTitlePrefix(
+          payload.dueDate,
+          'Touch Base',
+          'Australia/Sydney'
+        );
+
+        if (existing) {
+          // Count how many lead blocks are already in the description
+          const existingBlocks = (existing.description.match(/^---\s/gm) || []).length;
+          const newCount = existingBlocks + 1;
+
+          const updatedDescription = existing.description.trim() + '\n\n' + leadBlock.join('\n');
+          const updatedSummary = `Touch Base — ${newCount} leads`;
+
+          await updateEvent(existing.eventId, {
+            summary: updatedSummary,
+            description: updatedDescription,
+          });
+
+          calendarEventId = existing.eventId;
+
+          if (calendarEventId) {
+            db.prepare('UPDATE tasks SET google_calendar_event_id = ? WHERE id = ?')
+              .run(calendarEventId, taskId);
+          }
+
+          logger.info(
+            { leadId, taskId, eventId: existing.eventId, leadCount: newCount },
+            'Appended lead to existing Touch Base calendar event'
+          );
+        } else {
+          // No existing Touch Base event — create one.
+          const startTime = `${payload.dueDate}T09:00:00`;
+          const endTime = `${payload.dueDate}T09:30:00`;
+
+          const event = await createEvent({
+            summary: `Touch Base — ${lead.name}`,
+            description: leadBlock.join('\n'),
+            startTime,
+            endTime,
+            timezone: 'Australia/Sydney',
+          });
+          calendarEventId = event.eventId || null;
+          calendarLink = event.htmlLink || null;
+
+          if (calendarEventId) {
+            db.prepare('UPDATE tasks SET google_calendar_event_id = ? WHERE id = ?')
+              .run(calendarEventId, taskId);
+          }
+        }
+      } else {
+        // ── Regular (non-Touch Base) task ──────────────────
+        const startTime = `${payload.dueDate}T09:00:00`;
+        const endTime = `${payload.dueDate}T09:30:00`;
+
+        const descLines: string[] = [];
+        descLines.push(`Open in OxyCRM: https://oxycrm-production.up.railway.app/leads/${leadId}`);
+        if (latestNote?.content) {
+          descLines.push('');
+          descLines.push(`Latest note: ${latestNote.content}`);
+        }
         descLines.push('');
-        descLines.push('--- Call summary ---');
-        descLines.push(leadSummary.consolidated_summary);
-      }
+        descLines.push(`Lead: ${lead.name}`);
+        if (lead.company) descLines.push(`Company: ${lead.company}`);
+        if (lead.phone) descLines.push(`Phone: ${lead.phone}`);
+        if (lead.email) descLines.push(`Email: ${lead.email}`);
 
-      descLines.push('');
-      descLines.push(`Open in OxyCRM: https://oxycrm-production.up.railway.app/leads/${leadId}`);
+        const event = await createEvent({
+          summary: `${payload.label} — ${lead.name}`,
+          description: descLines.join('\n'),
+          startTime,
+          endTime,
+          timezone: 'Australia/Sydney',
+        });
+        calendarEventId = event.eventId || null;
+        calendarLink = event.htmlLink || null;
 
-      const event = await createEvent({
-        summary: `${payload.label} — ${lead.name}`,
-        description: descLines.join('\n'),
-        startTime,
-        endTime,
-        timezone: 'Australia/Sydney',
-      });
-      calendarEventId = event.eventId || null;
-      calendarLink = event.htmlLink || null;
-
-      if (calendarEventId) {
-        db.prepare('UPDATE tasks SET google_calendar_event_id = ? WHERE id = ?')
-          .run(calendarEventId, taskId);
+        if (calendarEventId) {
+          db.prepare('UPDATE tasks SET google_calendar_event_id = ? WHERE id = ?')
+            .run(calendarEventId, taskId);
+        }
       }
     } catch (err) {
       logger.warn(
