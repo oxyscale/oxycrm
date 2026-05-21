@@ -48,13 +48,14 @@ export default function LeadsPage() {
 
   const filtered = leads
     .filter((lead) => {
-      if (filterCategory !== 'all' && lead.category !== filterCategory) return false;
+      if (filterCategory === 'none' && lead.category) return false;
+      if (filterCategory !== 'all' && filterCategory !== 'none' && lead.category !== filterCategory) return false;
       if (search) {
         const q = search.toLowerCase();
         return (
           lead.name.toLowerCase().includes(q) ||
           (lead.company || '').toLowerCase().includes(q) ||
-          lead.phone.includes(q) ||
+          (lead.phone || '').includes(q) ||
           (lead.email || '').toLowerCase().includes(q)
         );
       }
@@ -125,18 +126,17 @@ export default function LeadsPage() {
         </div>
 
         {/* Category filter */}
-        {categories.length > 0 && (
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="bg-paper border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink-muted focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
-          >
-            <option value="all">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-        )}
+        <select
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+          className="bg-paper border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink-muted focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
+        >
+          <option value="all">All Categories</option>
+          <option value="none">No Category</option>
+          {categories.map((cat) => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
 
         {/* Contacted toggle — cycles: all → contacted → not_contacted → all */}
         <button
