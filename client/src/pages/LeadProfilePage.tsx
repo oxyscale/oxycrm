@@ -1578,6 +1578,20 @@ export default function LeadProfilePage() {
                 <p className="text-ink-muted text-sm">{stageLabel(lead.pipelineStage)}</p>
               </div>
 
+              {/* Contacted status */}
+              <div>
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Status</p>
+                {lead.contacted ? (
+                  <span className="inline-block bg-[rgba(16,185,129,0.1)] text-[#10b981] text-xs px-2.5 py-1 rounded-full">
+                    Contacted
+                  </span>
+                ) : (
+                  <span className="inline-block bg-[rgba(239,68,68,0.08)] text-[#ef4444] text-xs px-2.5 py-1 rounded-full">
+                    Not Contacted
+                  </span>
+                )}
+              </div>
+
               {/* Deal value — inline editable */}
               <div>
                 <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Deal Value</p>

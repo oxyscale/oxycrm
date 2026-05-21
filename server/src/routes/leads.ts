@@ -656,6 +656,16 @@ router.get('/:id', (req, res, next) => {
     const lead = mapLeadRow(leadRow);
     const callLogs = callLogRows.map(mapCallLogRow);
 
+    // Compute contacted flag
+    const contactedResult = db.prepare(`
+      SELECT CASE WHEN (
+        EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
+        OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = ?)
+        OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = ?)
+      ) THEN 1 ELSE 0 END AS contacted
+    `).get(id, id, id) as { contacted: number };
+    lead.contacted = contactedResult.contacted === 1;
+
     res.json({
       ...lead,
       callLogs,
@@ -765,13 +775,15 @@ router.post('/import', upload.single('file'), (req, res, next) => {
 
     try {
       records = parse(csvContent, {
-        columns: true,        // Use first row as headers
+        columns: (headers: string[]) => headers.map((h) => h.trim().toLowerCase().replace(/\s+/g, '_')),
         skip_empty_lines: true,
         trim: true,
       });
     } catch {
       throw new ApiError(400, 'Invalid CSV format');
     }
+
+    logger.info({ rowCount: records.length, sampleKeys: records[0] ? Object.keys(records[0]) : [] }, 'CSV parsed');
 
     const result: ImportResult = { imported: 0, skipped: 0, duplicates: 0, errors: [] };
     const duplicateLeads: DuplicateLead[] = [];
@@ -800,8 +812,9 @@ router.post('/import', upload.single('file'), (req, res, next) => {
 
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
-        const name = row.name?.trim();
-        const phone = row.phone?.trim();
+        // Support common column name variants (headers already lowercased + underscored)
+        const name = (row.name || row.contact_name || row.full_name || row.lead_name || row.first_name || '')?.trim();
+        const phone = (row.phone || row.phone_number || row.telephone || row.mobile || row.tel || '')?.trim();
 
         // Name is required — phone can be empty (user may have email/website to find it later)
         if (!name) {
@@ -830,12 +843,12 @@ router.post('/import', upload.single('file'), (req, res, next) => {
 
         insertStmt.run({
           name,
-          company: row.company?.trim() || null,
+          company: (row.company || row.company_name || row.organisation || row.organization || row.business || '')?.trim() || null,
           phone: phone || null,
-          email: row.email?.trim() || null,
-          website: row.website?.trim() || null,
+          email: (row.email || row.email_address || row.e_mail || '')?.trim() || null,
+          website: (row.website || row.url || row.web || '')?.trim() || null,
           leadType,
-          category: categoryOverride || row.category?.trim() || null,
+          category: categoryOverride || (row.category || row.industry || row.sector || '')?.trim() || null,
           queuePosition: currentPos,
         });
 
