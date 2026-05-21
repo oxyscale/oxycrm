@@ -378,9 +378,6 @@ export function initializeDatabase(db: Database.Database): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
-    -- Seed default category if table is empty
-    INSERT OR IGNORE INTO categories (name) VALUES ('Recruitment');
-
     -- Category prompts: free-text AI context per industry category
     CREATE TABLE IF NOT EXISTS category_prompts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -518,6 +515,14 @@ export function initializeDatabase(db: Database.Database): void {
        ON emails_sent(last_opened_at DESC)
        WHERE last_opened_at IS NOT NULL`,
   );
+
+  // Seed the categories table with "Recruitment" if it's empty.
+  // Runs outside the DDL block to avoid mixing DML with CREATE TABLE
+  // statements in the same db.exec() call.
+  const catCount = (db.prepare('SELECT COUNT(*) AS n FROM categories').get() as { n: number }).n;
+  if (catCount === 0) {
+    db.prepare("INSERT INTO categories (name) VALUES ('Recruitment')").run();
+  }
 }
 
 /**
