@@ -182,7 +182,7 @@ const updateLeadSchema = z.object({
 router.get('/', (req, res, next) => {
   try {
     const db = getDb();
-    const { status, leadType, category } = req.query;
+    const { status, leadType, category, contacted } = req.query;
 
     let query = 'SELECT * FROM leads WHERE 1=1';
     const params: Record<string, string> = {};
@@ -198,6 +198,21 @@ router.get('/', (req, res, next) => {
     if (category && typeof category === 'string') {
       query += ' AND category = @category';
       params.category = category;
+    }
+
+    // Contacted filter: a lead is "contacted" if it has any notes,
+    // emails, or call logs (transcripts). This lets Jordan separate
+    // CSV-imported leads from ones he's actually engaged with.
+    if (contacted === 'true') {
+      query += ` AND (
+        EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
+        OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
+        OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
+      )`;
+    } else if (contacted === 'false') {
+      query += ` AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
+        AND NOT EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
+        AND NOT EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)`;
     }
 
     query += ' ORDER BY queue_position ASC';

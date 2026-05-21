@@ -21,17 +21,21 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterContacted, setFilterContacted] = useState<'all' | 'contacted' | 'not_contacted'>('all');
   const [sortField, setSortField] = useState<SortField>('queuePosition');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   useEffect(() => {
     loadLeads();
-  }, []);
+  }, [filterContacted]);
 
   const loadLeads = async () => {
     try {
       setLoading(true);
-      const data = await api.getLeads();
+      const params: Parameters<typeof api.getLeads>[0] = {};
+      if (filterContacted === 'contacted') params.contacted = 'true';
+      else if (filterContacted === 'not_contacted') params.contacted = 'false';
+      const data = await api.getLeads(params);
       setLeads(data);
     } catch (err) {
       console.error('Failed to load leads:', err);
@@ -133,6 +137,17 @@ export default function LeadsPage() {
             ))}
           </select>
         )}
+
+        {/* Contacted filter */}
+        <select
+          value={filterContacted}
+          onChange={(e) => setFilterContacted(e.target.value as 'all' | 'contacted' | 'not_contacted')}
+          className="bg-paper border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink-muted focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
+        >
+          <option value="all">All Leads</option>
+          <option value="contacted">Contacted</option>
+          <option value="not_contacted">Not Contacted</option>
+        </select>
       </div>
 
       {/* Table */}
@@ -218,7 +233,7 @@ export default function LeadsPage() {
 
         {filtered.length === 0 && (
           <div className="text-center py-12 text-ink-dim">
-            {search || filterCategory !== 'all'
+            {search || filterCategory !== 'all' || filterContacted !== 'all'
               ? 'No leads match your filters'
               : 'No leads imported yet'}
           </div>
