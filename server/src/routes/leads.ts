@@ -709,7 +709,7 @@ router.post('/', (req, res, next) => {
         VALUES (@name, @phone, @company, @email, @website, @category, 'new', 'not_called', @pipelineStage, @temperature, @queuePosition, @now, @now)
       `).run({
         name: payload.name,
-        phone: payload.phone,
+        phone: payload.phone || '',
         company: payload.company ?? null,
         email: payload.email ?? null,
         website: payload.website ?? null,
@@ -855,12 +855,12 @@ router.post('/import', upload.single('file'), (req, res, next) => {
 
         insertStmt.run({
           name,
-          company: (row.company || row.company_name || row.organisation || row.organization || row.business || '')?.trim() || null,
-          phone: phone || null,
-          email: (row.email || row.email_address || row.e_mail || '')?.trim() || null,
-          website: (row.website || row.url || row.web || '')?.trim() || null,
+          company: (row.company || row.company_name || row.organisation || row.organization || row.business || '').trim() || null,
+          phone: phone || '',
+          email: (row.email || row.email_address || row.e_mail || '').trim() || null,
+          website: (row.website || row.url || row.web || '').trim() || null,
           leadType,
-          category: categoryOverride || (row.category || row.industry || row.sector || '')?.trim() || null,
+          category: categoryOverride || (row.category || row.industry || row.sector || '').trim() || null,
           queuePosition: currentPos,
         });
 
