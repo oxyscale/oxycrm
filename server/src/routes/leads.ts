@@ -769,19 +769,31 @@ router.post('/import', upload.single('file'), (req, res, next) => {
     // Optional category override — applies to all leads in this batch
     const categoryOverride = (req.body.category as string)?.trim() || null;
 
-    // Parse the CSV from the uploaded buffer
-    const csvContent = req.file.buffer.toString('utf-8');
+    // Parse the CSV from the uploaded buffer, stripping BOM if present
+    const csvContent = req.file.buffer.toString('utf-8').replace(/^﻿/, '');
     let records: Record<string, string>[];
 
     try {
       records = parse(csvContent, {
-        columns: (headers: string[]) => headers.map((h) => h.trim().toLowerCase().replace(/\s+/g, '_')),
+        columns: true,
         skip_empty_lines: true,
         trim: true,
+        relax_column_count: true,
       });
-    } catch {
+    } catch (csvErr) {
+      logger.error({ err: csvErr }, 'CSV parse failed');
       throw new ApiError(400, 'Invalid CSV format');
     }
+
+    // Normalise column headers to lowercase with underscores so
+    // "Name", "Phone Number", "Company Name" etc. all work.
+    records = records.map((row) => {
+      const normalised: Record<string, string> = {};
+      for (const [key, value] of Object.entries(row)) {
+        normalised[key.trim().toLowerCase().replace(/\s+/g, '_')] = value;
+      }
+      return normalised;
+    });
 
     logger.info({ rowCount: records.length, sampleKeys: records[0] ? Object.keys(records[0]) : [] }, 'CSV parsed');
 
@@ -861,6 +873,7 @@ router.post('/import', upload.single('file'), (req, res, next) => {
     logger.info({ imported: result.imported, skipped: result.skipped, duplicates: result.duplicates }, 'CSV import complete');
     res.status(201).json({ ...result, duplicateLeads });
   } catch (err) {
+    logger.error({ err, message: (err as Error).message, stack: (err as Error).stack }, 'CSV import failed');
     next(err);
   }
 });
