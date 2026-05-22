@@ -602,6 +602,106 @@ router.post('/:id/retry', async (req, res, next) => {
   }
 });
 
+// ── GET /api/email-drafts/:id/attachments — list attachments ──
+
+router.get('/:id/attachments', (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) throw new ApiError(400, 'Invalid draft ID');
+
+    const db = getDb();
+    const draft = db.prepare('SELECT id FROM email_drafts WHERE id = ?').get(id);
+    if (!draft) throw new ApiError(404, 'Email draft not found');
+
+    // Return metadata only — never send base64 content in list responses.
+    const rows = db.prepare(
+      'SELECT id, draft_id, filename, mime_type, size, created_at FROM draft_attachments WHERE draft_id = ? ORDER BY created_at ASC'
+    ).all(id) as Array<{
+      id: number; draft_id: number; filename: string;
+      mime_type: string; size: number; created_at: string;
+    }>;
+
+    res.json(rows.map((r) => ({
+      id: r.id,
+      draftId: r.draft_id,
+      filename: r.filename,
+      mimeType: r.mime_type,
+      size: r.size,
+      createdAt: r.created_at,
+    })));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/email-drafts/:id/attachments — add attachment ───
+
+const addAttachmentSchema = z.object({
+  filename: z.string().min(1),
+  mimeType: z.string().min(1),
+  contentBase64: z.string().min(1),
+});
+
+router.post('/:id/attachments', (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) throw new ApiError(400, 'Invalid draft ID');
+
+    const payload = addAttachmentSchema.parse(req.body);
+    const db = getDb();
+
+    const draft = db.prepare('SELECT id, status FROM email_drafts WHERE id = ?').get(id) as { id: number; status: string } | undefined;
+    if (!draft) throw new ApiError(404, 'Email draft not found');
+    if (draft.status === 'sent') throw new ApiError(409, 'Cannot add attachments to a sent draft');
+
+    const sizeBytes = Math.ceil(payload.contentBase64.length * 3 / 4);
+
+    const result = db.prepare(`
+      INSERT INTO draft_attachments (draft_id, filename, mime_type, size, content_base64)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, payload.filename, payload.mimeType, sizeBytes, payload.contentBase64);
+
+    logger.info({ draftId: id, filename: payload.filename, size: sizeBytes }, 'Attachment added to draft');
+
+    res.status(201).json({
+      id: result.lastInsertRowid as number,
+      draftId: id,
+      filename: payload.filename,
+      mimeType: payload.mimeType,
+      size: sizeBytes,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── DELETE /api/email-drafts/:id/attachments/:attachmentId ────
+
+router.delete('/:id/attachments/:attachmentId', (req, res, next) => {
+  try {
+    const draftId = parseInt(req.params.id, 10);
+    const attachmentId = parseInt(req.params.attachmentId, 10);
+    if (isNaN(draftId) || isNaN(attachmentId)) throw new ApiError(400, 'Invalid ID');
+
+    const db = getDb();
+
+    const draft = db.prepare('SELECT status FROM email_drafts WHERE id = ?').get(draftId) as { status: string } | undefined;
+    if (!draft) throw new ApiError(404, 'Email draft not found');
+    if (draft.status === 'sent') throw new ApiError(409, 'Cannot remove attachments from a sent draft');
+
+    const result = db.prepare(
+      'DELETE FROM draft_attachments WHERE id = ? AND draft_id = ?'
+    ).run(attachmentId, draftId);
+
+    if (result.changes === 0) throw new ApiError(404, 'Attachment not found');
+
+    logger.info({ draftId, attachmentId }, 'Attachment removed from draft');
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── DELETE /api/email-drafts/:id — discard ────────────────────
 
 router.delete('/:id', (req, res, next) => {

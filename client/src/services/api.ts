@@ -911,6 +911,37 @@ export async function sendEmailDraft(id: number): Promise<{ success: true; messa
   });
 }
 
+// ── Draft Attachments ───────────────────────────────────────
+
+export interface DraftAttachment {
+  id: number;
+  draftId: number;
+  filename: string;
+  mimeType: string;
+  size: number;
+  createdAt?: string;
+}
+
+export async function getDraftAttachments(draftId: number): Promise<DraftAttachment[]> {
+  return request<DraftAttachment[]>(`/email-drafts/${draftId}/attachments`);
+}
+
+export async function addDraftAttachment(
+  draftId: number,
+  data: { filename: string; mimeType: string; contentBase64: string },
+): Promise<DraftAttachment> {
+  return request<DraftAttachment>(`/email-drafts/${draftId}/attachments`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteDraftAttachment(draftId: number, attachmentId: number): Promise<void> {
+  return request<void>(`/email-drafts/${draftId}/attachments/${attachmentId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function retryEmailDraft(id: number): Promise<{ success: true }> {
   return request<{ success: true }>(`/email-drafts/${id}/retry`, {
     method: 'POST',

@@ -15,6 +15,9 @@ import {
   ExternalLink,
   Eye,
   Save,
+  Paperclip,
+  X,
+  FileText,
 } from 'lucide-react';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
@@ -52,6 +55,9 @@ export default function EmailBankPage() {
   const [editCc, setEditCc] = useState('');
   const [editIncludeHeader, setEditIncludeHeader] = useState(true);
   const [editIncludeCapabilities, setEditIncludeCapabilities] = useState(false);
+  const [attachments, setAttachments] = useState<api.DraftAttachment[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [dirty, setDirty] = useState(false);
   const [savingExplicit, setSavingExplicit] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -101,7 +107,7 @@ export default function EmailBankPage() {
     return () => window.clearInterval(id);
   }, []);
 
-  // When the selected draft changes, hydrate the editor
+  // When the selected draft changes, hydrate the editor + load attachments
   const selected = drafts.find((d) => d.id === selectedId) || null;
   useEffect(() => {
     if (selected) {
@@ -111,10 +117,15 @@ export default function EmailBankPage() {
       setEditCc(selected.ccEmail || '');
       setEditIncludeHeader(selected.includeAfterCallHeader);
       setEditIncludeCapabilities(selected.includeCapabilities);
+      setAttachments([]);
       setDirty(false);
       setActionError(null);
       setActionSuccess(null);
       setPreviewHtml('');
+      // Load attachments for this draft
+      api.getDraftAttachments(selected.id)
+        .then((atts) => setAttachments(atts))
+        .catch(() => {});
     }
   }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -301,6 +312,42 @@ export default function EmailBankPage() {
     } finally {
       setDiscarding(false);
     }
+  };
+
+  const handleAddAttachment = async (file: File) => {
+    if (!selected) return;
+    setUploadingAttachment(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const att = await api.addDraftAttachment(selected.id, {
+        filename: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        contentBase64: base64,
+      });
+      setAttachments((prev) => [...prev, att]);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to upload attachment');
+    } finally {
+      setUploadingAttachment(false);
+      // Reset file input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAttachment = async (attachmentId: number) => {
+    if (!selected) return;
+    try {
+      await api.deleteDraftAttachment(selected.id, attachmentId);
+      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to remove attachment');
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const formatAge = (iso: string) => {
@@ -666,6 +713,62 @@ export default function EmailBankPage() {
                 </p>
               </div>
 
+              {/* Attachments */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <EyebrowLabel variant="bare">
+                    Attachments {attachments.length > 0 && `(${attachments.length})`}
+                  </EyebrowLabel>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingAttachment}
+                    className="inline-flex items-center gap-1.5 text-sky-ink text-xs font-medium hover:underline disabled:opacity-50"
+                  >
+                    {uploadingAttachment ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Paperclip size={12} />
+                    )}
+                    {uploadingAttachment ? 'Uploading...' : 'Add file'}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleAddAttachment(file);
+                    }}
+                  />
+                </div>
+                {attachments.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="flex items-center gap-2 bg-tray border border-hair-soft rounded-lg px-3 py-2"
+                      >
+                        <FileText size={14} className="text-sky-ink flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-ink text-xs font-medium truncate">{att.filename}</p>
+                          <p className="text-ink-dim text-[10px]">{formatFileSize(att.size)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAttachment(att.id)}
+                          className="text-ink-dim hover:text-risk transition-colors flex-shrink-0 p-0.5"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-ink-dim text-[11px]">No files attached. Click "Add file" to attach.</p>
+                )}
+              </div>
+
               {/* Feedback + actions */}
               {actionError && (
                 <div className="bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.18)] rounded-xl p-3">
@@ -767,6 +870,22 @@ export default function EmailBankPage() {
       )}
     </div>
   );
+}
+
+// ── Helpers ─────────────────────────────────────────────────
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Strip the data:...;base64, prefix
+      const base64 = result.split(',')[1] || '';
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 // ── Toggle row ───────────────────────────────────────────────
