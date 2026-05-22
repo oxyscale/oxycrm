@@ -838,6 +838,20 @@ export interface EmailBankResponse {
   };
 }
 
+export async function createEmailDraft(data: {
+  leadId: number;
+  toEmail?: string;
+  ccEmail?: string;
+  subject: string;
+  body: string;
+  attachments?: { filename: string; mimeType: string; contentBase64: string }[];
+}): Promise<EmailDraftWithLead> {
+  return request<EmailDraftWithLead>('/email-drafts', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function getEmailDrafts(status?: string): Promise<EmailBankResponse> {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
   return request<EmailBankResponse>(`/email-drafts${qs}`);

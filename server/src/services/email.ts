@@ -25,6 +25,11 @@ function getResend(): Resend {
 
 // ── Types ───────────────────────────────────────────────────
 
+interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+}
+
 interface SendEmailParams {
   to: string;
   cc?: string;
@@ -34,6 +39,7 @@ interface SendEmailParams {
   htmlBody?: string;
   fromName?: string;
   fromAddress?: string;
+  attachments?: EmailAttachment[];
 }
 
 interface SendEmailResult {
@@ -71,6 +77,11 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
 
   try {
     const resend = getResend();
+    const resendAttachments = params.attachments?.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+    }));
+
     const response = await resend.emails.send({
       from,
       to,
@@ -79,6 +90,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
       subject,
       text: textBody,
       ...(htmlBody ? { html: htmlBody } : {}),
+      ...(resendAttachments && resendAttachments.length > 0 ? { attachments: resendAttachments } : {}),
       tags: [
         { name: 'source', value: 'oxyscale-dialler' },
         { name: 'type', value: 'follow-up' },

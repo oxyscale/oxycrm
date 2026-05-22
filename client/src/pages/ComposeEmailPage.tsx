@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
-  Send,
+  Inbox,
   Mic,
   MicOff,
   Loader2,
@@ -13,12 +13,25 @@ import {
 } from 'lucide-react';
 import * as api from '../services/api';
 import type { Lead } from '../types';
-import { buildEmailText } from '../utils/emailTemplate';
 
 // Browser Speech Recognition types
 interface SpeechRecognitionEvent {
   results: { [index: number]: { [index: number]: { transcript: string } }; length: number };
   resultIndex: number;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Strip data URL prefix (e.g. "data:application/pdf;base64,")
+      const base64 = result.split(',')[1] || result;
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function ComposeEmailPage() {
@@ -217,19 +230,30 @@ export default function ComposeEmailPage() {
     }
   };
 
-  // Send email
-  const handleSend = async () => {
-    if (!lead || !toEmail || !subject || !body) return;
+  // Save to Email Bank (drafts)
+  const handleSaveToDrafts = async () => {
+    if (!lead || !subject || !body) return;
 
     setSending(true);
     try {
-      await api.sendEmail({
+      // Convert file attachments to base64 for the API
+      const attachmentData: { filename: string; mimeType: string; contentBase64: string }[] = [];
+      for (const file of attachments) {
+        const base64 = await fileToBase64(file);
+        attachmentData.push({
+          filename: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          contentBase64: base64,
+        });
+      }
+
+      await api.createEmailDraft({
         leadId: lead.id,
-        to: toEmail,
-        cc: ccEmail || undefined,
+        toEmail: toEmail || undefined,
+        ccEmail: ccEmail || undefined,
         subject,
-        body: buildEmailText(body),
-        // Tiers are user-controlled — pipelineStage no longer auto-set on send.
+        body,
+        attachments: attachmentData.length > 0 ? attachmentData : undefined,
       });
 
       // Auto-update lead's email if user entered a different one
@@ -242,11 +266,11 @@ export default function ComposeEmailPage() {
       }
 
       setSent(true);
-      setTimeout(() => navigate(`/leads/${lead.id}`), 2000);
+      setTimeout(() => navigate('/email-bank'), 2000);
     } catch (err) {
-      console.error('Send failed:', err);
+      console.error('Save to drafts failed:', err);
       setSending(false);
-      alert('Failed to send email. Please try again.');
+      alert('Failed to save draft. Please try again.');
     }
   };
 
@@ -284,10 +308,10 @@ export default function ComposeEmailPage() {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <div className="w-16 h-16 rounded-full bg-[rgba(10,156,212,0.15)] flex items-center justify-center">
-          <Send size={24} className="text-sky-ink" />
+          <Inbox size={24} className="text-sky-ink" />
         </div>
-        <p className="text-ink font-bold text-lg">Email sent</p>
-        <p className="text-ink-dim text-sm">Redirecting to profile...</p>
+        <p className="text-ink font-bold text-lg">Saved to Email Bank</p>
+        <p className="text-ink-dim text-sm">Redirecting to Email Bank...</p>
       </div>
     );
   }
@@ -325,19 +349,19 @@ export default function ComposeEmailPage() {
             Preview
           </button>
           <button
-            onClick={handleSend}
-            disabled={!toEmail || !subject || !body || sending}
+            onClick={handleSaveToDrafts}
+            disabled={!subject || !body || sending}
             className="bg-ink text-white font-bold text-sm rounded-lg px-5 py-2.5 hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {sending ? (
               <>
                 <Loader2 size={14} className="animate-spin" />
-                Sending...
+                Saving...
               </>
             ) : (
               <>
-                <Send size={14} />
-                Send Email
+                <Inbox size={14} />
+                Save to Email Bank
               </>
             )}
           </button>
@@ -565,7 +589,7 @@ export default function ComposeEmailPage() {
                   {subject || 'No subject'}
                 </p>
                 <pre className="text-ink-faint text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                  {buildEmailText(body || '...')}
+                  {body || '...'}
                 </pre>
               </div>
             </div>

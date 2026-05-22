@@ -200,6 +200,83 @@ router.get('/:id', (req, res, next) => {
   }
 });
 
+// ── POST /api/email-drafts — create a manual draft ───────────
+// Used from the Compose Email page to save a draft to the Email Bank
+// instead of sending immediately.
+
+const createDraftSchema = z.object({
+  leadId: z.number().int().positive(),
+  toEmail: z.string().email().optional().or(z.literal('')),
+  ccEmail: z.string().optional(),
+  subject: z.string().min(1, 'Subject is required'),
+  body: z.string().min(1, 'Body is required'),
+  attachments: z.array(z.object({
+    filename: z.string(),
+    mimeType: z.string(),
+    contentBase64: z.string(),
+  })).optional(),
+});
+
+router.post('/', (req, res, next) => {
+  try {
+    const db = getDb();
+    const payload = createDraftSchema.parse(req.body);
+
+    // Verify lead exists
+    const lead = db.prepare('SELECT id FROM leads WHERE id = ?').get(payload.leadId);
+    if (!lead) throw new ApiError(404, 'Lead not found');
+
+    const now = new Date().toISOString();
+
+    const insert = db.prepare(`
+      INSERT INTO email_drafts (lead_id, call_log_id, disposition, to_email, cc_email, subject, body,
+        suggested_stage, status, generated_at, include_after_call_header, include_capabilities, include_book_a_call,
+        created_at, updated_at)
+      VALUES (?, NULL, 'interested', ?, ?, ?, ?, 'follow_up', 'ready', ?, 0, 0, 1, ?, ?)
+    `).run(
+      payload.leadId,
+      payload.toEmail || null,
+      payload.ccEmail || null,
+      payload.subject,
+      payload.body,
+      now, now, now,
+    );
+
+    const draftId = insert.lastInsertRowid as number;
+
+    // Save attachments if any
+    if (payload.attachments && payload.attachments.length > 0) {
+      const attachInsert = db.prepare(`
+        INSERT INTO draft_attachments (draft_id, filename, mime_type, size, content_base64)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      for (const att of payload.attachments) {
+        const sizeBytes = Math.ceil(att.contentBase64.length * 3 / 4);
+        attachInsert.run(draftId, att.filename, att.mimeType, sizeBytes, att.contentBase64);
+      }
+    }
+
+    // Log activity
+    db.prepare(`
+      INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+      VALUES (?, 'email', 'Email draft saved', ?, ?, ?)
+    `).run(payload.leadId, `Subject: ${payload.subject}`, now, req.user?.name || 'System');
+
+    const row = db.prepare(`
+      SELECT d.*, l.name AS lead_name, l.company AS lead_company,
+             l.phone AS lead_phone, l.category AS lead_category
+      FROM email_drafts d
+      JOIN leads l ON l.id = d.lead_id
+      WHERE d.id = ?
+    `).get(draftId) as DraftRowWithLead;
+
+    logger.info({ draftId, leadId: payload.leadId }, 'Manual email draft created');
+    res.status(201).json(mapDraftWithLead(row));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── PATCH /api/email-drafts/:id — edit draft fields ───────────
 
 const patchSchema = z.object({
@@ -436,6 +513,16 @@ router.post('/:id/send', async (req, res, next) => {
       bookACallUrl,
     });
 
+    // Load attachments for this draft (if any)
+    const attachmentRows = db.prepare(
+      'SELECT filename, mime_type, content_base64 FROM draft_attachments WHERE draft_id = ?'
+    ).all(id) as { filename: string; mime_type: string; content_base64: string }[];
+
+    const emailAttachments = attachmentRows.map((a) => ({
+      filename: a.filename,
+      content: Buffer.from(a.content_base64, 'base64'),
+    }));
+
     const result = await sendEmail({
       to: draft.to_email,
       cc: draft.cc_email || undefined,
@@ -444,6 +531,7 @@ router.post('/:id/send', async (req, res, next) => {
       htmlBody,
       fromName: user.name,
       fromAddress: user.senderEmail,
+      attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
     });
 
     // Log sent email + activity + update pipeline stage + mark draft sent.

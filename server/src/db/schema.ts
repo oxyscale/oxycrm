@@ -465,6 +465,19 @@ export function initializeDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_email_drafts_lead
       ON email_drafts(lead_id);
 
+    -- Draft attachments — file content stored as base64 blobs.
+    -- Tied to a draft; deleted when the draft is discarded or the lead is removed.
+    CREATE TABLE IF NOT EXISTS draft_attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      draft_id INTEGER NOT NULL,
+      filename TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      content_base64 TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (draft_id) REFERENCES email_drafts(id) ON DELETE CASCADE
+    );
+
     -- ============================================================
     -- Users — internal team accounts (George + Jordan)
     -- Identity for sending emails (sender_email + signature) and
