@@ -132,8 +132,8 @@ router.get('/', (req, res, next) => {
     }>;
 
     // ── Contacted leads in the window ─────────────────────
-    // A lead counts as "contacted" if it has any note, email, or
-    // call logged within the date window.
+    // A lead counts as "contacted" if it has any note, email,
+    // call, or task logged within the date window.
     const contactedCount = (db.prepare(`
       SELECT COUNT(DISTINCT lead_id) AS n FROM (
         SELECT lead_id FROM notes WHERE DATE(created_at) >= @fromDate AND DATE(created_at) <= @toDate
@@ -141,6 +141,8 @@ router.get('/', (req, res, next) => {
         SELECT lead_id FROM emails_sent WHERE DATE(created_at) >= @fromDate AND DATE(created_at) <= @toDate
         UNION
         SELECT lead_id FROM call_logs WHERE DATE(created_at) >= @fromDate AND DATE(created_at) <= @toDate
+        UNION
+        SELECT lead_id FROM tasks WHERE DATE(created_at) >= @fromDate AND DATE(created_at) <= @toDate
       )
     `).get({ fromDate, toDate }) as { n: number }).n;
 
@@ -148,7 +150,7 @@ router.get('/', (req, res, next) => {
     const newLeadIds = newLeads.map((l) => l.id);
     let contactedNewLeads = 0;
     if (newLeadIds.length > 0) {
-      // Check which of the new leads have any note/email/call (any time, not just window)
+      // Check which of the new leads have any note/email/call/task (any time, not just window)
       const placeholders = newLeadIds.map(() => '?').join(',');
       contactedNewLeads = (db.prepare(`
         SELECT COUNT(DISTINCT lead_id) AS n FROM (
@@ -157,8 +159,10 @@ router.get('/', (req, res, next) => {
           SELECT lead_id FROM emails_sent WHERE lead_id IN (${placeholders})
           UNION
           SELECT lead_id FROM call_logs WHERE lead_id IN (${placeholders})
+          UNION
+          SELECT lead_id FROM tasks WHERE lead_id IN (${placeholders})
         )
-      `).get(...newLeadIds, ...newLeadIds, ...newLeadIds) as { n: number }).n;
+      `).get(...newLeadIds, ...newLeadIds, ...newLeadIds, ...newLeadIds) as { n: number }).n;
     }
 
     // ── Tasks created in the window ────────────────────────
@@ -198,8 +202,9 @@ router.get('/', (req, res, next) => {
         SELECT 1 FROM notes WHERE lead_id = ?
         UNION SELECT 1 FROM emails_sent WHERE lead_id = ?
         UNION SELECT 1 FROM call_logs WHERE lead_id = ?
+        UNION SELECT 1 FROM tasks WHERE lead_id = ?
         LIMIT 1
-      `).get(lead.id, lead.id, lead.id));
+      `).get(lead.id, lead.id, lead.id, lead.id));
       return { ...lead, contacted: !!hasActivity };
     });
 

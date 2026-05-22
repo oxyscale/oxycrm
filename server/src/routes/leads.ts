@@ -204,7 +204,7 @@ router.get('/', (req, res, next) => {
     }
 
     // Contacted filter: a lead is "contacted" if it has any notes,
-    // emails, or call logs (transcripts), OR if manually_contacted is set.
+    // emails, call logs, or tasks, OR if manually_contacted is set.
     // This lets Jordan separate CSV-imported leads from ones he's
     // actually engaged with.
     if (contacted === 'true') {
@@ -213,12 +213,14 @@ router.get('/', (req, res, next) => {
         OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
+        OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = leads.id)
       )`;
     } else if (contacted === 'false') {
       query += ` AND leads.manually_contacted = 0
         AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
         AND NOT EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
-        AND NOT EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)`;
+        AND NOT EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
+        AND NOT EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = leads.id)`;
     }
 
     query += ' ORDER BY queue_position ASC';
@@ -234,12 +236,13 @@ router.get('/', (req, res, next) => {
         OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = ?)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = ?)
+        OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = ?)
       ) THEN 1 ELSE 0 END AS contacted
     `);
 
     for (const lead of leads) {
       const mc = lead.manuallyContacted ? 1 : 0;
-      const result = contactedStmt.get(mc, lead.id, lead.id, lead.id) as { contacted: number };
+      const result = contactedStmt.get(mc, lead.id, lead.id, lead.id, lead.id) as { contacted: number };
       lead.contacted = result.contacted === 1;
     }
 
@@ -671,8 +674,9 @@ router.get('/:id', (req, res, next) => {
         OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = ?)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = ?)
+        OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = ?)
       ) THEN 1 ELSE 0 END AS contacted
-    `).get(lead.manuallyContacted ? 1 : 0, id, id, id) as { contacted: number };
+    `).get(lead.manuallyContacted ? 1 : 0, id, id, id, id) as { contacted: number };
     lead.contacted = contactedResult.contacted === 1;
 
     res.json({

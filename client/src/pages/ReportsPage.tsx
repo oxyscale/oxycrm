@@ -29,6 +29,7 @@ import {
   Building2,
   DollarSign,
   Printer,
+  PhoneCall,
 } from 'lucide-react';
 import * as api from '../services/api';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
@@ -243,7 +244,7 @@ export default function ReportsPage() {
       ) : data ? (
         <>
           {/* KPI strip */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             <KpiCard
               icon={<DollarSign size={14} />}
               label="Pipeline value"
@@ -256,6 +257,12 @@ export default function ReportsPage() {
               label="New leads"
               value={String(data.summary.newLeadCount)}
               sub="in window"
+            />
+            <KpiCard
+              icon={<PhoneCall size={14} />}
+              label="Contacted"
+              value={String(data.summary.contactedCount)}
+              sub={`${data.summary.conversionRate}% conversion`}
             />
             <KpiCard
               icon={<Trophy size={14} />}
