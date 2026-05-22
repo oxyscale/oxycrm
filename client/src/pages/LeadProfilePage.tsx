@@ -1255,11 +1255,12 @@ export default function LeadProfilePage() {
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                      handleCreateNote();
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (newNote.trim()) handleCreateNote();
                     }
                   }}
-                  placeholder="Add a note... (Cmd+Enter to save)"
+                  placeholder="Add a note... (Enter to save, Shift+Enter for new line)"
                   rows={3}
                   className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all resize-none leading-relaxed mb-3"
                 />
@@ -1315,6 +1316,16 @@ export default function LeadProfilePage() {
                             <textarea
                               value={editingNoteContent}
                               onChange={(e) => setEditingNoteContent(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  if (editingNoteContent.trim()) handleUpdateNote(note.id);
+                                }
+                                if (e.key === 'Escape') {
+                                  setEditingNoteId(null);
+                                  setEditingNoteContent('');
+                                }
+                              }}
                               rows={3}
                               className="w-full bg-tray border border-[rgba(10,156,212,0.4)] rounded-lg px-4 py-3 text-ink text-sm focus:outline-none transition-all resize-none leading-relaxed mb-3"
                               autoFocus
