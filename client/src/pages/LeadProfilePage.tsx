@@ -776,21 +776,6 @@ export default function LeadProfilePage() {
           Book Meeting
         </button>
 
-        {/* Add Note button */}
-        <button
-          onClick={() => {
-            setTab('notes');
-            // Focus the note textarea after tab switch
-            setTimeout(() => {
-              document.getElementById('new-note-input')?.focus();
-            }, 100);
-          }}
-          className="flex items-center gap-2 bg-transparent text-ink-muted border border-hair-soft rounded-lg px-4 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all"
-        >
-          <Plus size={15} />
-          Add Note
-        </button>
-
         {/* Set Task button — schedule a follow-up that lands in your calendar */}
         <button
           onClick={() => setShowSetTask((v) => !v)}
@@ -969,29 +954,47 @@ export default function LeadProfilePage() {
       <div className="flex gap-8">
         {/* ── Left: tabbed content ──────────────────────────── */}
         <div className="flex-1 min-w-0">
-          {/* Call Summary — pinned above the tabs so it's always visible
-              before dialling. Shows the rolling AI summary across calls,
-              with an empty state for never-called leads. */}
+          {/* Quick note — always visible above the tabs */}
           <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-ink-dim text-xs font-medium uppercase tracking-wider">
-                Call Summary
-              </h3>
-              {totalCallsCount > 0 && (
-                <span className="text-ink-dim text-[11px]">
-                  {totalCallsCount} call{totalCallsCount !== 1 ? 's' : ''}
-                </span>
-              )}
+            <textarea
+              id="new-note-input"
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (newNote.trim()) handleCreateNote();
+                }
+              }}
+              placeholder="Add a note... (Enter to save, Shift+Enter for new line)"
+              rows={2}
+              className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all resize-none leading-relaxed mb-3"
+            />
+            <div className="flex justify-between items-center">
+              <button
+                onClick={toggleDictation}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                  isDictating
+                    ? 'bg-red-500/15 text-red-400 border border-red-500/30 animate-pulse'
+                    : 'bg-tray text-ink-muted border border-hair-soft hover:text-ink hover:bg-[rgba(11,13,14,0.03)]'
+                }`}
+              >
+                {isDictating ? <MicOff size={14} /> : <Mic size={14} />}
+                {isDictating ? 'Stop' : 'Dictate'}
+              </button>
+              <button
+                onClick={handleCreateNote}
+                disabled={!newNote.trim() || savingNote}
+                className="bg-ink text-white font-bold rounded-lg px-5 py-2 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {savingNote ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Plus size={14} />
+                )}
+                Save Note
+              </button>
             </div>
-            {lead.consolidatedSummary ? (
-              <p className="text-ink-muted text-sm leading-relaxed whitespace-pre-line">
-                {lead.consolidatedSummary}
-              </p>
-            ) : (
-              <p className="text-ink-dim text-sm italic">
-                No call notes available for this lead yet.
-              </p>
-            )}
           </div>
 
           {/* Tab bar */}
@@ -1275,49 +1278,6 @@ export default function LeadProfilePage() {
           {/* ── Notes tab ───────────────────────────────────── */}
           {tab === 'notes' && (
             <>
-              {/* Add note form */}
-              <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-6">
-                <textarea
-                  id="new-note-input"
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (newNote.trim()) handleCreateNote();
-                    }
-                  }}
-                  placeholder="Add a note... (Enter to save, Shift+Enter for new line)"
-                  rows={3}
-                  className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-3 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all resize-none leading-relaxed mb-3"
-                />
-                <div className="flex justify-between items-center">
-                  <button
-                    onClick={toggleDictation}
-                    className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-                      isDictating
-                        ? 'bg-red-500/15 text-red-400 border border-red-500/30 animate-pulse'
-                        : 'bg-tray text-ink-muted border border-hair-soft hover:text-ink hover:bg-[rgba(11,13,14,0.03)]'
-                    }`}
-                  >
-                    {isDictating ? <MicOff size={14} /> : <Mic size={14} />}
-                    {isDictating ? 'Stop' : 'Dictate'}
-                  </button>
-                  <button
-                    onClick={handleCreateNote}
-                    disabled={!newNote.trim() || savingNote}
-                    className="bg-ink text-white font-bold rounded-lg px-5 py-2 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {savingNote ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Plus size={14} />
-                    )}
-                    Save Note
-                  </button>
-                </div>
-              </div>
-
               {/* Notes list */}
               {loadingNotes ? (
                 <div className="flex items-center justify-center py-16">
