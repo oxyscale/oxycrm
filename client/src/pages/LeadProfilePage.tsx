@@ -897,6 +897,9 @@ export default function LeadProfilePage() {
                 type="date"
                 value={taskDate}
                 onChange={(e) => setTaskDate(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && taskLabel.trim() && taskDate) handleCreateTask();
+                }}
                 className="bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all [color-scheme:light]"
               />
             </div>
@@ -927,6 +930,9 @@ export default function LeadProfilePage() {
                 type="text"
                 value={taskLabel}
                 onChange={(e) => setTaskLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && taskLabel.trim() && taskDate) handleCreateTask();
+                }}
                 placeholder="e.g. Follow up in July"
                 className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all"
               />
