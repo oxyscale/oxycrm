@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { sendEmail } from '../services/email.js';
 import { buildEmailSignature } from '../services/emailSignature.js';
 import { buildBrandedEmailHtml } from '../services/emailTemplate.js';
+import { insertIntoGmailSent } from '../services/gmail-insert.js';
 import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import pino from 'pino';
@@ -118,6 +119,25 @@ router.post('/send', async (req, res, next) => {
       // Log but don't fail the request — the email was already sent
       logger.error({ error: dbErr }, 'Failed to record email in database');
     }
+
+    // Insert a copy into Gmail's Sent folder (non-blocking, non-fatal).
+    insertIntoGmailSent({
+      from: `${user.name} <${user.senderEmail}>`,
+      to: payload.to,
+      cc: payload.cc,
+      subject: payload.subject,
+      textBody: payload.body,
+      htmlBody,
+    }).then((gmailCopyId) => {
+      if (gmailCopyId) {
+        try {
+          db.prepare('UPDATE emails_sent SET gmail_copy_id = ? WHERE gmail_message_id = ? AND source = ?')
+            .run(gmailCopyId, result.messageId, 'dialler');
+        } catch (dbErr) {
+          logger.warn({ dbErr }, 'Failed to store gmail_copy_id');
+        }
+      }
+    }).catch(() => { /* already logged inside insertIntoGmailSent */ });
 
     res.json({ success: true, messageId: result.messageId });
   } catch (error) {

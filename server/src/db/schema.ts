@@ -559,6 +559,11 @@ export function initializeDatabase(db: Database.Database): void {
   //   clicked    → clicked_at (first), last_clicked_at, click_count
   //   bounced    → bounced_at
   // ============================================================
+  // When an email is sent via Resend, a copy is inserted into Gmail's
+  // Sent folder so it shows up in the user's mailbox. The Gmail message
+  // ID of that copy is stored here so gmail-sync can skip it (dedup).
+  addColumnIfMissing(db, 'emails_sent', 'gmail_copy_id', 'TEXT');
+
   addColumnIfMissing(db, 'emails_sent', 'delivered_at', 'TEXT');
   addColumnIfMissing(db, 'emails_sent', 'opened_at', 'TEXT');
   addColumnIfMissing(db, 'emails_sent', 'last_opened_at', 'TEXT');

@@ -57,7 +57,9 @@ export async function syncSentEmails(): Promise<{ matched: number; total: number
 
   // Prepare statements for reuse
   const findLeadByEmail = db.prepare('SELECT id, name, company FROM leads WHERE LOWER(email) = ?');
-  const checkDuplicate = db.prepare('SELECT id FROM emails_sent WHERE gmail_message_id = ?');
+  // Check both gmail_message_id (synced/Resend IDs) and gmail_copy_id
+  // (IDs of copies inserted into Gmail Sent folder after Resend sends).
+  const checkDuplicate = db.prepare('SELECT id FROM emails_sent WHERE gmail_message_id = ? OR gmail_copy_id = ?');
   const insertEmail = db.prepare(`
     INSERT INTO emails_sent (lead_id, to_address, from_address, subject, body_snippet, gmail_message_id, source, direction)
     VALUES (?, ?, ?, ?, ?, ?, 'gmail', ?)
@@ -72,7 +74,7 @@ export async function syncSentEmails(): Promise<{ matched: number; total: number
 
     try {
       // Check if we already logged this message
-      const existing = checkDuplicate.get(msg.id);
+      const existing = checkDuplicate.get(msg.id, msg.id);
       if (existing) continue;
 
       // Fetch message headers (include Cc for George's emails)

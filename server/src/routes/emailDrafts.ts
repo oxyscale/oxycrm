@@ -10,6 +10,7 @@ import { ApiError } from '../middleware/errorHandler.js';
 import { sendEmail } from '../services/email.js';
 import { buildEmailSignature } from '../services/emailSignature.js';
 import { buildBrandedEmailHtml } from '../services/emailTemplate.js';
+import { insertIntoGmailSent } from '../services/gmail-insert.js';
 import {
   summariseAndPersistCall,
   draftAndStoreEmailForCall,
@@ -556,6 +557,29 @@ router.post('/:id/send', async (req, res, next) => {
     })();
 
     logger.info({ draftId: id, leadId: draft.lead_id, messageId: result.messageId }, 'Email draft sent from bank');
+
+    // Insert a copy into Gmail's Sent folder (non-blocking, non-fatal).
+    // This lets Jordan see dialler-sent emails in his Gmail inbox.
+    insertIntoGmailSent({
+      from: `${user.name} <${user.senderEmail}>`,
+      to: draft.to_email,
+      cc: draft.cc_email || undefined,
+      subject: draft.subject,
+      textBody: draft.body,
+      htmlBody,
+      attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
+    }).then((gmailCopyId) => {
+      if (gmailCopyId) {
+        // Store the Gmail message ID so gmail-sync skips this message
+        try {
+          db.prepare('UPDATE emails_sent SET gmail_copy_id = ? WHERE gmail_message_id = ? AND source = ?')
+            .run(gmailCopyId, result.messageId, 'dialler');
+        } catch (dbErr) {
+          logger.warn({ dbErr }, 'Failed to store gmail_copy_id — dedup may log a duplicate');
+        }
+      }
+    }).catch(() => { /* already logged inside insertIntoGmailSent */ });
+
     res.json({ success: true, messageId: result.messageId });
   } catch (err) {
     logger.error({ err }, 'Send from email bank failed');

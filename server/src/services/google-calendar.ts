@@ -23,7 +23,9 @@ const TOKEN_PATH = path.resolve(
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/gmail.readonly',
+  // gmail.modify covers read + insert + label changes. We need insert
+  // so dialler-sent emails can be copied into the Gmail Sent folder.
+  'https://www.googleapis.com/auth/gmail.modify',
 ];
 
 function getOAuth2Client() {
