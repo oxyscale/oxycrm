@@ -6,7 +6,7 @@
 // clean, branded A4-ready document. Cmd+P to print or save as PDF.
 // ============================================================
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import * as api from '../services/api';
 
@@ -43,6 +43,17 @@ export default function PrintReportPage() {
   const [searchParams] = useSearchParams();
   const [data, setData] = useState<api.ReportData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [expandedLeads, setExpandedLeads] = useState<Set<number>>(new Set());
+
+  const toggleLead = useCallback((id: number) => {
+    setExpandedLeads((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const from = searchParams.get('from') || '';
   const to = searchParams.get('to') || '';
@@ -82,6 +93,8 @@ export default function PrintReportPage() {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .no-print { display: none !important; }
           .page-break { page-break-before: always; }
+          .print-show-note { display: block !important; }
+          tr { page-break-inside: avoid; }
         }
       `}</style>
 
@@ -232,23 +245,33 @@ export default function PrintReportPage() {
                 {data.pipelineLeads.map((lead, i) => {
                   const prevTier = i > 0 ? data.pipelineLeads[i - 1].tier : null;
                   const showDivider = prevTier && prevTier !== lead.tier;
+                  const isExpanded = expandedLeads.has(lead.id);
                   return (
                     <tr
                       key={lead.id}
-                      className={`border-b border-[rgba(11,13,14,0.06)] ${showDivider ? 'border-t-2 border-t-[rgba(11,13,14,0.12)]' : ''}`}
+                      onClick={() => lead.latestNote && toggleLead(lead.id)}
+                      className={`border-b border-[rgba(11,13,14,0.06)] ${showDivider ? 'border-t-2 border-t-[rgba(11,13,14,0.12)]' : ''} ${lead.latestNote ? 'cursor-pointer hover:bg-[#faf9f5]' : ''}`}
                     >
                       <td className="py-2.5 pr-3">
                         <span className="font-medium text-[#0b0d0e]">{lead.name}</span>
                         {lead.company && (
                           <span className="text-[#8a95a0] ml-1.5">{lead.company}</span>
                         )}
-                        {lead.latestNote && (
-                          <p className="text-[11px] text-[#8a95a0] mt-0.5 leading-snug truncate max-w-[400px]">
-                            {lead.latestNote.slice(0, 100)}{lead.latestNote.length > 100 ? '...' : ''}
+                        {lead.latestNote && !isExpanded && (
+                          <p className="no-print text-[11px] text-[#8a95a0] mt-0.5 leading-snug">
+                            {lead.latestNote.slice(0, 80)}{lead.latestNote.length > 80 ? '...' : ''}
+                            <span className="text-[#0a9cd4] ml-1">show</span>
                           </p>
                         )}
+                        {lead.latestNote && (
+                          <div
+                            className={`print-show-note mt-1 text-[12px] text-[#55606a] leading-relaxed whitespace-pre-line ${isExpanded ? '' : 'hidden'}`}
+                          >
+                            {lead.latestNote}
+                          </div>
+                        )}
                       </td>
-                      <td className="py-2.5 pr-3">
+                      <td className="py-2.5 pr-3 align-top">
                         <span className={`text-[11px] font-mono font-semibold uppercase tracking-[0.15em] ${
                           lead.tier === 'tier_1' ? 'text-[#0a9cd4]'
                           : lead.tier === 'tier_2' ? 'text-[#f59e0b]'
@@ -257,12 +280,12 @@ export default function PrintReportPage() {
                           {tierLabel(lead.tier)}
                         </span>
                       </td>
-                      <td className="py-2.5 pr-3 text-right font-medium">
+                      <td className="py-2.5 pr-3 text-right font-medium align-top">
                         {lead.dealValue > 0 ? formatAUD(lead.dealValue) : (
                           <span className="text-[#b8bfc6]">--</span>
                         )}
                       </td>
-                      <td className="py-2.5 text-center">
+                      <td className="py-2.5 text-center align-top">
                         <span className={`text-[10px] font-mono font-semibold uppercase tracking-[0.18em] px-2 py-0.5 rounded-full ${
                           lead.contacted
                             ? 'bg-[rgba(16,185,129,0.1)] text-[#10b981]'
