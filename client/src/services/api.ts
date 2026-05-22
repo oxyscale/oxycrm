@@ -242,7 +242,8 @@ export interface ReportData {
     lostValue: number;
     tasksDueCount: number;
     contactedCount: number;
-    contactedNewLeads: number;
+    totalLeadCount: number;
+    totalContactedCount: number;
     conversionRate: number;
     tasksCreated: number;
     tasksCompleted: number;

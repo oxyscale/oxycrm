@@ -146,24 +146,22 @@ router.get('/', (req, res, next) => {
       )
     `).get({ fromDate, toDate }) as { n: number }).n;
 
-    // ── Conversion rate: of leads added in the window, how many contacted?
-    const newLeadIds = newLeads.map((l) => l.id);
-    let contactedNewLeads = 0;
-    if (newLeadIds.length > 0) {
-      // Check which of the new leads have any note/email/call/task (any time, not just window)
-      const placeholders = newLeadIds.map(() => '?').join(',');
-      contactedNewLeads = (db.prepare(`
-        SELECT COUNT(DISTINCT lead_id) AS n FROM (
-          SELECT lead_id FROM notes WHERE lead_id IN (${placeholders})
-          UNION
-          SELECT lead_id FROM emails_sent WHERE lead_id IN (${placeholders})
-          UNION
-          SELECT lead_id FROM call_logs WHERE lead_id IN (${placeholders})
-          UNION
-          SELECT lead_id FROM tasks WHERE lead_id IN (${placeholders})
-        )
-      `).get(...newLeadIds, ...newLeadIds, ...newLeadIds, ...newLeadIds) as { n: number }).n;
-    }
+    // ── Conversion rate: contacted / total leads in ecosystem ─
+    const totalLeadCount = (db.prepare(`
+      SELECT COUNT(*) AS n FROM leads WHERE 1=1 ${catFilter}
+    `).get(catParam) as { n: number }).n;
+
+    // Total leads ever contacted (not window-scoped)
+    const totalContactedCount = (db.prepare(`
+      SELECT COUNT(*) AS n FROM leads
+      WHERE (
+        manually_contacted = 1
+        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
+        OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
+        OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
+        OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = leads.id)
+      ) ${catFilter}
+    `).get(catParam) as { n: number }).n;
 
     // ── Tasks created in the window ────────────────────────
     const tasksCreated = (db.prepare(`
@@ -246,9 +244,10 @@ router.get('/', (req, res, next) => {
         lostValue,
         tasksDueCount: tasksDue.length,
         contactedCount,
-        contactedNewLeads,
-        conversionRate: newLeads.length > 0
-          ? Math.round((contactedNewLeads / newLeads.length) * 100)
+        totalLeadCount,
+        totalContactedCount,
+        conversionRate: totalLeadCount > 0
+          ? Math.round((totalContactedCount / totalLeadCount) * 100)
           : 0,
         tasksCreated,
         tasksCompleted,

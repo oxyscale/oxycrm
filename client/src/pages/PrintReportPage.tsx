@@ -168,8 +168,8 @@ export default function PrintReportPage() {
             />
             <KpiCard
               label="Contacted"
-              value={String(s.contactedCount)}
-              sub={`${s.conversionRate}% of new leads converted`}
+              value={`${s.totalContactedCount} / ${s.totalLeadCount}`}
+              sub={`${s.conversionRate}% of ecosystem`}
             />
           </div>
 

@@ -30,6 +30,8 @@ import {
   DollarSign,
   Printer,
   PhoneCall,
+  CheckSquare,
+  ClipboardList,
 } from 'lucide-react';
 import * as api from '../services/api';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
@@ -243,26 +245,42 @@ export default function ReportsPage() {
         </div>
       ) : data ? (
         <>
-          {/* KPI strip */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          {/* KPI strip — row 1 */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
             <KpiCard
               icon={<DollarSign size={14} />}
               label="Pipeline value"
               value={formatAUD(data.summary.totalPipelineValue)}
-              sub={`${data.summary.totalPipelineCount} active`}
+              sub={`${data.summary.totalPipelineCount} active leads`}
               accent
             />
             <KpiCard
               icon={<Users size={14} />}
               label="New leads"
               value={String(data.summary.newLeadCount)}
-              sub="in window"
+              sub="added in window"
             />
             <KpiCard
               icon={<PhoneCall size={14} />}
               label="Contacted"
-              value={String(data.summary.contactedCount)}
-              sub={`${data.summary.conversionRate}% conversion`}
+              value={`${data.summary.totalContactedCount} / ${data.summary.totalLeadCount}`}
+              sub={`${data.summary.conversionRate}% of ecosystem`}
+            />
+          </div>
+
+          {/* KPI strip — row 2 */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <KpiCard
+              icon={<ClipboardList size={14} />}
+              label="Tasks set"
+              value={String(data.summary.tasksCreated)}
+              sub="in window"
+            />
+            <KpiCard
+              icon={<CheckSquare size={14} />}
+              label="Tasks completed"
+              value={String(data.summary.tasksCompleted)}
+              sub="in window"
             />
             <KpiCard
               icon={<Trophy size={14} />}
@@ -278,10 +296,10 @@ export default function ReportsPage() {
             />
           </div>
 
-          {/* Tier breakdown */}
+          {/* Tier breakdown — active pipeline only */}
           <Section title="Pipeline by tier" icon={<TrendingUp size={14} />}>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {data.byTier.map((t) => (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {data.byTier.filter((t) => ['tier_1', 'tier_2', 'tier_3'].includes(t.tier)).map((t) => (
                 <div
                   key={t.tier}
                   className="bg-paper border border-hair-soft rounded-xl p-4"
