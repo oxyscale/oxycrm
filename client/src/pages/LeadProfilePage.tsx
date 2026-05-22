@@ -1773,13 +1773,6 @@ export default function LeadProfilePage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Phone size={13} className="text-sky-ink" />
-                  <span className="text-ink-muted text-sm">Total Calls</span>
-                </div>
-                <span className="text-ink text-sm font-bold">{totalCallsCount}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
                   <FileText size={13} className="text-blue-400" />
                   <span className="text-ink-muted text-sm">Notes</span>
                 </div>
