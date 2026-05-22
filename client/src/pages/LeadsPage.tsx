@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
   ArrowUpDown,
   UserPlus,
+  Clock,
+  Building2,
 } from 'lucide-react';
 import * as api from '../services/api';
+import { getRecentLeads, type RecentLead } from '../utils/recentLeads';
 import type { Lead } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
@@ -23,10 +26,24 @@ export default function LeadsPage() {
   const [filterContacted, setFilterContacted] = useState<'all' | 'contacted' | 'not_contacted'>('all');
   const [sortField, setSortField] = useState<SortField>('queuePosition');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [recentLeads, setRecentLeads] = useState<RecentLead[]>([]);
+  const searchWrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadLeads();
   }, [filterContacted]);
+
+  // Close recent leads dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchWrapperRef.current && !searchWrapperRef.current.contains(e.target as Node)) {
+        setSearchFocused(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const loadLeads = async () => {
     try {
@@ -112,16 +129,55 @@ export default function LeadsPage() {
 
       {/* Filters bar */}
       <div className="flex items-center gap-3 mb-6">
-        {/* Search */}
-        <div className="relative flex-1 max-w-sm">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-dim" />
+        {/* Search with recent leads dropdown */}
+        <div className="relative flex-1 max-w-sm" ref={searchWrapperRef}>
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-dim z-10" />
           <input
             type="text"
             placeholder="Search leads..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onFocus={() => {
+              setSearchFocused(true);
+              setRecentLeads(getRecentLeads());
+            }}
             className="w-full bg-paper border border-hair-soft rounded-lg pl-10 pr-4 py-2.5 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
           />
+          {/* Recent leads dropdown — shows when focused and search is empty */}
+          {searchFocused && !search && recentLeads.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-paper border border-hair-soft rounded-xl shadow-lg z-20 overflow-hidden">
+              <div className="px-3 pt-2.5 pb-1">
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider font-medium flex items-center gap-1.5">
+                  <Clock size={11} />
+                  Recently visited
+                </p>
+              </div>
+              <ul className="py-1">
+                {recentLeads.map((recent) => (
+                  <li key={recent.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchFocused(false);
+                        navigate(`/leads/${recent.id}`);
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-tray transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-ink truncate block">{recent.name}</span>
+                        {recent.company && (
+                          <span className="flex items-center gap-1 text-xs text-ink-muted truncate">
+                            <Building2 size={11} className="flex-shrink-0" />
+                            {recent.company}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Category filter */}

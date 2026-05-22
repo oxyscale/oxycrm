@@ -5,6 +5,7 @@ import SearchBar from './SearchBar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useAuth } from '../hooks/useAuth';
+import { getLastVisitedLead } from '../utils/recentLeads';
 import * as api from '../services/api';
 
 const navItems = [
@@ -112,7 +113,18 @@ export default function Layout() {
             return (
               <button
                 key={path}
-                onClick={() => navigate(path)}
+                onClick={() => {
+                  // If clicking Leads and we're NOT already on a lead page,
+                  // jump to the last-visited lead profile if one exists.
+                  if (path === '/leads' && !location.pathname.startsWith('/leads/')) {
+                    const last = getLastVisitedLead();
+                    if (last) {
+                      navigate(`/leads/${last.id}`);
+                      return;
+                    }
+                  }
+                  navigate(path);
+                }}
                 title={label}
                 className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200 ${
                   isActive

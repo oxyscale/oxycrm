@@ -5,8 +5,9 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X, User, Building2, Phone, ArrowRight } from 'lucide-react';
+import { Search, X, User, Building2, Phone, ArrowRight, Clock } from 'lucide-react';
 import { searchLeads } from '../services/api';
+import { getRecentLeads, type RecentLead } from '../utils/recentLeads';
 import type { Lead, CallLog } from '../types';
 
 type SearchResult = Lead & { lastCallLog: CallLog | null };
@@ -27,11 +28,14 @@ export default function SearchBar() {
 
   // ── Open / close ──────────────────────────────────────────
 
+  const [recentLeads, setRecentLeads] = useState<RecentLead[]>([]);
+
   const openSearch = useCallback(() => {
     setOpen(true);
     setQuery('');
     setResults([]);
     setSelectedIndex(0);
+    setRecentLeads(getRecentLeads());
   }, []);
 
   const closeSearch = useCallback(() => {
@@ -118,15 +122,24 @@ export default function SearchBar() {
       return;
     }
 
+    // When query is empty, navigate the recent leads list instead
+    const isShowingRecent = query.trim().length < 2 && recentLeads.length > 0;
+    const listLength = isShowingRecent ? recentLeads.length : results.length;
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
+      setSelectedIndex((prev) => Math.min(prev + 1, listLength - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelectedIndex((prev) => Math.max(prev - 1, 0));
-    } else if (e.key === 'Enter' && results.length > 0) {
+    } else if (e.key === 'Enter' && listLength > 0) {
       e.preventDefault();
-      selectResult(results[selectedIndex]);
+      if (isShowingRecent) {
+        closeSearch();
+        navigate(`/leads/${recentLeads[selectedIndex].id}`);
+      } else {
+        selectResult(results[selectedIndex]);
+      }
     }
   }
 
@@ -211,12 +224,61 @@ export default function SearchBar() {
               </div>
             )}
 
-            {/* Empty query hint */}
+            {/* Recent leads or empty hint */}
             {!loading && query.trim().length < 2 && (
-              <div className="px-4 py-8 text-center">
-                <Search size={24} className="mx-auto text-ink-dim mb-2" />
-                <p className="text-ink-dim text-sm">Type at least 2 characters to search</p>
-              </div>
+              recentLeads.length > 0 ? (
+                <div>
+                  <div className="px-4 pt-3 pb-1">
+                    <p className="text-ink-dim text-[11px] uppercase tracking-wider font-medium flex items-center gap-1.5">
+                      <Clock size={11} />
+                      Recently visited
+                    </p>
+                  </div>
+                  <ul className="py-1">
+                    {recentLeads.map((recent, index) => (
+                      <li key={recent.id}>
+                        <button
+                          data-search-item
+                          onClick={() => {
+                            closeSearch();
+                            navigate(`/leads/${recent.id}`);
+                          }}
+                          onMouseEnter={() => setSelectedIndex(index)}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                            index === selectedIndex
+                              ? 'bg-tray'
+                              : 'hover:bg-tray/50'
+                          }`}
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-cream border border-hair-soft flex items-center justify-center flex-shrink-0">
+                            <User size={14} className="text-ink-dim" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium text-ink truncate block">{recent.name}</span>
+                            {recent.company && (
+                              <span className="flex items-center gap-1 text-xs text-ink-muted truncate">
+                                <Building2 size={11} className="flex-shrink-0" />
+                                {recent.company}
+                              </span>
+                            )}
+                          </div>
+                          <ArrowRight
+                            size={14}
+                            className={`flex-shrink-0 transition-colors ${
+                              index === selectedIndex ? 'text-sky-ink' : 'text-ink-dim'
+                            }`}
+                          />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="px-4 py-8 text-center">
+                  <Search size={24} className="mx-auto text-ink-dim mb-2" />
+                  <p className="text-ink-dim text-sm">Type at least 2 characters to search</p>
+                </div>
+              )
             )}
 
             {/* No results */}
@@ -296,7 +358,7 @@ export default function SearchBar() {
           </div>
 
           {/* Footer hint */}
-          {results.length > 0 && (
+          {(results.length > 0 || (query.trim().length < 2 && recentLeads.length > 0)) && (
             <div className="px-4 py-2 border-t border-hair-soft flex items-center gap-4 text-[10px] text-ink-dim">
               <span className="flex items-center gap-1">
                 <kbd className="px-1 py-0.5 bg-cream border border-hair-soft rounded text-[10px]">

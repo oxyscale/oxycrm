@@ -24,6 +24,7 @@ import {
   MicOff,
 } from 'lucide-react';
 import * as api from '../services/api';
+import { recordLeadVisit } from '../utils/recentLeads';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import PillButton from '../components/ui/PillButton';
 import type {
@@ -345,6 +346,8 @@ export default function LeadProfilePage() {
     try {
       const data = await api.getLeadById(leadId);
       setLead(data);
+      // Track this visit for "recent leads" in sidebar + search
+      recordLeadVisit({ id: data.id, name: data.name, company: data.company });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load lead');
     } finally {
