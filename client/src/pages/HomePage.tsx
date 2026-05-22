@@ -60,9 +60,9 @@ export default function HomePage() {
     (Activity & { leadName: string; leadCompany: string | null })[]
   >([]);
   const [dashboardLoading, setDashboardLoading] = useState(true);
-  const [followUpQueue, setFollowUpQueue] = useState<(Lead & { isOverdue: boolean })[]>([]);
+  const [homeTasks, setHomeTasks] = useState<api.TaskWithLead[]>([]);
   const [queueFilter, setQueueFilter] = useState<'all' | 'overdue' | 'due_today' | 'upcoming'>('all');
-  const [removingLeadId, setRemovingLeadId] = useState<number | null>(null);
+  const [removingTaskId, setRemovingTaskId] = useState<number | null>(null);
 
   const [showImport, setShowImport] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -163,15 +163,18 @@ export default function HomePage() {
     const loadDashboard = async () => {
       setDashboardLoading(true);
       try {
-        const [statsRes, activitiesRes, followUpsRes] = await Promise.allSettled([
+        const [statsRes, activitiesRes, tasksRes] = await Promise.allSettled([
           api.getPipelineStats(),
           api.getRecentActivities(),
-          api.getFollowUpQueue(),
+          api.getAllTasks(),
         ]);
 
         if (statsRes.status === 'fulfilled') setPipelineStats(statsRes.value);
         if (activitiesRes.status === 'fulfilled') setRecentActivities(activitiesRes.value);
-        if (followUpsRes.status === 'fulfilled') setFollowUpQueue(followUpsRes.value);
+        if (tasksRes.status === 'fulfilled') {
+          // Only incomplete tasks, sorted by due_date (server already sorts this way)
+          setHomeTasks(tasksRes.value.filter((t) => !t.completed));
+        }
       } catch {
         // Silently fail — dashboard still works with partial data
       } finally {
@@ -225,15 +228,15 @@ export default function HomePage() {
     }
   };
 
-  const handleRemoveFollowUp = async (leadId: number) => {
-    setRemovingLeadId(leadId);
+  const handleRemoveTask = async (taskId: number) => {
+    setRemovingTaskId(taskId);
     try {
-      await api.updateLead(leadId, { followUpDate: null });
-      setFollowUpQueue((prev) => prev.filter((l) => l.id !== leadId));
+      await api.completeTask(taskId);
+      setHomeTasks((prev) => prev.filter((t) => t.id !== taskId));
     } catch (err) {
-      console.error('Failed to remove from follow-up queue:', err);
+      console.error('Failed to complete task:', err);
     } finally {
-      setRemovingLeadId(null);
+      setRemovingTaskId(null);
     }
   };
 
@@ -301,14 +304,12 @@ export default function HomePage() {
     hour12: false,
   });
 
-  const overdueLeads = followUpQueue.filter((l) => l.isOverdue);
   const today = new Date().toISOString().split('T')[0];
-  const dueTodayLeads = followUpQueue.filter((l) => !l.isOverdue && l.followUpDate === today);
-  const upcomingLeads = followUpQueue.filter(
-    (l) => !l.isOverdue && l.followUpDate && l.followUpDate !== today
-  );
+  const overdueTasks = homeTasks.filter((t) => t.dueDate < today);
+  const dueTodayTasks = homeTasks.filter((t) => t.dueDate === today);
+  const upcomingTasks = homeTasks.filter((t) => t.dueDate > today);
 
-  const highPriorityCount = overdueLeads.length + dueTodayLeads.length;
+  const highPriorityCount = overdueTasks.length + dueTodayTasks.length;
 
   const tempInputClass =
     'w-full bg-paper border border-hair-soft rounded-xl px-3.5 py-2.5 text-ink text-sm placeholder-ink-faint focus:outline-none focus:border-sky-hair focus:bg-paper transition-all';
@@ -681,12 +682,28 @@ export default function HomePage() {
               )}
             </PanelCard>
 
-            {/* Tasks Queue */}
-            {followUpQueue.length > 0 && (
+            {/* Tasks Queue — shows the 3 most urgent incomplete tasks */}
+            {homeTasks.length > 0 && (() => {
+              // Build prioritised list: overdue first, then today, then upcoming
+              const allFiltered = [
+                ...(queueFilter === 'all' || queueFilter === 'overdue'
+                  ? overdueTasks.map((t) => ({ task: t, tone: 'risk' as const }))
+                  : []),
+                ...(queueFilter === 'all' || queueFilter === 'due_today'
+                  ? dueTodayTasks.map((t) => ({ task: t, tone: 'warn' as const }))
+                  : []),
+                ...(queueFilter === 'all' || queueFilter === 'upcoming'
+                  ? upcomingTasks.map((t) => ({ task: t, tone: 'sky' as const }))
+                  : []),
+              ];
+              // Show at most 3 on the home page
+              const visible = queueFilter === 'all' ? allFiltered.slice(0, 3) : allFiltered;
+
+              return (
               <PanelCard
                 eyebrow="TASKS"
                 title="Today's queue"
-                elevated={overdueLeads.length > 0}
+                elevated={overdueTasks.length > 0}
                 right={
                   <button
                     onClick={() => navigate('/tasks')}
@@ -696,9 +713,9 @@ export default function HomePage() {
                   </button>
                 }
               >
-                {/* Summary chips — clickable to filter. Click active chip again to clear. */}
+                {/* Summary chips */}
                 <div className="flex flex-wrap items-center gap-2 mb-4">
-                  {overdueLeads.length > 0 && (
+                  {overdueTasks.length > 0 && (
                     <button
                       type="button"
                       onClick={() =>
@@ -711,10 +728,10 @@ export default function HomePage() {
                       }`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${queueFilter === 'overdue' ? 'bg-white' : 'bg-risk'}`} />
-                      {overdueLeads.length} overdue
+                      {overdueTasks.length} overdue
                     </button>
                   )}
-                  {dueTodayLeads.length > 0 && (
+                  {dueTodayTasks.length > 0 && (
                     <button
                       type="button"
                       onClick={() =>
@@ -727,10 +744,10 @@ export default function HomePage() {
                       }`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${queueFilter === 'due_today' ? 'bg-white' : 'bg-warn'}`} />
-                      {dueTodayLeads.length} due today
+                      {dueTodayTasks.length} due today
                     </button>
                   )}
-                  {upcomingLeads.length > 0 && (
+                  {upcomingTasks.length > 0 && (
                     <button
                       type="button"
                       onClick={() =>
@@ -743,7 +760,7 @@ export default function HomePage() {
                       }`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${queueFilter === 'upcoming' ? 'bg-white' : 'bg-sky-ink'}`} />
-                      {upcomingLeads.length} upcoming
+                      {upcomingTasks.length} upcoming
                     </button>
                   )}
                   {queueFilter !== 'all' && (
@@ -759,59 +776,38 @@ export default function HomePage() {
                 </div>
 
                 <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-                  {[
-                    ...(queueFilter === 'all' || queueFilter === 'overdue'
-                      ? overdueLeads.map((l) => ({ lead: l, tone: 'risk' as const }))
-                      : []),
-                    ...(queueFilter === 'all' || queueFilter === 'due_today'
-                      ? dueTodayLeads.map((l) => ({ lead: l, tone: 'warn' as const }))
-                      : []),
-                    ...(queueFilter === 'all' || queueFilter === 'upcoming'
-                      ? upcomingLeads.map((l) => ({ lead: l, tone: 'sky' as const }))
-                      : []),
-                  ].map(({ lead, tone }) => {
-                    const daysOverdue = lead.followUpDate
-                      ? Math.floor(
-                          (Date.now() -
-                            new Date(lead.followUpDate + 'T00:00:00').getTime()) /
-                            86400000
-                        )
-                      : 0;
-                    const dateFmt = lead.followUpDate
-                      ? new Date(lead.followUpDate + 'T00:00:00').toLocaleDateString(
-                          'en-AU',
-                          { day: 'numeric', month: 'short' }
-                        )
-                      : 'No date';
+                  {visible.map(({ task, tone }) => {
+                    const daysOverdue = Math.floor(
+                      (Date.now() - new Date(task.dueDate + 'T00:00:00').getTime()) / 86400000
+                    );
+                    const dateFmt = new Date(task.dueDate + 'T00:00:00').toLocaleDateString(
+                      'en-AU',
+                      { day: 'numeric', month: 'short' }
+                    );
                     const tag =
                       tone === 'risk'
                         ? `OVERDUE · ${daysOverdue} ${daysOverdue === 1 ? 'DAY' : 'DAYS'}`
                         : tone === 'warn'
                           ? 'DUE TODAY'
-                          : lead.category
-                            ? `UPCOMING · ${lead.category.toUpperCase()}`
-                            : 'UPCOMING';
+                          : 'UPCOMING';
 
                     return (
                       <PriorityRow
-                        key={lead.id}
+                        key={task.id}
                         tone={tone}
                         tag={tag}
                         title={
                           <span className="inline-flex items-center gap-2">
-                            <span className="truncate">{lead.name}</span>
-                            {lead.company && (
+                            <span className="truncate">{task.leadName}</span>
+                            {task.leadCompany && (
                               <span className="text-ink-muted font-normal">
-                                · {lead.company}
+                                · {task.leadCompany}
                               </span>
                             )}
                           </span>
                         }
-                        body={
-                          lead.consolidatedSummary?.split('\n')[0]?.slice(0, 90) ||
-                          'No prior notes'
-                        }
-                        onClick={() => navigate(`/leads/${lead.id}`)}
+                        body={task.label}
+                        onClick={() => navigate(`/leads/${task.leadId}`)}
                         right={
                           <>
                             <span className="font-mono text-[11px] text-ink-dim tracking-wide">
@@ -825,7 +821,7 @@ export default function HomePage() {
                                 icon={<ArrowRight size={13} />}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(`/leads/${lead.id}`);
+                                  navigate(`/leads/${task.leadId}`);
                                 }}
                               >
                                 Open
@@ -835,13 +831,13 @@ export default function HomePage() {
                                 size="sm"
                                 trailing="none"
                                 icon={<X size={12} />}
-                                disabled={removingLeadId === lead.id}
+                                disabled={removingTaskId === task.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleRemoveFollowUp(lead.id);
+                                  handleRemoveTask(task.id);
                                 }}
                               >
-                                {removingLeadId === lead.id ? 'Removing…' : 'Remove'}
+                                {removingTaskId === task.id ? 'Done...' : 'Done'}
                               </PillButton>
                             </div>
                           </>
@@ -851,7 +847,7 @@ export default function HomePage() {
                   })}
                 </div>
               </PanelCard>
-            )}
+            );})()}
           </div>
 
           {/* Right column: Activity feed + quick links */}
