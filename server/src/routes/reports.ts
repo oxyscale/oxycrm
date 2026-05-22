@@ -131,6 +131,86 @@ router.get('/', (req, res, next) => {
       leadId: number; leadName: string; leadCompany: string | null;
     }>;
 
+    // ── Contacted leads in the window ─────────────────────
+    // A lead counts as "contacted" if it has any note, email, or
+    // call logged within the date window.
+    const contactedCount = (db.prepare(`
+      SELECT COUNT(DISTINCT lead_id) AS n FROM (
+        SELECT lead_id FROM notes WHERE DATE(created_at) >= @fromDate AND DATE(created_at) <= @toDate
+        UNION
+        SELECT lead_id FROM emails_sent WHERE DATE(created_at) >= @fromDate AND DATE(created_at) <= @toDate
+        UNION
+        SELECT lead_id FROM call_logs WHERE DATE(created_at) >= @fromDate AND DATE(created_at) <= @toDate
+      )
+    `).get({ fromDate, toDate }) as { n: number }).n;
+
+    // ── Conversion rate: of leads added in the window, how many contacted?
+    const newLeadIds = newLeads.map((l) => l.id);
+    let contactedNewLeads = 0;
+    if (newLeadIds.length > 0) {
+      // Check which of the new leads have any note/email/call (any time, not just window)
+      const placeholders = newLeadIds.map(() => '?').join(',');
+      contactedNewLeads = (db.prepare(`
+        SELECT COUNT(DISTINCT lead_id) AS n FROM (
+          SELECT lead_id FROM notes WHERE lead_id IN (${placeholders})
+          UNION
+          SELECT lead_id FROM emails_sent WHERE lead_id IN (${placeholders})
+          UNION
+          SELECT lead_id FROM call_logs WHERE lead_id IN (${placeholders})
+        )
+      `).get(...newLeadIds, ...newLeadIds, ...newLeadIds) as { n: number }).n;
+    }
+
+    // ── Tasks created in the window ────────────────────────
+    const tasksCreated = (db.prepare(`
+      SELECT COUNT(*) AS n FROM tasks
+      WHERE DATE(created_at) >= @fromDate AND DATE(created_at) <= @toDate
+    `).get({ fromDate, toDate }) as { n: number }).n;
+
+    // ── Tasks completed in the window ──────────────────────
+    const tasksCompleted = (db.prepare(`
+      SELECT COUNT(*) AS n FROM tasks
+      WHERE completed = 1
+        AND DATE(completed_at) >= @fromDate AND DATE(completed_at) <= @toDate
+    `).get({ fromDate, toDate }) as { n: number }).n;
+
+    // ── Pipeline leads (Tier 1/2/3) with details ───────────
+    // Full list of active pipeline leads for the meeting table
+    const pipelineLeads = db.prepare(`
+      SELECT id, name, company, category, pipeline_stage AS tier,
+             deal_value AS dealValue, follow_up_date AS followUpDate,
+             manually_contacted AS manuallyContacted
+      FROM leads
+      WHERE pipeline_stage IN ('tier_1','tier_2','tier_3')
+        ${catFilter}
+      ORDER BY
+        CASE pipeline_stage WHEN 'tier_1' THEN 1 WHEN 'tier_2' THEN 2 WHEN 'tier_3' THEN 3 END,
+        deal_value DESC
+    `).all(catParam) as Array<{
+      id: number; name: string; company: string | null; category: string | null;
+      tier: string; dealValue: number; followUpDate: string | null; manuallyContacted: number;
+    }>;
+
+    // Determine contacted status for each pipeline lead
+    const pipelineLeadsWithContacted = pipelineLeads.map((lead) => {
+      if (lead.manuallyContacted === 1) return { ...lead, contacted: true };
+      const hasActivity = (db.prepare(`
+        SELECT 1 FROM notes WHERE lead_id = ?
+        UNION SELECT 1 FROM emails_sent WHERE lead_id = ?
+        UNION SELECT 1 FROM call_logs WHERE lead_id = ?
+        LIMIT 1
+      `).get(lead.id, lead.id, lead.id));
+      return { ...lead, contacted: !!hasActivity };
+    });
+
+    // Grab the latest note for each pipeline lead (for meeting context)
+    const pipelineLeadsEnriched = pipelineLeadsWithContacted.map((lead) => {
+      const latestNote = db.prepare(
+        'SELECT content FROM notes WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1'
+      ).get(lead.id) as { content: string } | undefined;
+      return { ...lead, latestNote: latestNote?.content || null };
+    });
+
     // ── Totals + KPIs ───────────────────────────────────────
     const totalPipelineValue = byTier
       .filter((b) => b.tier === 'tier_1' || b.tier === 'tier_2' || b.tier === 'tier_3')
@@ -160,12 +240,20 @@ router.get('/', (req, res, next) => {
         lostCount: lost.length,
         lostValue,
         tasksDueCount: tasksDue.length,
+        contactedCount,
+        contactedNewLeads,
+        conversionRate: newLeads.length > 0
+          ? Math.round((contactedNewLeads / newLeads.length) * 100)
+          : 0,
+        tasksCreated,
+        tasksCompleted,
       },
       byTier,
       newLeads,
       won,
       lost,
       tasksDue,
+      pipelineLeads: pipelineLeadsEnriched,
     });
   } catch (err) {
     next(err);

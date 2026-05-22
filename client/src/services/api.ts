@@ -241,6 +241,11 @@ export interface ReportData {
     lostCount: number;
     lostValue: number;
     tasksDueCount: number;
+    contactedCount: number;
+    contactedNewLeads: number;
+    conversionRate: number;
+    tasksCreated: number;
+    tasksCompleted: number;
   };
   byTier: ReportTierBucket[];
   newLeads: Array<{
@@ -258,6 +263,11 @@ export interface ReportData {
   tasksDue: Array<{
     id: number; label: string; dueDate: string; completed: number;
     leadId: number; leadName: string; leadCompany: string | null;
+  }>;
+  pipelineLeads: Array<{
+    id: number; name: string; company: string | null; category: string | null;
+    tier: string; dealValue: number; followUpDate: string | null;
+    contacted: boolean; latestNote: string | null;
   }>;
 }
 
