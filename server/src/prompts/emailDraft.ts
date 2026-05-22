@@ -4,15 +4,52 @@
 // ============================================================
 
 export const EMAIL_STYLE_GUIDE = `
-## Writing style rules (mandatory)
-- Write like a real person, not a language model. Short sentences. Get to the point.
-- Australian casual but professional. "Mate" is acceptable. "Cheers" or "Kind regards" to close.
-- NEVER use em dashes. Use commas, full stops, or semicolons instead.
-- NEVER use: "leverage", "synergy", "streamline", "optimize", "delighted", "thrilled", "excited to share", "I hope this finds you well", "circle back", "touch base", "at your earliest convenience", "please don't hesitate to reach out", "as promised, here's a quick overview of how we help businesses like yours".
-- Short paragraphs, 1-3 sentences max each.
+## Writing style rules (mandatory — match Jordan's voice exactly)
+
+### Tone
+- Professional but genuine. Not corporate, not overly casual. Confident and direct.
+- Australian English. Natural, conversational. Sounds like a real person wrote it, not AI.
 - Use "we" for the company, "I" for personal connection. Switch naturally.
-- Be concrete and specific. No vague benefit statements. No filler.
-- When referencing what was discussed on the call, weave it in naturally, not as a bullet list of "key takeaways."
+- Jordan is honest, upfront, and not afraid to be direct about what OxyScale does.
+
+### What OxyScale does (use this as context, not as copy-paste)
+- OxyScale is an operational intelligence business based in Melbourne.
+- They help businesses centralise fragmented data from every internal platform into one live view.
+- They build a custom visualisation layer (dashboards, metrics, KPIs).
+- On top of that, they build a monitoring layer that watches the data 24/7 and surfaces recommended actions, automated workflows, and alerts when metrics lag.
+- They don't replace existing technology — they work alongside it to unlock the data already sitting within.
+- They're a tailored service at a cost-effective price compared to going direct to Power BI developers or other providers.
+- Only mention specific case studies (like Miller Leith) if Jordan mentions them in his instructions. Don't assume recruitment-specific details unless told.
+
+### Structure
+- Clear paragraphs. Each paragraph makes one point.
+- Longer emails are fine when there's substance to cover (Jordan doesn't shy away from detail when it matters).
+- Shorter emails are fine for quick follow-ups or voicemails.
+- End with a forward-looking line: "I look forward to hearing from you", "Look forward to picking this up when the timing's right", "Let's keep in touch over the coming weeks."
+
+### Banned words and phrases (NEVER use these)
+- "leverage", "synergy", "streamline", "optimize", "delighted", "thrilled"
+- "excited to share", "I hope this finds you well", "circle back"
+- "at your earliest convenience", "game-changer", "cutting-edge"
+- "unlock potential", "drive growth", "innovative solution"
+- "I wanted to reach out", "just following up on our previous conversation"
+- "as promised, here's a quick overview of how we help businesses like yours"
+- NEVER use em dashes. Use commas, full stops, or semicolons instead.
+- NEVER use asterisks for emphasis or any markdown formatting.
+
+### Phrases Jordan actually uses (use these naturally, don't force them)
+- "I thought I'd send through an email"
+- "Thanks for the chat, really appreciate your time"
+- "Just as a quick refresher"
+- "It's hard to fully articulate our capabilities over email"
+- "We'd love 30 minutes to showcase what we do"
+- "Worst case, we get some feedback and you get a sense of what's possible"
+- "I really look forward to hearing from you"
+- "Look forward to picking this up when the timing's right"
+- "Popping out to your office is not an issue for us either"
+
+### Sign-off
+- Always "Kind regards," (the signature block is added automatically after this, never include a name or company after the sign-off)
 `;
 
 export function buildEmailDraftPrompt(params: {
@@ -32,7 +69,7 @@ export function buildEmailDraftPrompt(params: {
   const firstName = leadName.split(' ')[0];
   const calLink = calendlyLink || 'https://calendly.com/jordan-oxyscale/30min';
   const calDuration = calendlyDuration || '30';
-  const signOffText = signOff || 'Cheers';
+  const signOffText = signOff || 'Kind regards';
   const companyDesc = companyDescription || 'helps businesses centralise fragmented data into one view, with a custom layer and monitoring that drives decisions based on the data';
 
   if (emailType === 'call_booked') {

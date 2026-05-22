@@ -145,14 +145,14 @@ function getSettingsContext(): { calendlyLink: string; calendlyDuration: string;
       calendlyLink: map.calendly_link || 'https://calendly.com/jordan-oxyscale/30min',
       calendlyDuration: map.calendly_duration || '20',
       companyDescription: map.company_description || 'We help businesses with their data and visualisation strategy. We centralise fragmented data into one view, build a custom layer on top, and then add a monitoring layer that actually drives business decisions based on the data.',
-      signOff: map.email_sign_off || 'Cheers',
+      signOff: map.email_sign_off || 'Kind regards',
     };
   } catch {
     return {
       calendlyLink: 'https://calendly.com/jordan-oxyscale/30min',
       calendlyDuration: '30',
       companyDescription: 'We help businesses with their data and visualisation strategy. We centralise fragmented data into one view, build a custom layer on top, and then add a monitoring layer that actually drives business decisions based on the data.',
-      signOff: 'Cheers',
+      signOff: 'Kind regards',
     };
   }
 }
@@ -574,7 +574,7 @@ export async function draftEmailFromInstructions(
   const playbookSection = getCategoryPrompt(leadCategory);
   const ctx = getSettingsContext();
 
-  const prompt = `You are writing an email for Jordan Bell from OxyScale (${ctx.companyDescription}) to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
+  const prompt = `You are writing an email for Jordan Bell, co-founder of OxyScale (${ctx.companyDescription}), based in Melbourne, Australia. You are writing to ${leadName}${leadCompany ? ` at ${leadCompany}` : ''}${leadCategory ? ` (industry: ${leadCategory})` : ''}.
 
 Jordan has given you these instructions on what the email should say:
 "${instructions}"
@@ -584,14 +584,47 @@ ${playbookSection}
 
 ${existingContext ? `## Context about this lead (previous interactions)\n${existingContext}\n` : ''}
 
+## Reference emails (this is how Jordan actually writes — match this voice)
+
+Example 1 (voicemail follow-up, cold outreach):
+"Hi Alexis,
+
+I have tried calling you recently and couldn't catch you so I thought I'd send an email through as well.
+
+Jordan Bell here, co-founder of OxyScale. I came across your background and figured it was worth reaching out directly.
+
+We run an operational intelligence business based here in Melbourne. It's challenging to fully articulate our services via email but I'd really love and appreciate half an hour of your time to walk you through a demo of exactly what we've built and you can assess if there's value in it for your business.
+
+There's a link below to our website for some context on what we do.
+
+https://oxyscale.ai/
+
+I really look forward to hearing from you.
+
+Kind regards,"
+
+Example 2 (post-call follow-up):
+"Hi Kate,
+
+Thanks for the chat earlier, really appreciate your time.
+
+As promised, here's a bit of context on what we built so you and the team can start picturing how this might look.
+
+[specific details about what was discussed on the call]
+
+Let's keep in touch over the coming weeks. If you have any questions or ideas you want to float my way before then, please don't hesitate.
+
+Kind regards,"
+
 ## Important
-- This is NOT a post-call follow-up. Jordan is composing a fresh email from their CRM.
+- This is NOT a post-call follow-up unless Jordan's instructions say otherwise. He is composing a fresh email from the CRM.
 - Follow the instructions closely. If Jordan says "tell them X", write about X.
 - If the instructions are brief, keep the email brief. Match the energy.
 - Don't assume a call just happened unless Jordan says so.
+- Don't mention Miller Leith, recruitment-specific details, or specific case studies unless Jordan explicitly mentions them in his instructions.
 - If the instructions mention booking a call or meeting, include this Calendly link: ${ctx.calendlyLink}
-- START the email body with a greeting like "Hi ${firstName}," on its own line. The signature is added automatically, so do NOT include one.
-- Sign off with "${ctx.signOff},"
+- START the email body with a greeting like "Hi ${firstName}," on its own line.
+- Sign off with "${ctx.signOff}," — never include a name, title, or signature after the sign-off (it is added automatically).
 - Never use em dashes. Comma, full stop, or semicolon instead.
 - NEVER use asterisks for emphasis. No *italic*, no **bold**, no markdown formatting. Plain text only.
 
@@ -599,7 +632,7 @@ ${existingContext ? `## Context about this lead (previous interactions)\n${exist
 Return ONLY valid JSON in this exact format, no other text:
 {
   "subject": "Short, casual subject line under 8 words. Never include 'OxyScale'. No em dashes.",
-  "body": "The email body starting with the greeting. Plain text only, no asterisks, no markdown."
+  "body": "The email body starting with the greeting. Plain text only, no asterisks, no markdown. End with Kind regards, and nothing after."
 }`;
 
   try {
