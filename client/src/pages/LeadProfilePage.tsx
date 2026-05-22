@@ -279,7 +279,7 @@ export default function LeadProfilePage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [newNote, setNewNote] = useState('');
-  const [savingNote, setSavingNote] = useState(false);
+  // savingNote removed — notes use optimistic local insert (no spinner needed)
   const [fieldUpdateError, setFieldUpdateError] = useState<string | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editingNoteContent, setEditingNoteContent] = useState('');
@@ -624,15 +624,43 @@ export default function LeadProfilePage() {
 
   const handleCreateNote = async () => {
     if (!newNote.trim() || !lead) return;
-    setSavingNote(true);
+
+    const content = newNote.trim();
+
+    // Optimistic: show the note instantly, clear the input, no spinner.
+    const tempId = -(Date.now());
+    const optimisticNote: Note = {
+      id: tempId,
+      leadId: lead.id,
+      content,
+      createdBy: 'Jordan',
+      createdAt: new Date().toISOString(),
+    };
+    setNotes((prev) => [optimisticNote, ...prev]);
+    setNewNote('');
+
+    // Stop dictation if it's running so the field is clean for next use
+    if (isDictating) {
+      recognitionRef.current?.stop();
+      setIsDictating(false);
+    }
+
+    // Save in the background — swap the temp note for the real one
     try {
-      const note = await api.createNote({ leadId: lead.id, content: newNote.trim() });
-      setNotes((prev) => [note, ...prev]);
-      setNewNote('');
+      const saved = await api.createNote({ leadId: lead.id, content });
+      setNotes((prev) => prev.map((n) => (n.id === tempId ? saved : n)));
+
+      // Quietly refresh activity timeline if that tab is active
+      if (tab === 'activity') {
+        api.getActivitiesForLead(leadId, { limit: ACTIVITY_LIMIT, offset: 0 })
+          .then((res) => { setActivities(res.activities); setActivityTotal(res.total); })
+          .catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to create note:', err);
-    } finally {
-      setSavingNote(false);
+      // Remove the optimistic note on failure
+      setNotes((prev) => prev.filter((n) => n.id !== tempId));
+      setNewNote(content); // restore so the user doesn't lose their text
     }
   };
 
@@ -1004,14 +1032,10 @@ export default function LeadProfilePage() {
               </button>
               <button
                 onClick={handleCreateNote}
-                disabled={!newNote.trim() || savingNote}
+                disabled={!newNote.trim()}
                 className="bg-ink text-white font-bold rounded-lg px-5 py-2 text-sm hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                {savingNote ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Plus size={14} />
-                )}
+                <Plus size={14} />
                 Save Note
               </button>
             </div>

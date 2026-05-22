@@ -277,13 +277,13 @@ export default function LeadsPage() {
                   {sortField === 'name' && <ArrowUpDown size={12} className="text-sky-ink" />}
                 </span>
               </th>
-              <th className="w-[120px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3 select-none cursor-pointer hover:text-ink-muted transition-colors" onClick={() => handleSort('category')}>
+              <th className="w-[180px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3 select-none cursor-pointer hover:text-ink-muted transition-colors" onClick={() => handleSort('category')}>
                 <span className="flex items-center gap-1">
                   Category
                   {sortField === 'category' && <ArrowUpDown size={12} className="text-sky-ink" />}
                 </span>
               </th>
-              <th className="w-[120px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Status</th>
+              <th className="w-[130px] text-right text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -318,14 +318,14 @@ export default function LeadsPage() {
                     )}
                   </div>
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-3 py-3 overflow-hidden">
                   {lead.category && (
-                    <span className="bg-[rgba(10,156,212,0.15)] text-sky-ink text-xs px-2.5 py-1 rounded-full whitespace-nowrap">
+                    <span className="bg-[rgba(10,156,212,0.15)] text-sky-ink text-xs px-2.5 py-1 rounded-full inline-block max-w-full truncate align-middle">
                       {lead.category}
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-3 py-3 text-right">
                   {lead.contacted ? (
                     <span className="bg-[rgba(16,185,129,0.1)] text-[#10b981] text-xs px-2.5 py-1 rounded-full whitespace-nowrap">
                       Contacted

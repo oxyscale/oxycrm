@@ -86,6 +86,51 @@ const ITALIC_ACCENT_PATTERN = /\*([^*\n]{5,80})\*/g;
 const ITALIC_ACCENT_STYLE = `font-family: ${SERIF_STACK}; font-style: italic; color: #0a9cd4; font-weight: 400;`;
 
 /**
+ * Auto-link bare URLs in already-escaped HTML text. Matches http/https
+ * URLs and wraps them in styled <a> tags. Trailing sentence punctuation
+ * (periods, commas, etc.) is stripped from the URL so "visit https://oxyscale.ai/."
+ * links correctly without including the full stop.
+ */
+function autoLinkUrls(escapedHtml: string): string {
+  const linkStyle = 'color: #0a9cd4; text-decoration: underline;';
+
+  // Step 1: Link full URLs (http:// or https://)
+  let result = escapedHtml.replace(
+    /https?:\/\/[^\s<]+/g,
+    (match) => {
+      let url = match;
+      let suffix = '';
+      const trailing = url.match(/([.,;:!?)\]]+)$/);
+      if (trailing) {
+        suffix = trailing[1];
+        url = url.slice(0, -suffix.length);
+      }
+      return `<a href="${url}" style="${linkStyle}">${url}</a>${suffix}`;
+    },
+  );
+
+  // Step 2: Link bare domains (e.g. "oxyscale.ai", "example.com/path")
+  // Only matches words that contain a dot followed by a valid TLD,
+  // and aren't already inside an <a> tag from step 1.
+  // Negative lookbehind ensures we skip anything preceded by :// or "
+  result = result.replace(
+    /(?<![/":])\b([a-zA-Z0-9][\w.-]*\.(?:com|ai|au|co|io|org|net|dev|app|xyz|info|biz|me|uk|nz|com\.au|co\.uk|co\.nz)(?:\/[^\s<]*)?)/g,
+    (match) => {
+      let url = match;
+      let suffix = '';
+      const trailing = url.match(/([.,;:!?)\]]+)$/);
+      if (trailing) {
+        suffix = trailing[1];
+        url = url.slice(0, -suffix.length);
+      }
+      return `<a href="https://${url}" style="${linkStyle}">${url}</a>${suffix}`;
+    },
+  );
+
+  return result;
+}
+
+/**
  * Convert plain-text body (Jordan's textarea content) into HTML paragraphs.
  * Blank lines separate paragraphs. Single newlines inside a paragraph
  * become <br />. All content is HTML-escaped — Jordan can never break
@@ -95,6 +140,8 @@ const ITALIC_ACCENT_STYLE = `font-family: ${SERIF_STACK}; font-style: italic; co
  * renders in Fraunces italic sky-ink. Claude is prompted to pick one
  * distinctive phrase per email; Jordan can move or remove the asterisks
  * in the textarea.
+ *
+ * Bare URLs (http/https) are auto-linked into clickable <a> tags.
  */
 function renderBodyParagraphs(body: string): string {
   const paragraphStyle =
@@ -112,9 +159,10 @@ function renderBodyParagraphs(body: string): string {
 
   return chunks
     .map((p, i) => {
-      const html = escapeHtml(p)
-        .replace(ITALIC_ACCENT_PATTERN, (_m, phrase: string) => `<em style="${ITALIC_ACCENT_STYLE}">${phrase}</em>`)
-        .replace(/\n/g, '<br />');
+      const html = autoLinkUrls(
+        escapeHtml(p)
+          .replace(ITALIC_ACCENT_PATTERN, (_m, phrase: string) => `<em style="${ITALIC_ACCENT_STYLE}">${phrase}</em>`),
+      ).replace(/\n/g, '<br />');
       const style = i === chunks.length - 1 ? lastParagraphStyle : paragraphStyle;
       return `<p style="${style}">${html}</p>`;
     })
