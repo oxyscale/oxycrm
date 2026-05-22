@@ -1119,6 +1119,10 @@ router.patch('/:id', (req, res, next) => {
       setClauses.push('email = @email');
       params.email = updates.email;
     }
+    if (updates.website !== undefined) {
+      setClauses.push('website = @website');
+      params.website = updates.website;
+    }
     if (updates.category !== undefined) {
       setClauses.push('category = @category');
       params.category = updates.category;

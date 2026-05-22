@@ -1021,7 +1021,15 @@ export default function LeadProfilePage() {
                   {activities.map((act) => (
                     <div
                       key={act.id}
-                      className={`bg-paper border border-hair-soft border-l-2 ${activityColorBar(act.type)} rounded-xl px-5 py-4`}
+                      className={`bg-paper border border-hair-soft border-l-2 ${activityColorBar(act.type)} rounded-xl px-5 py-4 ${
+                        act.description && act.description.length > 120 ? 'cursor-pointer hover:bg-[rgba(11,13,14,0.02)] transition-colors' : ''
+                      }`}
+                      onClick={act.description && act.description.length > 120 ? () => setExpandedActivityIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(act.id)) next.delete(act.id);
+                        else next.add(act.id);
+                        return next;
+                      }) : undefined}
                     >
                       <div className="flex items-start gap-3">
                         <div className="mt-0.5 flex-shrink-0">
@@ -1034,15 +1042,7 @@ export default function LeadProfilePage() {
                             const isLong = text.length > 120;
                             const isExpanded = expandedActivityIds.has(act.id);
                             return (
-                              <p
-                                className={`text-ink-muted text-sm mt-1 leading-relaxed whitespace-pre-wrap ${isLong ? 'cursor-pointer' : ''}`}
-                                onClick={isLong ? () => setExpandedActivityIds((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(act.id)) next.delete(act.id);
-                                  else next.add(act.id);
-                                  return next;
-                                }) : undefined}
-                              >
+                              <p className="text-ink-muted text-sm mt-1 leading-relaxed whitespace-pre-wrap">
                                 {isLong && !isExpanded ? text.slice(0, 120) + '...' : text}
                               </p>
                             );
