@@ -14,7 +14,6 @@ import {
   summariseAndPersistCall,
   draftAndStoreEmailForCall,
   getCategoryCta,
-  getBookACallUrl,
 } from '../services/ai-summary.js';
 import pino from 'pino';
 
@@ -422,8 +421,6 @@ router.post('/:id/preview', (req, res, next) => {
     const capabilitiesCta = includeCaps && categoryCta
       ? { url: categoryCta.url, label: categoryCta.label, intro: categoryCta.intro }
       : null;
-    const bookACallUrl = includeBook ? getBookACallUrl(user.calendlyLink) : null;
-
     const html = buildBrandedEmailHtml({
       body,
       recipientName,
@@ -433,7 +430,9 @@ router.post('/:id/preview', (req, res, next) => {
       signature,
       mode: includeHeader ? 'post-call' : 'standard',
       capabilitiesCta,
-      bookACallUrl,
+      // Book-a-call CTA block removed — the email signature already
+      // contains a "Book a call" button linking to Calendly.
+      bookACallUrl: null,
     });
 
     res.json({ html });
@@ -499,8 +498,6 @@ router.post('/:id/send', async (req, res, next) => {
           intro: categoryCta.intro,
         }
       : null;
-    const bookACallUrl = draft.include_book_a_call ? getBookACallUrl(user.calendlyLink) : null;
-
     const htmlBody = buildBrandedEmailHtml({
       body: draft.body,
       recipientName,
@@ -510,7 +507,9 @@ router.post('/:id/send', async (req, res, next) => {
       signature,
       mode: draft.include_after_call_header ? 'post-call' : 'standard',
       capabilitiesCta,
-      bookACallUrl,
+      // Book-a-call CTA block removed — the email signature already
+      // contains a "Book a call" button linking to Calendly.
+      bookACallUrl: null,
     });
 
     // Load attachments for this draft (if any)
@@ -547,10 +546,8 @@ router.post('/:id/send', async (req, res, next) => {
         VALUES (?, 'email', 'Email sent', ?, ?, ?)
       `).run(draft.lead_id, `To: ${draft.to_email} — ${draft.subject}`, now, user.name);
 
-      // Move lead to the suggested pipeline stage (follow_up or call_booked)
-      const stage = draft.suggested_stage || 'follow_up';
-      db.prepare("UPDATE leads SET pipeline_stage = ?, updated_at = ? WHERE id = ?")
-        .run(stage, now, draft.lead_id);
+      // Pipeline stage management is manual — sending an email no longer
+      // auto-moves the lead to a tier.
 
       // Mark draft sent
       db.prepare(
