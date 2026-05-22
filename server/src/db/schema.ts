@@ -601,6 +601,14 @@ export function initializeDatabase(db: Database.Database): void {
   // manually mark a lead as contacted (e.g. after saving a draft) without
   // needing a note/email/call row.
   addColumnIfMissing(db, 'leads', 'manually_contacted', 'INTEGER NOT NULL DEFAULT 0');
+
+  // One-time (May 2026): set $10k default deal value for Pulse leads that
+  // don't have one yet. Safe to re-run — only touches NULL/0 values.
+  db.prepare(`
+    UPDATE leads SET deal_value = 10000
+    WHERE pipeline_stage = 'pulse'
+      AND (deal_value IS NULL OR deal_value = 0)
+  `).run();
 }
 
 /**
