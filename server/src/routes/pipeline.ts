@@ -78,7 +78,7 @@ function mapLeadRow(row: LeadRow): Lead {
 // ============================================================
 
 const PIPELINE_STAGES: [PipelineStage, ...PipelineStage[]] = [
-  'tier_1', 'tier_2', 'tier_3', 'won', 'lost',
+  'pulse', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost',
 ];
 
 const TEMPERATURES: [Temperature, ...Temperature[]] = ['hot', 'warm', 'cold'];
@@ -97,6 +97,7 @@ const updateTemperatureSchema = z.object({
 // ============================================================
 
 const stageLabels: Record<PipelineStage, string> = {
+  pulse: 'Pulse',
   tier_1: 'Tier 1',
   tier_2: 'Tier 2',
   tier_3: 'Tier 3',

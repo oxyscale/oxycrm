@@ -40,6 +40,7 @@ import type {
 // ── Constants ────────────────────────────────────────────────
 
 const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
+  { value: 'pulse', label: 'Pulse' },
   { value: 'tier_1', label: 'Tier 1' },
   { value: 'tier_2', label: 'Tier 2' },
   { value: 'tier_3', label: 'Tier 3' },

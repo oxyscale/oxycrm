@@ -153,7 +153,7 @@ const createLeadSchema = z.object({
   category: z.string().nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
-  pipelineStage: z.enum(['tier_1', 'tier_2', 'tier_3', 'won', 'lost']).nullable().optional(),
+  pipelineStage: z.enum(['pulse', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost']).nullable().optional(),
 });
 
 const updateLeadSchema = z.object({
@@ -167,7 +167,7 @@ const updateLeadSchema = z.object({
   consolidatedSummary: z.string().nullable().optional(),
   companyInfo: z.string().nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
-  pipelineStage: z.enum(['tier_1', 'tier_2', 'tier_3', 'won', 'lost']).nullable().optional(),
+  pipelineStage: z.enum(['pulse', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost']).nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   followUpDate: z.string().nullable().optional(),
   dealValue: z.number().min(0).optional(),

@@ -35,6 +35,7 @@ interface TierBucket {
 }
 
 const TIER_LABELS: Record<string, string> = {
+  pulse: 'Pulse',
   tier_1: 'Tier 1',
   tier_2: 'Tier 2',
   tier_3: 'Tier 3',
@@ -65,13 +66,13 @@ router.get('/', (req, res, next) => {
              COUNT(*) AS count,
              COALESCE(SUM(deal_value), 0) AS total_value
       FROM leads
-      WHERE pipeline_stage IN ('tier_1','tier_2','tier_3','won','lost')
+      WHERE pipeline_stage IN ('pulse','tier_1','tier_2','tier_3','won','lost')
         ${catFilter}
       GROUP BY pipeline_stage
     `).all(catParam) as { tier: string; count: number; total_value: number }[];
 
     // Build the full set of tiers (even ones with 0) so the UI shows every column.
-    const byTier: TierBucket[] = (['tier_1', 'tier_2', 'tier_3', 'won', 'lost'] as const).map(
+    const byTier: TierBucket[] = (['pulse', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost'] as const).map(
       (t) => {
         const row = tierRows.find((r) => r.tier === t);
         return {
@@ -183,10 +184,10 @@ router.get('/', (req, res, next) => {
              deal_value AS dealValue, follow_up_date AS followUpDate,
              manually_contacted AS manuallyContacted
       FROM leads
-      WHERE pipeline_stage IN ('tier_1','tier_2','tier_3')
+      WHERE pipeline_stage IN ('pulse','tier_1','tier_2','tier_3')
         ${catFilter}
       ORDER BY
-        CASE pipeline_stage WHEN 'tier_1' THEN 1 WHEN 'tier_2' THEN 2 WHEN 'tier_3' THEN 3 END,
+        CASE pipeline_stage WHEN 'tier_1' THEN 1 WHEN 'tier_2' THEN 2 WHEN 'tier_3' THEN 3 WHEN 'pulse' THEN 4 END,
         deal_value DESC
     `).all(catParam) as Array<{
       id: number; name: string; company: string | null; category: string | null;
@@ -216,10 +217,10 @@ router.get('/', (req, res, next) => {
 
     // ── Totals + KPIs ───────────────────────────────────────
     const totalPipelineValue = byTier
-      .filter((b) => b.tier === 'tier_1' || b.tier === 'tier_2' || b.tier === 'tier_3')
+      .filter((b) => ['pulse', 'tier_1', 'tier_2', 'tier_3'].includes(b.tier))
       .reduce((sum, b) => sum + b.totalValue, 0);
     const totalPipelineCount = byTier
-      .filter((b) => b.tier === 'tier_1' || b.tier === 'tier_2' || b.tier === 'tier_3')
+      .filter((b) => ['pulse', 'tier_1', 'tier_2', 'tier_3'].includes(b.tier))
       .reduce((sum, b) => sum + b.count, 0);
     const wonValue = won.reduce((sum, w) => sum + (w.dealValue || 0), 0);
     const lostValue = lost.reduce((sum, w) => sum + (w.dealValue || 0), 0);

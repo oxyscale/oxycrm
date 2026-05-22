@@ -3,12 +3,13 @@
 // Used by both client and server
 // ============================================================
 
-// Pipeline stages — three working tiers + two outcomes
-// A lead either sits in one of these tiers, or has NO pipeline stage at all
+// Pipeline stages — three working tiers, a warm-interest stage, + two outcomes
+// A lead either sits in one of these stages, or has NO pipeline stage at all
 // (pipeline_stage IS NULL in the DB). NULL = not yet placed in the kanban.
 // The Lead profile dropdown includes a "Remove from pipeline" action that
 // nulls the stage.
-export type PipelineStage = 'tier_1' | 'tier_2' | 'tier_3' | 'won' | 'lost';
+// Flow: New Lead (NULL) → Pulse → Tier 3 → Tier 2 → Tier 1 → Won / Lost
+export type PipelineStage = 'pulse' | 'tier_1' | 'tier_2' | 'tier_3' | 'won' | 'lost';
 
 // Temperature
 export type Temperature = 'hot' | 'warm' | 'cold';

@@ -29,6 +29,7 @@ interface StageColumn {
 }
 
 const STAGES: StageColumn[] = [
+  { key: 'pulse', label: 'Pulse', color: 'bg-violet-500', bgTint: 'bg-[rgba(139,92,246,0.06)]' },
   { key: 'tier_1', label: 'Tier 1', color: 'bg-sky-ink', bgTint: 'bg-[rgba(10,156,212,0.06)]' },
   { key: 'tier_2', label: 'Tier 2', color: 'bg-amber-400', bgTint: 'bg-[rgba(245,158,11,0.06)]' },
   { key: 'tier_3', label: 'Tier 3', color: 'bg-ink-dim', bgTint: 'bg-[rgba(138,149,160,0.06)]' },
@@ -146,8 +147,8 @@ export default function PipelinePage() {
   // Surface the count from /api/pipeline/stats so Jordan knows where they went.
   const unplacedCount = stats?.unplaced ?? 0;
 
-  // Sum deal values across active tiers (Tier 1/2/3 only — Won/Lost are closed)
-  const activePipelineValue = (['tier_1', 'tier_2', 'tier_3'] as const).reduce((sum, key) => {
+  // Sum deal values across active tiers (Pulse/Tier 1/2/3 — Won/Lost are closed)
+  const activePipelineValue = (['pulse', 'tier_1', 'tier_2', 'tier_3'] as const).reduce((sum, key) => {
     const list = pipeline[key] || [];
     return sum + list.reduce((s, l) => s + (l.dealValue || 0), 0);
   }, 0);

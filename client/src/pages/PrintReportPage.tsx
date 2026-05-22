@@ -34,7 +34,7 @@ function formatLongDate(yyyymmdd: string): string {
 }
 
 function tierLabel(tier: string): string {
-  return ({ tier_1: 'Tier 1', tier_2: 'Tier 2', tier_3: 'Tier 3', won: 'Won', lost: 'Lost' })[tier] || tier;
+  return ({ pulse: 'Pulse', tier_1: 'Tier 1', tier_2: 'Tier 2', tier_3: 'Tier 3', won: 'Won', lost: 'Lost' })[tier] || tier;
 }
 
 // ── Component ──────────────────────────────────────────────────
@@ -201,9 +201,9 @@ export default function PrintReportPage() {
           {/* ── Pipeline by Tier ──────────────────────────────── */}
           <div className="mb-3">
             <SectionLabel>Pipeline by Tier</SectionLabel>
-            <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className="grid grid-cols-4 gap-3 mb-6">
               {data.byTier
-                .filter((b) => ['tier_1', 'tier_2', 'tier_3'].includes(b.tier))
+                .filter((b) => ['pulse', 'tier_1', 'tier_2', 'tier_3'].includes(b.tier))
                 .map((b) => (
                   <div
                     key={b.tier}
@@ -275,6 +275,7 @@ export default function PrintReportPage() {
                         <span className={`text-[11px] font-mono font-semibold uppercase tracking-[0.15em] ${
                           lead.tier === 'tier_1' ? 'text-[#0a9cd4]'
                           : lead.tier === 'tier_2' ? 'text-[#f59e0b]'
+                          : lead.tier === 'pulse' ? 'text-[#8b5cf6]'
                           : 'text-[#8a95a0]'
                         }`}>
                           {tierLabel(lead.tier)}

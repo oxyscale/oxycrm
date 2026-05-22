@@ -298,8 +298,8 @@ export default function ReportsPage() {
 
           {/* Tier breakdown — active pipeline only */}
           <Section title="Pipeline by tier" icon={<TrendingUp size={14} />}>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {data.byTier.filter((t) => ['tier_1', 'tier_2', 'tier_3'].includes(t.tier)).map((t) => (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {data.byTier.filter((t) => ['pulse', 'tier_1', 'tier_2', 'tier_3'].includes(t.tier)).map((t) => (
                 <div
                   key={t.tier}
                   className="bg-paper border border-hair-soft rounded-xl p-4"
@@ -496,6 +496,7 @@ function EmptyRow({ text }: { text: string }) {
 }
 
 const TIER_LABELS: Record<string, string> = {
+  pulse: 'Pulse',
   tier_1: 'Tier 1',
   tier_2: 'Tier 2',
   tier_3: 'Tier 3',
