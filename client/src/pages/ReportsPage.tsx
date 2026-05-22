@@ -246,14 +246,23 @@ export default function ReportsPage() {
       ) : data ? (
         <>
           {/* KPI strip */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          <div className="grid grid-cols-2 gap-3 mb-3">
             <KpiCard
               icon={<DollarSign size={14} />}
-              label="Pipeline value"
+              label="Total pipeline"
               value={formatAUD(data.summary.totalPipelineValue)}
               sub={`${data.summary.totalPipelineCount} active`}
               accent
             />
+            <KpiCard
+              icon={<DollarSign size={14} />}
+              label="Weighted pipeline"
+              value={formatAUD(data.summary.weightedPipelineValue)}
+              sub="risk-adjusted"
+              accent
+            />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             <KpiCard
               icon={<Users size={14} />}
               label="New leads"
@@ -306,9 +315,7 @@ export default function ReportsPage() {
                 >
                   <p className="text-ink-dim text-[11px] uppercase tracking-wider">{t.label}</p>
                   <p className="text-ink text-2xl font-medium mt-1">{t.count}</p>
-                  {t.tier !== 'pulse' && (
-                    <p className="text-ink-muted text-xs mt-1">{formatAUD(t.totalValue)}</p>
-                  )}
+                  <p className="text-ink-muted text-xs mt-1">{formatAUD(t.totalValue)}</p>
                 </div>
               ))}
             </div>

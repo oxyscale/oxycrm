@@ -235,6 +235,7 @@ export interface ReportData {
   summary: {
     totalPipelineCount: number;
     totalPipelineValue: number;
+    weightedPipelineValue: number;
     newLeadCount: number;
     wonCount: number;
     wonValue: number;

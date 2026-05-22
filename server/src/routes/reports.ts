@@ -229,6 +229,17 @@ router.get('/', (req, res, next) => {
     const wonValue = won.reduce((sum, w) => sum + (w.dealValue || 0), 0);
     const lostValue = lost.reduce((sum, w) => sum + (w.dealValue || 0), 0);
 
+    // Weighted pipeline value — close probability by tier
+    const TIER_WEIGHTS: Record<string, number> = {
+      pulse: 0.05,   // 5%
+      tier_3: 0.10,  // 10%
+      tier_2: 0.30,  // 30%
+      tier_1: 0.75,  // 75%
+    };
+    const weightedPipelineValue = byTier
+      .filter((b) => b.tier in TIER_WEIGHTS)
+      .reduce((sum, b) => sum + b.totalValue * TIER_WEIGHTS[b.tier], 0);
+
     // Distinct categories available for the filter dropdown
     const categories = (db.prepare(
       "SELECT DISTINCT category FROM leads WHERE category IS NOT NULL AND category != '' ORDER BY category ASC"
@@ -242,6 +253,7 @@ router.get('/', (req, res, next) => {
       summary: {
         totalPipelineCount,
         totalPipelineValue,
+        weightedPipelineValue: Math.round(weightedPipelineValue),
         newLeadCount: newLeads.length,
         wonCount: won.length,
         wonValue,

@@ -154,13 +154,21 @@ export default function PrintReportPage() {
           </p>
 
           {/* ── KPI Strip ────────────────────────────────────── */}
-          <div className="grid grid-cols-5 gap-3 mb-6">
+          <div className="grid grid-cols-2 gap-3 mb-4">
             <KpiCard
-              label="Pipeline Value"
+              label="Total Pipeline"
               value={formatAUD(s.totalPipelineValue)}
               sub={`${s.totalPipelineCount} active`}
               accent
             />
+            <KpiCard
+              label="Weighted Pipeline"
+              value={formatAUD(s.weightedPipelineValue)}
+              sub="risk-adjusted"
+              accent
+            />
+          </div>
+          <div className="grid grid-cols-5 gap-3 mb-6">
             <KpiCard
               label="New Leads"
               value={String(s.newLeadCount)}
@@ -214,11 +222,9 @@ export default function PrintReportPage() {
                     </p>
                     <p className="text-[20px] font-semibold text-[#0b0d0e] tracking-[-0.02em]">
                       {b.count}
-                      {b.tier !== 'pulse' && (
-                        <span className="text-[14px] text-[#55606a] font-normal ml-2">
-                          {formatAUD(b.totalValue)}
-                        </span>
-                      )}
+                      <span className="text-[14px] text-[#55606a] font-normal ml-2">
+                        {formatAUD(b.totalValue)}
+                      </span>
                     </p>
                   </div>
                 ))}
