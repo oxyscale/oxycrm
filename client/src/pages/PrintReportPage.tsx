@@ -112,7 +112,7 @@ export default function PrintReportPage() {
             onClick={() => window.print()}
             className="bg-[#0b0d0e] text-white text-sm font-medium rounded-full px-6 py-2.5 hover:bg-[#1a1d1f] transition-colors"
           >
-            Print / Save PDF
+            Download PDF
           </button>
         </div>
 

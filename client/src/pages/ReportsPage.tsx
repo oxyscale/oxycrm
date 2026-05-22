@@ -153,10 +153,10 @@ export default function ReportsPage() {
             navigate(`/report?${params.toString()}`);
           }}
           className="border border-hair-strong text-ink-muted hover:text-ink text-sm rounded-full px-4 py-2 transition-all flex items-center gap-2"
-          title="Print / save as PDF"
+          title="Download as PDF"
         >
           <Printer size={14} />
-          Print Report
+          Download PDF
         </button>
       </div>
 

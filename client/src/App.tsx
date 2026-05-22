@@ -46,6 +46,8 @@ export default function App() {
         element={
           <RequireAuth>
             <Routes>
+              {/* Report page renders standalone — no sidebar, no Layout */}
+              <Route path="/report" element={<PrintReportPage />} />
               <Route element={<Layout />}>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/leads" element={<LeadsPage />} />
@@ -58,7 +60,6 @@ export default function App() {
                 <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/email-bank" element={<EmailBankPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
-                <Route path="/report" element={<PrintReportPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
             </Routes>
