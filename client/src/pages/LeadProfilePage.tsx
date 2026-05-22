@@ -533,23 +533,30 @@ export default function LeadProfilePage() {
     setCreatingTask(true);
     setTaskError(null);
     try {
-      await api.createLeadTask(lead.id, {
+      const newTask = await api.createLeadTask(lead.id, {
         label: taskLabel.trim(),
         dueDate: taskDate,
       });
 
-      // Reload the lead to pick up follow_up_date and any related changes
-      const refreshed = await api.getLeadById(lead.id);
-      setLead(refreshed);
+      // Update follow_up_date locally instead of re-fetching the whole lead.
+      // The server mirrors the earliest task due date onto the lead.
+      if (!lead.followUpDate || taskDate < lead.followUpDate) {
+        setLead((prev) => prev ? { ...prev, followUpDate: taskDate } : prev);
+      }
 
-      // Reset form + close panel
+      // Append the new task locally — no need for a full reload
+      setTasks((prev) => [...prev, newTask]);
+
+      // Reset form but keep the panel open so the user can create another
       setTaskLabel('');
       setTaskDate('');
-      setShowSetTask(false);
 
-      // Refresh tasks list + activity timeline
-      loadTasks();
-      if (tab === 'activity') loadActivities();
+      // Quietly refresh the activity timeline (no loading spinner)
+      if (tab === 'activity') {
+        api.getActivitiesForLead(leadId, { limit: ACTIVITY_LIMIT, offset: 0 })
+          .then((res) => { setActivities(res.activities); setActivityTotal(res.total); })
+          .catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to create task:', err);
       setTaskError(err instanceof Error ? err.message : 'Failed to create task');
@@ -854,7 +861,15 @@ export default function LeadProfilePage() {
 
       {/* ── Set Task panel ───────────────────────────────────── */}
       {showSetTask && (
-        <div className="bg-paper border border-sky-hair rounded-xl p-5 mb-8 -mt-6">
+        <div
+          className="bg-paper border border-sky-hair rounded-xl p-5 mb-8 -mt-6"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey && taskLabel.trim() && taskDate && !creatingTask) {
+              e.preventDefault();
+              handleCreateTask();
+            }
+          }}
+        >
           <div className="flex items-start justify-between mb-4">
             <div>
               <h3 className="text-ink font-medium text-base flex items-center gap-2">
@@ -882,9 +897,6 @@ export default function LeadProfilePage() {
                 type="date"
                 value={taskDate}
                 onChange={(e) => setTaskDate(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && taskLabel.trim() && taskDate) handleCreateTask();
-                }}
                 className="bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all [color-scheme:light]"
               />
             </div>
@@ -915,9 +927,6 @@ export default function LeadProfilePage() {
                 type="text"
                 value={taskLabel}
                 onChange={(e) => setTaskLabel(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && taskLabel.trim() && taskDate) handleCreateTask();
-                }}
                 placeholder="e.g. Follow up in July"
                 className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all"
               />
