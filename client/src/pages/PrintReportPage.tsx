@@ -89,7 +89,7 @@ export default function PrintReportPage() {
       {/* Print-specific styles */}
       <style>{`
         @media print {
-          @page { size: A4; margin: 0; }
+          @page { size: A4; margin: 14mm 14mm; }
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; }
           .no-print { display: none !important; }
           .page-break { page-break-before: always; }
@@ -108,15 +108,20 @@ export default function PrintReportPage() {
           >
             Back to Operations
           </button>
-          <button
-            onClick={() => window.print()}
-            className="bg-[#0b0d0e] text-white text-sm font-medium rounded-full px-6 py-2.5 hover:bg-[#1a1d1f] transition-colors"
-          >
-            Download PDF
-          </button>
+          <div className="flex items-center gap-4">
+            <span className="text-[11px] text-[#b8bfc6]">
+              Uncheck "Headers and footers" in the save dialog
+            </span>
+            <button
+              onClick={() => window.print()}
+              className="bg-[#0b0d0e] text-white text-sm font-medium rounded-full px-6 py-2.5 hover:bg-[#1a1d1f] transition-colors"
+            >
+              Download PDF
+            </button>
+          </div>
         </div>
 
-        <div className="px-8 py-10 print:px-[14mm] print:py-[16mm]">
+        <div className="px-8 py-10 print:px-0 print:py-0">
           {/* ── Header ───────────────────────────────────────── */}
           <div className="flex items-start justify-between mb-2">
             <div>
