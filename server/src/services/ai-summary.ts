@@ -212,8 +212,8 @@ function buildRenderContextSection(mode: FollowUpDraftMode, calendlyLink: string
   }
 
   const constraints: string[] = [];
-  constraints.push('No greeting line ("Hi name,") — the wrapper adds the recipient framing automatically.');
-  constraints.push('No signature block — the wrapper adds it.');
+  constraints.push('The signature block is added automatically, so do NOT include one.');
+  constraints.push('NEVER use asterisks for emphasis. No *italic*, no **bold**. Plain text only.');
   if (mode.includeBookACall) {
     constraints.push(
       'Do NOT paste the Calendly URL or any "book a time here" link in the body. The button handles the click. Close on a forward-looking line that makes the discovery call feel like the obvious next step (without typing the link).',
@@ -419,15 +419,18 @@ ${EMAIL_STYLE_GUIDE}
 ${previousEmailsSection}
 ${playbookSection}
 ${renderContext}
-${ITALIC_ACCENT_INSTRUCTION}
+
 
 ## Structure
-1. Open with a one-line warm reference to the call. Pick up something specific they said, not generic ("Great chat just then..." style).
-2. Tie what they raised on the call directly to what OxyScale would deliver. This is the heart of the email — weave 2-3 specific things they discussed into how OxyScale would handle them. Frame OxyScale as additive to what they already have, not a replacement.
-3. Forward-looking close that sets up the next step (see the render-context constraints above for whether to paste the Calendly link).
-4. Sign off with "${ctx.signOff},"
+1. Start with "Hi ${leadName.split(' ')[0]}," on its own line.
+2. Open with a one-line warm reference to the call. Pick up something specific they said, not generic ("Great chat just then..." style).
+3. Tie what they raised on the call directly to what OxyScale would deliver. This is the heart of the email, weave 2-3 specific things they discussed into how OxyScale would handle them. Frame OxyScale as additive to what they already have, not a replacement.
+4. Forward-looking close that sets up the next step (see the render-context constraints above for whether to paste the Calendly link).
+5. Sign off with "${ctx.signOff},"
 
 Total length 110-180 words. Concrete and specific to the call, not generic.
+NEVER use asterisks for emphasis. No *italic*, no **bold**, no markdown formatting. Plain text only.
+The signature block is added automatically, so do NOT include one.
 
 ## Call transcript
 ${transcript}
@@ -440,8 +443,8 @@ ${callContext ? `## Additional context\n${callContext}` : ''}
 ## Output format
 Return ONLY valid JSON in this exact format, no other text:
 {
-  "subject": "Short, casual subject line under 8 words. Never include 'OxyScale' (it's already in the from-address). No em dashes. Examples: 'Quick follow up from our chat', 'After our chat — the picture below', 'On the margin question you raised'",
-  "body": "The email body, plain text. No greeting line, no signature block. One italic-accented phrase wrapped in single asterisks per the rule above. Match the EMAIL_STYLE_GUIDE precisely: never use em dashes."
+  "subject": "Short, casual subject line under 8 words. Never include 'OxyScale' (it's already in the from-address). No em dashes.",
+  "body": "The email body starting with the greeting. Plain text only, no asterisks, no markdown."
 }`;
 
   try {
@@ -509,22 +512,25 @@ ${EMAIL_STYLE_GUIDE}
 ${previousEmailsSection}
 ${playbookSection}
 ${renderContext}
-${ITALIC_ACCENT_INSTRUCTION}
+
 
 ## Structure
-1. Mention you just tried calling and left a voicemail.
-2. Very briefly introduce OxyScale, tailored to their industry if playbook context is available above.
-3. If playbook context is available, mention 1-2 specific outcomes that would matter for their business. Frame as "if any of this sounds useful" rather than assuming pain.
-4. Forward-looking close per the render-context constraints above.
-5. Sign off with "${ctx.signOff},"
+1. Start with "Hi ${leadName.split(' ')[0]}," on its own line.
+2. Mention you just tried calling and left a voicemail.
+3. Very briefly introduce OxyScale, tailored to their industry if playbook context is available above.
+4. If playbook context is available, mention 1-2 specific outcomes that would matter for their business. Frame as "if any of this sounds useful" rather than assuming pain.
+5. Forward-looking close per the render-context constraints above.
+6. Sign off with "${ctx.signOff},"
 
 Total length under 110 words.
+NEVER use asterisks for emphasis. No *italic*, no **bold**, no markdown formatting. Plain text only.
+The signature block is added automatically, so do NOT include one.
 
 ## Output format
 Return ONLY valid JSON in this exact format, no other text:
 {
   "subject": "Short casual subject line, 5-7 words. e.g. 'Just tried giving you a call', 'Quick voicemail follow up'. Never include 'OxyScale'.",
-  "body": "The email body, plain text. No greeting, no signature. One italic-accented outcome phrase in single asterisks per the rule. Never use em dashes."
+  "body": "The email body starting with the greeting. Plain text only, no asterisks, no markdown."
 }`;
 
   try {
@@ -575,7 +581,6 @@ Jordan has given you these instructions on what the email should say:
 
 ${EMAIL_STYLE_GUIDE}
 ${playbookSection}
-${ITALIC_ACCENT_INSTRUCTION}
 
 ${existingContext ? `## Context about this lead (previous interactions)\n${existingContext}\n` : ''}
 
@@ -585,16 +590,16 @@ ${existingContext ? `## Context about this lead (previous interactions)\n${exist
 - If the instructions are brief, keep the email brief. Match the energy.
 - Don't assume a call just happened unless Jordan says so.
 - If the instructions mention booking a call or meeting, include this Calendly link: ${ctx.calendlyLink}
-- No greeting line (no "Hi ${firstName}," as it is added automatically).
-- No signature block.
+- START the email body with a greeting like "Hi ${firstName}," on its own line. The signature is added automatically, so do NOT include one.
 - Sign off with "${ctx.signOff},"
 - Never use em dashes. Comma, full stop, or semicolon instead.
+- NEVER use asterisks for emphasis. No *italic*, no **bold**, no markdown formatting. Plain text only.
 
 ## Output format
 Return ONLY valid JSON in this exact format, no other text:
 {
   "subject": "Short, casual subject line under 8 words. Never include 'OxyScale'. No em dashes.",
-  "body": "The email body, plain text only. Concise and natural. One italic-accented outcome phrase in single asterisks per the rule above (skip if the email genuinely has no outcome moment, e.g. a quick logistics note)."
+  "body": "The email body starting with the greeting. Plain text only, no asterisks, no markdown."
 }`;
 
   try {

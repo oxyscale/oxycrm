@@ -14,7 +14,6 @@ import {
 import * as api from '../services/api';
 import type { Lead } from '../types';
 import { buildEmailText } from '../utils/emailTemplate';
-import { getContactFirstName } from '../utils/names';
 
 // Browser Speech Recognition types
 interface SpeechRecognitionEvent {
@@ -47,7 +46,6 @@ export default function ComposeEmailPage() {
   const [showTranscriptText, setShowTranscriptText] = useState(false);
 
   // Email fields
-  const [greetingName, setGreetingName] = useState('');
   const [toEmail, setToEmail] = useState('');
   const [ccEmail, setCcEmail] = useState('');
   const [subject, setSubject] = useState('');
@@ -69,7 +67,6 @@ export default function ComposeEmailPage() {
         const data = await api.getLeadById(parseInt(leadId, 10));
         setLead(data);
         if (data.email) setToEmail(data.email);
-        setGreetingName(getContactFirstName(data.name));
 
         // If the user arrived here from the Transcripts tab via
         // "Save and draft email" / "Send email based on this", a transcript
@@ -231,7 +228,7 @@ export default function ComposeEmailPage() {
         to: toEmail,
         cc: ccEmail || undefined,
         subject,
-        body: buildEmailText(body, greetingName || 'there'),
+        body: buildEmailText(body),
         // Tiers are user-controlled — pipelineStage no longer auto-set on send.
       });
 
@@ -485,27 +482,15 @@ export default function ComposeEmailPage() {
             )}
 
             {/* Email fields — always visible so you can manually compose too */}
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">To</label>
-                <input
-                  type="email"
-                  value={toEmail}
-                  onChange={(e) => setToEmail(e.target.value)}
-                  placeholder="recipient@company.com"
-                  className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
-                />
-              </div>
-              <div className="w-48">
-                <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">Greeting name</label>
-                <input
-                  type="text"
-                  value={greetingName}
-                  onChange={(e) => setGreetingName(e.target.value)}
-                  placeholder="e.g. Brianna"
-                  className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
-                />
-              </div>
+            <div>
+              <label className="text-ink-dim text-xs uppercase tracking-wider mb-1.5 block">To</label>
+              <input
+                type="email"
+                value={toEmail}
+                onChange={(e) => setToEmail(e.target.value)}
+                placeholder="recipient@company.com"
+                className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-3 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
+              />
             </div>
 
             <div>
@@ -580,7 +565,7 @@ export default function ComposeEmailPage() {
                   {subject || 'No subject'}
                 </p>
                 <pre className="text-ink-faint text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                  {buildEmailText(body || '...', greetingName || 'there')}
+                  {buildEmailText(body || '...')}
                 </pre>
               </div>
             </div>

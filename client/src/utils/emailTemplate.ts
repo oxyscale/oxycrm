@@ -1,11 +1,10 @@
 /**
- * Builds a plain text email with greeting and sign-off.
- * Simple, human, lands in inbox not junk.
+ * Builds a plain text email with sign-off.
+ * The greeting (e.g. "Hi James,") is already included in the body
+ * by the AI or typed manually by the user.
  */
-export function buildEmailText(body: string, greetingName: string): string {
-  return `Hi ${greetingName},
-
-${body}
+export function buildEmailText(body: string): string {
+  return `${body}
 
 Kind regards,
 Jordan

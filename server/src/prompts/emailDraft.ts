@@ -54,7 +54,7 @@ ${transcript}
 
 ${callSummary ? `## Call summary\n${callSummary}` : ''}
 
-Write the email body only (no subject line, no "Hi ${firstName}," greeting as that is added automatically, no signature block). Keep it under 50 words.`;
+Start with "Hi ${firstName}," on its own line. No signature block (it is added automatically). Keep it under 50 words. NEVER use asterisks for emphasis. Plain text only.`;
   }
 
   return `You are Jordan Bell from OxyScale (${companyDesc}, based in Australia). You just called ${leadName}${company ? ` at ${company}` : ''}${category ? ` (industry: ${category})` : ''}.
@@ -106,7 +106,7 @@ ${transcript}
 
 ${callSummary ? `## Call summary\n${callSummary}` : ''}
 
-Write the email body only (no subject line, no "Hi ${firstName}," greeting as that is added automatically, no signature block).`;
+Start with "Hi ${firstName}," on its own line. No signature block (it is added automatically). NEVER use asterisks for emphasis. Plain text only.`;
 }
 
 export function buildEmailSubjectPrompt(params: {
