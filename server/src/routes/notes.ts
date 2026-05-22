@@ -108,15 +108,12 @@ router.post('/', (req, res, next) => {
         VALUES (?, ?, ?, ?, ?)
       `).run(payload.leadId, payload.content, author, now, now);
 
-      // Create an activity record
-      const snippet = payload.content.length > 80
-        ? payload.content.substring(0, 80) + '...'
-        : payload.content;
-
+      // Create an activity record — store full content so the
+      // activity timeline can show it without a separate lookup.
       db.prepare(`
         INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
         VALUES (?, 'note', 'Note added', ?, ?, ?)
-      `).run(payload.leadId, snippet, now, author);
+      `).run(payload.leadId, payload.content, now, author);
 
       return result.lastInsertRowid;
     });

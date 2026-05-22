@@ -256,6 +256,7 @@ export default function LeadProfilePage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activityTotal, setActivityTotal] = useState(0);
   const [loadingActivities, setLoadingActivities] = useState(false);
+  const [expandedActivityIds, setExpandedActivityIds] = useState<Set<number>>(new Set());
 
   // Calls tab
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
@@ -1023,11 +1024,24 @@ export default function LeadProfilePage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-ink text-sm font-medium">{act.title}</p>
-                          {act.description && (
-                            <p className="text-ink-muted text-sm mt-1 leading-relaxed">
-                              {humaniseDates(act.description)}
-                            </p>
-                          )}
+                          {act.description && (() => {
+                            const text = humaniseDates(act.description);
+                            const isLong = text.length > 120;
+                            const isExpanded = expandedActivityIds.has(act.id);
+                            return (
+                              <p
+                                className={`text-ink-muted text-sm mt-1 leading-relaxed whitespace-pre-wrap ${isLong ? 'cursor-pointer' : ''}`}
+                                onClick={isLong ? () => setExpandedActivityIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(act.id)) next.delete(act.id);
+                                  else next.add(act.id);
+                                  return next;
+                                }) : undefined}
+                              >
+                                {isLong && !isExpanded ? text.slice(0, 120) + '...' : text}
+                              </p>
+                            );
+                          })()}
                         </div>
                         <span className="text-ink-dim text-xs flex-shrink-0 mt-0.5">
                           {formatDate(act.createdAt)}
