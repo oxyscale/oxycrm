@@ -50,6 +50,7 @@ interface LeadRow {
   converted_to_project: number;
   follow_up_date: string | null;
   deal_value: number;
+  manually_contacted: number;
   queue_position: number;
   last_called_at: string | null;
   created_at: string;
@@ -92,6 +93,7 @@ function mapLeadRow(row: LeadRow): Lead {
     convertedToProject: row.converted_to_project === 1,
     followUpDate: row.follow_up_date,
     dealValue: row.deal_value ?? 0,
+    manuallyContacted: row.manually_contacted === 1,
     queuePosition: row.queue_position,
     lastCalledAt: row.last_called_at,
     createdAt: row.created_at,
@@ -169,6 +171,7 @@ const updateLeadSchema = z.object({
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   followUpDate: z.string().nullable().optional(),
   dealValue: z.number().min(0).optional(),
+  manuallyContacted: z.boolean().optional(),
 });
 
 // ============================================================
@@ -201,16 +204,19 @@ router.get('/', (req, res, next) => {
     }
 
     // Contacted filter: a lead is "contacted" if it has any notes,
-    // emails, or call logs (transcripts). This lets Jordan separate
-    // CSV-imported leads from ones he's actually engaged with.
+    // emails, or call logs (transcripts), OR if manually_contacted is set.
+    // This lets Jordan separate CSV-imported leads from ones he's
+    // actually engaged with.
     if (contacted === 'true') {
       query += ` AND (
-        EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
+        leads.manually_contacted = 1
+        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
       )`;
     } else if (contacted === 'false') {
-      query += ` AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
+      query += ` AND leads.manually_contacted = 0
+        AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
         AND NOT EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
         AND NOT EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)`;
     }
@@ -224,14 +230,16 @@ router.get('/', (req, res, next) => {
     // show a pill without making extra queries per lead.
     const contactedStmt = db.prepare(`
       SELECT CASE WHEN (
-        EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
+        ? = 1
+        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = ?)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = ?)
       ) THEN 1 ELSE 0 END AS contacted
     `);
 
     for (const lead of leads) {
-      const result = contactedStmt.get(lead.id, lead.id, lead.id) as { contacted: number };
+      const mc = lead.manuallyContacted ? 1 : 0;
+      const result = contactedStmt.get(mc, lead.id, lead.id, lead.id) as { contacted: number };
       lead.contacted = result.contacted === 1;
     }
 
@@ -656,14 +664,15 @@ router.get('/:id', (req, res, next) => {
     const lead = mapLeadRow(leadRow);
     const callLogs = callLogRows.map(mapCallLogRow);
 
-    // Compute contacted flag
+    // Compute contacted flag (includes manual override)
     const contactedResult = db.prepare(`
       SELECT CASE WHEN (
-        EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
+        ? = 1
+        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = ?)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = ?)
       ) THEN 1 ELSE 0 END AS contacted
-    `).get(id, id, id) as { contacted: number };
+    `).get(lead.manuallyContacted ? 1 : 0, id, id, id) as { contacted: number };
     lead.contacted = contactedResult.contacted === 1;
 
     res.json({
@@ -1150,6 +1159,10 @@ router.patch('/:id', (req, res, next) => {
     if (updates.dealValue !== undefined) {
       setClauses.push('deal_value = @dealValue');
       params.dealValue = updates.dealValue;
+    }
+    if (updates.manuallyContacted !== undefined) {
+      setClauses.push('manually_contacted = @manuallyContacted');
+      params.manuallyContacted = updates.manuallyContacted ? 1 : 0;
     }
 
     if (setClauses.length === 0) {

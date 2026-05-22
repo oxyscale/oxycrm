@@ -39,7 +39,11 @@ export interface Lead {
   lastCalledAt: string | null;
   createdAt: string;
   updatedAt: string;
-  /** Computed — true if the lead has any notes, emails, or call logs */
+  /** Manual override — when true, lead counts as "contacted" regardless
+   *  of whether it has notes/emails/call logs. */
+  manuallyContacted?: boolean;
+  /** Computed — true if the lead has any notes, emails, or call logs
+   *  OR manuallyContacted is set. */
   contacted?: boolean;
 }
 

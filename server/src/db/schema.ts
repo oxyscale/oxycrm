@@ -590,6 +590,12 @@ export function initializeDatabase(db: Database.Database): void {
   // Tasks — add completed_at timestamp (May 2026). NULL until user manually
   // marks a task complete; used by the Tasks page to track completion history.
   addColumnIfMissing(db, 'tasks', 'completed_at', 'TEXT DEFAULT NULL');
+
+  // Manual contacted override (May 2026). The "contacted" flag is normally
+  // computed from notes/emails_sent/call_logs. This column lets Jordan
+  // manually mark a lead as contacted (e.g. after saving a draft) without
+  // needing a note/email/call row.
+  addColumnIfMissing(db, 'leads', 'manually_contacted', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 /**

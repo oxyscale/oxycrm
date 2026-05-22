@@ -117,6 +117,18 @@ export default function LeadsPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
 
+  const handleMarkContacted = async (leadId: number) => {
+    try {
+      await api.markLeadContacted(leadId, true);
+      // Remove from local list so it disappears instantly
+      setLeads((prev) => prev.map((l) =>
+        l.id === leadId ? { ...l, contacted: true, manuallyContacted: true } : l
+      ));
+    } catch (err) {
+      console.error('Failed to mark lead as contacted:', err);
+    }
+  };
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -319,9 +331,16 @@ export default function LeadsPage() {
                       Contacted
                     </span>
                   ) : (
-                    <span className="bg-[rgba(239,68,68,0.08)] text-[#ef4444] text-xs px-2.5 py-1 rounded-full whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMarkContacted(lead.id);
+                      }}
+                      className="bg-[rgba(239,68,68,0.08)] text-[#ef4444] text-xs px-2.5 py-1 rounded-full whitespace-nowrap hover:bg-[rgba(16,185,129,0.1)] hover:text-[#10b981] transition-colors cursor-pointer"
+                    >
                       Not Contacted
-                    </span>
+                    </button>
                   )}
                 </td>
               </tr>

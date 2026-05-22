@@ -344,6 +344,14 @@ export async function updateLead(
   });
 }
 
+/** Toggle the manual contacted flag on a lead */
+export async function markLeadContacted(id: number, contacted: boolean): Promise<Lead> {
+  return request<Lead>(`/leads/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ manuallyContacted: contacted }),
+  });
+}
+
 export async function disposeLead(
   payload: DispositionPayload
 ): Promise<(Lead & { callLogId: number | null }) | { deleted: true; id: number }> {
