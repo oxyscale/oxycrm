@@ -245,31 +245,27 @@ export default function ReportsPage() {
         </div>
       ) : data ? (
         <>
-          {/* KPI strip — row 1 */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+          {/* KPI strip */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             <KpiCard
               icon={<DollarSign size={14} />}
               label="Pipeline value"
               value={formatAUD(data.summary.totalPipelineValue)}
-              sub={`${data.summary.totalPipelineCount} active leads`}
+              sub={`${data.summary.totalPipelineCount} active`}
               accent
             />
             <KpiCard
               icon={<Users size={14} />}
               label="New leads"
               value={String(data.summary.newLeadCount)}
-              sub="added in window"
+              sub="in window"
             />
             <KpiCard
               icon={<PhoneCall size={14} />}
               label="Contacted"
-              value={`${data.summary.totalContactedCount} / ${data.summary.totalLeadCount}`}
-              sub={`${data.summary.conversionRate}% of ecosystem`}
+              value={String(data.summary.contactedCount)}
+              sub="in window"
             />
-          </div>
-
-          {/* KPI strip — row 2 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <KpiCard
               icon={<ClipboardList size={14} />}
               label="Tasks set"
@@ -278,10 +274,14 @@ export default function ReportsPage() {
             />
             <KpiCard
               icon={<CheckSquare size={14} />}
-              label="Tasks completed"
+              label="Tasks done"
               value={String(data.summary.tasksCompleted)}
               sub="in window"
             />
+          </div>
+
+          {/* Won / Lost */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
             <KpiCard
               icon={<Trophy size={14} />}
               label="Won"

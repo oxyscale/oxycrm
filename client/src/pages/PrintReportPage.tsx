@@ -154,36 +154,36 @@ export default function PrintReportPage() {
           </p>
 
           {/* ── KPI Strip ────────────────────────────────────── */}
-          <div className="grid grid-cols-3 gap-4 mb-10">
+          <div className="grid grid-cols-5 gap-3 mb-6">
             <KpiCard
               label="Pipeline Value"
               value={formatAUD(s.totalPipelineValue)}
-              sub={`${s.totalPipelineCount} active leads`}
+              sub={`${s.totalPipelineCount} active`}
               accent
             />
             <KpiCard
               label="New Leads"
               value={String(s.newLeadCount)}
-              sub="added in period"
+              sub="in period"
             />
             <KpiCard
               label="Contacted"
-              value={`${s.totalContactedCount} / ${s.totalLeadCount}`}
-              sub={`${s.conversionRate}% of ecosystem`}
+              value={String(s.contactedCount)}
+              sub="in period"
             />
-          </div>
-
-          <div className="grid grid-cols-4 gap-4 mb-10">
             <KpiCard
               label="Tasks Set"
               value={String(s.tasksCreated)}
               sub="in period"
             />
             <KpiCard
-              label="Tasks Completed"
+              label="Tasks Done"
               value={String(s.tasksCompleted)}
               sub="in period"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-10">
             <KpiCard
               label="Won"
               value={`${s.wonCount}`}
