@@ -1022,9 +1022,9 @@ export default function LeadProfilePage() {
                           {activityIcon(act.type)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-ink text-sm font-medium">{act.title}</p>
+                          <p className="text-ink-dim text-xs">{act.title}</p>
                           {act.description && (
-                            <p className="text-ink-muted text-sm mt-1 leading-relaxed">
+                            <p className="text-ink text-sm font-medium mt-0.5 leading-relaxed">
                               {humaniseDates(act.description)}
                             </p>
                           )}
