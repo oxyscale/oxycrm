@@ -217,22 +217,29 @@ export function initializeDatabase(db: Database.Database): void {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // Pipeline simplification (May 2026): collapse 7+ stages into
-  // three tiers + two outcomes (won, lost). Idempotent — runs every
-  // boot but only touches rows still on the legacy values.
-  //   new_lead       -> tier_3   (cold / freshly imported, never engaged)
-  //   follow_up      -> tier_2   (we're working on them)
-  //   call_booked    -> tier_1   (close to closing)
-  //   negotiation    -> tier_1   (close to closing)
-  //   not_interested -> lost
-  //   five_strikes   -> lost     (couldn't reach after N attempts)
-  //   won / lost     -> unchanged
+  // Pipeline simplification (May 2026): collapse legacy stages.
+  // new_lead is NO LONGER migrated — it was causing CSV imports to
+  // be auto-placed into tier_3. Legacy new_lead rows are now set to
+  // NULL (no tier) instead.
   // ─────────────────────────────────────────────────────────────────
   db.exec(`
-    UPDATE leads SET pipeline_stage = 'tier_3' WHERE pipeline_stage = 'new_lead';
+    UPDATE leads SET pipeline_stage = NULL  WHERE pipeline_stage = 'new_lead';
     UPDATE leads SET pipeline_stage = 'tier_2' WHERE pipeline_stage = 'follow_up';
     UPDATE leads SET pipeline_stage = 'tier_1' WHERE pipeline_stage IN ('call_booked', 'negotiation');
     UPDATE leads SET pipeline_stage = 'lost'   WHERE pipeline_stage IN ('not_interested', 'five_strikes');
+  `);
+
+  // ─────────────────────────────────────────────────────────────────
+  // One-time cleanup (May 2026): revert CSV-imported leads that were
+  // incorrectly auto-tiered to tier_3. A lead is "uncontacted" if it
+  // has no notes, emails, or call logs — those are the CSV imports.
+  // ─────────────────────────────────────────────────────────────────
+  db.exec(`
+    UPDATE leads SET pipeline_stage = NULL
+    WHERE pipeline_stage = 'tier_3'
+      AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
+      AND NOT EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
+      AND NOT EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id);
   `);
 
   // Add temperature column
