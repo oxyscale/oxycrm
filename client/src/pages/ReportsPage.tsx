@@ -68,9 +68,17 @@ function defaultRange(): { from: string; to: string } {
 }
 
 // Quick-pick range options
-function rangeForPreset(preset: 'today' | 'week' | 'fortnight' | 'month' | 'quarter') {
+function rangeForPreset(preset: 'today' | 'week' | 'fortnight' | 'month' | 'quarter' | 'mtd' | 'ytd') {
   const today = new Date();
   const to = today.toISOString().split('T')[0];
+  if (preset === 'mtd') {
+    const from = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+    return { from, to };
+  }
+  if (preset === 'ytd') {
+    const from = `${today.getFullYear()}-01-01`;
+    return { from, to };
+  }
   const days = preset === 'today' ? 0 : preset === 'week' ? 7 : preset === 'fortnight' ? 14 : preset === 'month' ? 30 : 90;
   const from = new Date(today.getTime() - days * 24 * 60 * 60 * 1000)
     .toISOString()
@@ -187,6 +195,8 @@ export default function ReportsPage() {
               { key: 'fortnight', label: '14 days' },
               { key: 'month', label: '30 days' },
               { key: 'quarter', label: '90 days' },
+              { key: 'mtd', label: 'MTD' },
+              { key: 'ytd', label: 'YTD' },
             ] as const).map((p) => (
               <button
                 key={p.key}
