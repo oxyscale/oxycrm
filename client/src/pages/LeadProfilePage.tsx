@@ -891,17 +891,22 @@ export default function LeadProfilePage() {
               into one calendar event. */}
           <div className="mb-3">
             <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Quick</p>
-            <button
-              type="button"
-              onClick={() => setTaskLabel('Touch Base')}
-              className={`text-sm rounded-full px-4 py-1.5 border transition-all ${
-                taskLabel === 'Touch Base'
-                  ? 'bg-sky-wash border-sky-hair text-sky-ink'
-                  : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
-              }`}
-            >
-              Touch Base
-            </button>
+            <div className="flex flex-wrap gap-2">
+            {['Touch Base', 'Send Proposal', 'Send Summary'].map((label) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setTaskLabel(label)}
+                className={`text-sm rounded-full px-4 py-1.5 border transition-all ${
+                  taskLabel === label
+                    ? 'bg-sky-wash border-sky-hair text-sky-ink'
+                    : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-[1fr_180px] gap-3 mb-4">
