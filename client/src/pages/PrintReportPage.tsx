@@ -177,7 +177,7 @@ export default function PrintReportPage() {
               sub="in period"
             />
             <KpiCard
-              label="Tasks Done"
+              label="Tasks Completed"
               value={String(s.tasksCompleted)}
               sub="in period"
             />

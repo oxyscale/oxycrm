@@ -274,7 +274,7 @@ export default function ReportsPage() {
             />
             <KpiCard
               icon={<CheckSquare size={14} />}
-              label="Tasks done"
+              label="Tasks completed"
               value={String(data.summary.tasksCompleted)}
               sub="in window"
             />
