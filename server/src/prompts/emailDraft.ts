@@ -33,7 +33,7 @@ export function buildEmailDraftPrompt(params: {
   const calLink = calendlyLink || 'https://calendly.com/jordan-oxyscale/30min';
   const calDuration = calendlyDuration || '30';
   const signOffText = signOff || 'Cheers';
-  const companyDesc = companyDescription || 'AI & Automation consultancy';
+  const companyDesc = companyDescription || 'helps businesses centralise fragmented data into one view, with a custom layer and monitoring that drives decisions based on the data';
 
   if (emailType === 'call_booked') {
     return `You are Jordan Bell from OxyScale (${companyDesc}, based in Australia). You just had a call with ${leadName}${company ? ` at ${company}` : ''} and a meeting has been booked.

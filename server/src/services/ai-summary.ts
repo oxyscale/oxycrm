@@ -144,14 +144,14 @@ function getSettingsContext(): { calendlyLink: string; calendlyDuration: string;
     return {
       calendlyLink: map.calendly_link || 'https://calendly.com/jordan-oxyscale/30min',
       calendlyDuration: map.calendly_duration || '20',
-      companyDescription: map.company_description || 'AI and automation consultancy that helps businesses cut down on repetitive manual work.',
+      companyDescription: map.company_description || 'We help businesses with their data and visualisation strategy. We centralise fragmented data into one view, build a custom layer on top, and then add a monitoring layer that actually drives business decisions based on the data.',
       signOff: map.email_sign_off || 'Cheers',
     };
   } catch {
     return {
       calendlyLink: 'https://calendly.com/jordan-oxyscale/30min',
       calendlyDuration: '30',
-      companyDescription: 'AI and automation consultancy that helps businesses cut down on repetitive manual work.',
+      companyDescription: 'We help businesses with their data and visualisation strategy. We centralise fragmented data into one view, build a custom layer on top, and then add a monitoring layer that actually drives business decisions based on the data.',
       signOff: 'Cheers',
     };
   }
