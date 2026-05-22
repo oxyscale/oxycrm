@@ -40,6 +40,8 @@ export default function LeadsPage() {
   const searchWrapperRef = useRef<HTMLDivElement>(null);
 
   // Sync filter state to URL params (replace, not push — avoids polluting history)
+  // Also stash the full URL in sessionStorage so other pages (Compose, etc.)
+  // can redirect back here with the same filters after completing an action.
   const syncParams = useCallback(() => {
     const params = new URLSearchParams();
     if (search) params.set('q', search);
@@ -48,6 +50,11 @@ export default function LeadsPage() {
     if (sortField !== 'queuePosition') params.set('sort', sortField);
     if (sortDir !== 'asc') params.set('dir', sortDir);
     setSearchParams(params, { replace: true });
+    // Remember this URL for "return to leads" after actions
+    const qs = params.toString();
+    try {
+      sessionStorage.setItem('leads-return-url', `/leads${qs ? `?${qs}` : ''}`);
+    } catch { /* ignore */ }
   }, [search, filterCategory, filterContacted, sortField, sortDir, setSearchParams]);
 
   useEffect(() => {

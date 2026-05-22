@@ -266,7 +266,7 @@ export default function ComposeEmailPage() {
       }
 
       setSent(true);
-      setTimeout(() => navigate('/email-bank'), 2000);
+      setTimeout(() => navigate(getReturnUrl()), 1500);
     } catch (err) {
       console.error('Save to drafts failed:', err);
       setSending(false);
@@ -303,6 +303,16 @@ export default function ComposeEmailPage() {
     );
   }
 
+  // Where to go after completing an action — back to the leads list
+  // with whatever filters were active (stored by LeadsPage).
+  const getReturnUrl = () => {
+    try {
+      return sessionStorage.getItem('leads-return-url') || '/leads?status=not_contacted';
+    } catch {
+      return '/leads?status=not_contacted';
+    }
+  };
+
   // Success state
   if (sent) {
     return (
@@ -311,7 +321,7 @@ export default function ComposeEmailPage() {
           <Inbox size={24} className="text-sky-ink" />
         </div>
         <p className="text-ink font-bold text-lg">Saved to Email Bank</p>
-        <p className="text-ink-dim text-sm">Redirecting to Email Bank...</p>
+        <p className="text-ink-dim text-sm">Back to leads...</p>
       </div>
     );
   }
