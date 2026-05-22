@@ -886,47 +886,46 @@ export default function LeadProfilePage() {
             </button>
           </div>
 
-          {/* Quick action — Touch Base fills the label and lets Jordan
-              just pick a date. Multiple leads on the same day get merged
-              into one calendar event. */}
-          <div className="mb-3">
-            <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Quick</p>
-            <div className="flex flex-wrap gap-2">
-            {['Touch Base', 'Send Proposal', 'Send Summary'].map((label) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setTaskLabel(label)}
-                className={`text-sm rounded-full px-4 py-1.5 border transition-all ${
-                  taskLabel === label
-                    ? 'bg-sky-wash border-sky-hair text-sky-ink'
-                    : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-[1fr_180px] gap-3 mb-4">
-            <div>
-              <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Task</p>
-              <input
-                type="text"
-                value={taskLabel}
-                onChange={(e) => setTaskLabel(e.target.value)}
-                placeholder="e.g. Follow up in July"
-                className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all"
-              />
-            </div>
+          {/* Due date first, then quick picks, then custom label — all close together */}
+          <div className="flex flex-wrap items-end gap-3 mb-4">
             <div>
               <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Due date</p>
               <input
                 type="date"
                 value={taskDate}
                 onChange={(e) => setTaskDate(e.target.value)}
-                className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all [color-scheme:light]"
+                className="bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all [color-scheme:light]"
+              />
+            </div>
+
+            <div>
+              <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Quick</p>
+              <div className="flex gap-2">
+                {['Touch Base', 'Send Proposal', 'Send Summary'].map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setTaskLabel(label)}
+                    className={`text-sm rounded-full px-4 py-1.5 border transition-all whitespace-nowrap ${
+                      taskLabel === label
+                        ? 'bg-sky-wash border-sky-hair text-sky-ink'
+                        : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 min-w-[180px]">
+              <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Or custom</p>
+              <input
+                type="text"
+                value={taskLabel}
+                onChange={(e) => setTaskLabel(e.target.value)}
+                placeholder="e.g. Follow up in July"
+                className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all"
               />
             </div>
           </div>
