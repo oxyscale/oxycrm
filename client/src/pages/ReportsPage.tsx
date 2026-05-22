@@ -333,10 +333,9 @@ export default function ReportsPage() {
             {/* Expanded tier leads */}
             {expandedTier && data.pipelineLeads.filter((l) => l.tier === expandedTier).length > 0 && (
               <div className="mt-4 bg-paper border border-hair-soft rounded-xl overflow-hidden">
-                <div className="grid grid-cols-[1fr_100px_70px] gap-3 px-4 py-2.5 bg-tray text-ink-dim text-[11px] uppercase tracking-wider font-medium">
+                <div className="grid grid-cols-[1fr_100px] gap-3 px-4 py-2.5 bg-tray text-ink-dim text-[11px] uppercase tracking-wider font-medium">
                   <span>Lead</span>
                   <span className="text-right">Value</span>
-                  <span className="text-center">Status</span>
                 </div>
                 {data.pipelineLeads
                   .filter((l) => l.tier === expandedTier)
@@ -344,7 +343,7 @@ export default function ReportsPage() {
                     <button
                       key={l.id}
                       onClick={() => navigate(`/leads/${l.id}`)}
-                      className={`w-full text-left grid grid-cols-[1fr_100px_70px] gap-3 px-4 py-3 hover:bg-tray transition-all items-center ${
+                      className={`w-full text-left grid grid-cols-[1fr_100px] gap-3 px-4 py-3 hover:bg-tray transition-all items-center ${
                         idx > 0 ? 'border-t border-hair-soft' : ''
                       }`}
                     >
@@ -364,15 +363,6 @@ export default function ReportsPage() {
                       </div>
                       <span className="text-ink text-sm font-medium text-right">
                         {l.dealValue ? formatAUD(l.dealValue) : <span className="text-ink-dim font-normal">--</span>}
-                      </span>
-                      <span className="text-center">
-                        <span className={`text-[10px] font-mono font-semibold uppercase tracking-[0.12em] px-2 py-0.5 rounded-full ${
-                          l.contacted
-                            ? 'bg-[rgba(16,185,129,0.08)] text-ok'
-                            : 'bg-[rgba(239,68,68,0.06)] text-risk'
-                        }`}>
-                          {l.contacted ? 'Yes' : 'No'}
-                        </span>
                       </span>
                     </button>
                   ))}
