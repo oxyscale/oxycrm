@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Phone,
@@ -243,6 +243,7 @@ function InlineEdit({
 export default function LeadProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const leadId = Number(id);
 
   // Core data
@@ -250,8 +251,18 @@ export default function LeadProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Tab state
-  const [tab, setTab] = useState<Tab>('activity');
+  // Tab state — restored from URL params
+  const [tab, setTab] = useState<Tab>(
+    (searchParams.get('tab') as Tab) || 'activity'
+  );
+
+  // Sync tab to URL
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    if (tab !== 'activity') params.set('tab', tab);
+    else params.delete('tab');
+    setSearchParams(params, { replace: true });
+  }, [tab]);
 
   // Activity tab
   const [activities, setActivities] = useState<Activity[]>([]);

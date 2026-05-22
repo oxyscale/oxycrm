@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Kanban,
   Filter,
@@ -40,6 +40,7 @@ const STAGES: StageColumn[] = [
 
 export default function PipelinePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Data state
   const [pipeline, setPipeline] = useState<Record<string, Lead[]>>({});
@@ -53,8 +54,15 @@ export default function PipelinePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filter state
-  const [filterCategory, setFilterCategory] = useState('all');
+  // Filter state — restored from URL params
+  const [filterCategory, setFilterCategory] = useState(searchParams.get('cat') || 'all');
+
+  // Sync filter to URL
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filterCategory !== 'all') params.set('cat', filterCategory);
+    setSearchParams(params, { replace: true });
+  }, [filterCategory, setSearchParams]);
 
   // Stage move dropdown state
   const [openMoveDropdown, setOpenMoveDropdown] = useState<number | null>(null);

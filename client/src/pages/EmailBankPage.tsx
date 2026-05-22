@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Mail,
   Send,
@@ -28,11 +28,21 @@ type StatusFilter = 'ready' | 'pending' | 'failed' | 'all';
 
 export default function EmailBankPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [drafts, setDrafts] = useState<EmailDraftWithLead[]>([]);
   const [stats, setStats] = useState({ ready: 0, pending: 0, failed: 0, sentLast24h: 0 });
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<StatusFilter>('ready');
+  const [filter, setFilter] = useState<StatusFilter>(
+    (searchParams.get('filter') as StatusFilter) || 'ready'
+  );
+
+  // Sync filter to URL
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filter !== 'ready') params.set('filter', filter);
+    setSearchParams(params, { replace: true });
+  }, [filter, setSearchParams]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   // Review panel state (edits to the selected draft)

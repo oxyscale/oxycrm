@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Loader2,
   CheckCircle2,
@@ -16,10 +16,12 @@ type FilterTab = 'overdue' | 'due_today' | 'upcoming' | 'completed';
 
 export default function TasksPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tasks, setTasks] = useState<TaskWithLead[]>([]);
   const [stats, setStats] = useState<TaskStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<FilterTab>('overdue');
+  const initialTab = (searchParams.get('tab') as FilterTab) || null;
+  const [activeTab, setActiveTab] = useState<FilterTab>(initialTab || 'overdue');
   const [completingId, setCompletingId] = useState<number | null>(null);
 
   const today = new Date().toISOString().split('T')[0];
@@ -33,21 +35,30 @@ export default function TasksPage() {
       setTasks(allTasks);
       setStats(taskStats);
 
-      // Auto-select first non-empty tab
-      if (taskStats.overdue > 0) setActiveTab('overdue');
-      else if (taskStats.dueToday > 0) setActiveTab('due_today');
-      else if (taskStats.upcoming > 0) setActiveTab('upcoming');
-      else setActiveTab('completed');
+      // Auto-select first non-empty tab only if no URL param was set
+      if (!initialTab) {
+        if (taskStats.overdue > 0) setActiveTab('overdue');
+        else if (taskStats.dueToday > 0) setActiveTab('due_today');
+        else if (taskStats.upcoming > 0) setActiveTab('upcoming');
+        else setActiveTab('completed');
+      }
     } catch (err) {
       console.error('Failed to load tasks:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialTab]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Sync active tab to URL params
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (activeTab !== 'overdue') params.set('tab', activeTab);
+    setSearchParams(params, { replace: true });
+  }, [activeTab, setSearchParams]);
 
   const handleComplete = async (taskId: number) => {
     setCompletingId(taskId);

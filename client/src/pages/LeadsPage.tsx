@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search,
   ArrowUpDown,
@@ -19,16 +19,40 @@ type SortDir = 'asc' | 'desc';
 
 export default function LeadsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Restore filter state from URL params (so back-button preserves filters)
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [filterContacted, setFilterContacted] = useState<'all' | 'contacted' | 'not_contacted'>('all');
-  const [sortField, setSortField] = useState<SortField>('queuePosition');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [search, setSearch] = useState(searchParams.get('q') || '');
+  const [filterCategory, setFilterCategory] = useState<string>(searchParams.get('cat') || 'all');
+  const [filterContacted, setFilterContacted] = useState<'all' | 'contacted' | 'not_contacted'>(
+    (searchParams.get('status') as 'all' | 'contacted' | 'not_contacted') || 'all'
+  );
+  const [sortField, setSortField] = useState<SortField>(
+    (searchParams.get('sort') as SortField) || 'queuePosition'
+  );
+  const [sortDir, setSortDir] = useState<SortDir>(
+    (searchParams.get('dir') as SortDir) || 'asc'
+  );
   const [searchFocused, setSearchFocused] = useState(false);
   const [recentLeads, setRecentLeads] = useState<RecentLead[]>([]);
   const searchWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Sync filter state to URL params (replace, not push — avoids polluting history)
+  const syncParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (search) params.set('q', search);
+    if (filterCategory !== 'all') params.set('cat', filterCategory);
+    if (filterContacted !== 'all') params.set('status', filterContacted);
+    if (sortField !== 'queuePosition') params.set('sort', sortField);
+    if (sortDir !== 'asc') params.set('dir', sortDir);
+    setSearchParams(params, { replace: true });
+  }, [search, filterCategory, filterContacted, sortField, sortDir, setSearchParams]);
+
+  useEffect(() => {
+    syncParams();
+  }, [syncParams]);
 
   useEffect(() => {
     loadLeads();
