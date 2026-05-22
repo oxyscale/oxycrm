@@ -570,6 +570,9 @@ export function initializeDatabase(db: Database.Database): void {
   if (catCount === 0) {
     db.prepare("INSERT INTO categories (name) VALUES ('Recruitment')").run();
   }
+
+  // Ensure "Miller Leith Network" category exists (added May 2026)
+  db.prepare("INSERT OR IGNORE INTO categories (name) VALUES ('Miller Leith Network')").run();
 }
 
 /**
