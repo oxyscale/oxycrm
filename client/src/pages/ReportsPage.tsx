@@ -313,21 +313,34 @@ export default function ReportsPage() {
           {/* Tier breakdown — clickable to expand leads */}
           <Section title="Pipeline by tier" icon={<TrendingUp size={14} />}>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {data.byTier.filter((t) => ['pulse', 'tier_1', 'tier_2', 'tier_3'].includes(t.tier)).map((t) => (
-                <button
-                  key={t.tier}
-                  onClick={() => t.count > 0 && toggleTier(t.tier)}
-                  className={`text-left bg-paper border rounded-xl p-4 transition-all ${
-                    expandedTier === t.tier
-                      ? 'border-sky ring-1 ring-sky-hair'
-                      : 'border-hair-soft hover:border-hair-strong'
-                  } ${t.count > 0 ? 'cursor-pointer' : 'cursor-default'}`}
-                >
-                  <p className="text-ink-dim text-[11px] uppercase tracking-wider">{t.label}</p>
-                  <p className="text-ink text-2xl font-medium mt-1">{t.count}</p>
-                  <p className="text-ink-muted text-xs mt-1">{formatAUD(t.totalValue)}</p>
-                </button>
-              ))}
+              {data.byTier.filter((t) => ['tier_1', 'tier_2', 'tier_3', 'pulse'].includes(t.tier))
+                .sort((a, b) => {
+                  const order = ['tier_1', 'tier_2', 'tier_3', 'pulse'];
+                  return order.indexOf(a.tier) - order.indexOf(b.tier);
+                })
+                .map((t) => {
+                  const weight = ({ tier_1: '75%', tier_2: '30%', tier_3: '10%', pulse: '5%' } as Record<string, string>)[t.tier];
+                  return (
+                    <button
+                      key={t.tier}
+                      onClick={() => t.count > 0 && toggleTier(t.tier)}
+                      className={`relative text-left bg-paper border rounded-xl p-4 transition-all ${
+                        expandedTier === t.tier
+                          ? 'border-sky ring-1 ring-sky-hair'
+                          : 'border-hair-soft hover:border-hair-strong'
+                      } ${t.count > 0 ? 'cursor-pointer' : 'cursor-default'}`}
+                    >
+                      {weight && (
+                        <span className="absolute top-3 right-3 text-ink-faint text-[10px] font-mono tracking-wider">
+                          {weight}
+                        </span>
+                      )}
+                      <p className="text-ink-dim text-[11px] uppercase tracking-wider">{t.label}</p>
+                      <p className="text-ink text-2xl font-medium mt-1">{t.count}</p>
+                      <p className="text-ink-muted text-xs mt-1">{formatAUD(t.totalValue)}</p>
+                    </button>
+                  );
+                })}
             </div>
 
             {/* Expanded tier leads */}

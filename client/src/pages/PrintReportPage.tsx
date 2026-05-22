@@ -211,12 +211,23 @@ export default function PrintReportPage() {
             <SectionLabel>Pipeline by Tier</SectionLabel>
             <div className="grid grid-cols-4 gap-3 mb-6">
               {data.byTier
-                .filter((b) => ['pulse', 'tier_1', 'tier_2', 'tier_3'].includes(b.tier))
-                .map((b) => (
+                .filter((b) => ['tier_1', 'tier_2', 'tier_3', 'pulse'].includes(b.tier))
+                .sort((a, b2) => {
+                  const order = ['tier_1', 'tier_2', 'tier_3', 'pulse'];
+                  return order.indexOf(a.tier) - order.indexOf(b2.tier);
+                })
+                .map((b) => {
+                  const weight = ({ tier_1: '75%', tier_2: '30%', tier_3: '10%', pulse: '5%' } as Record<string, string>)[b.tier];
+                  return (
                   <div
                     key={b.tier}
-                    className="border border-[rgba(11,13,14,0.06)] rounded-lg px-4 py-3"
+                    className="relative border border-[rgba(11,13,14,0.06)] rounded-lg px-4 py-3"
                   >
+                    {weight && (
+                      <span className="absolute top-2.5 right-3 text-[10px] text-[#b8bfc6] font-mono tracking-wider">
+                        {weight}
+                      </span>
+                    )}
                     <p className="text-[10px] text-[#8a95a0] font-mono uppercase tracking-[0.22em] font-semibold mb-1">
                       {b.label}
                     </p>
@@ -227,7 +238,8 @@ export default function PrintReportPage() {
                       </span>
                     </p>
                   </div>
-                ))}
+                  );
+                })}
             </div>
           </div>
 
