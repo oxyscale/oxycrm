@@ -89,8 +89,8 @@ export default function PrintReportPage() {
       {/* Print-specific styles */}
       <style>{`
         @media print {
-          @page { size: A4; margin: 16mm 14mm; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          @page { size: A4; margin: 0; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; }
           .no-print { display: none !important; }
           .page-break { page-break-before: always; }
           .print-show-note { display: block !important; }
@@ -116,7 +116,7 @@ export default function PrintReportPage() {
           </button>
         </div>
 
-        <div className="px-8 py-10">
+        <div className="px-8 py-10 print:px-[14mm] print:py-[16mm]">
           {/* ── Header ───────────────────────────────────────── */}
           <div className="flex items-start justify-between mb-2">
             <div>
