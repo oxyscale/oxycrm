@@ -306,7 +306,9 @@ export default function ReportsPage() {
                 >
                   <p className="text-ink-dim text-[11px] uppercase tracking-wider">{t.label}</p>
                   <p className="text-ink text-2xl font-medium mt-1">{t.count}</p>
-                  <p className="text-ink-muted text-xs mt-1">{formatAUD(t.totalValue)}</p>
+                  {t.tier !== 'pulse' && (
+                    <p className="text-ink-muted text-xs mt-1">{formatAUD(t.totalValue)}</p>
+                  )}
                 </div>
               ))}
             </div>

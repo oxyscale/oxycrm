@@ -214,9 +214,11 @@ export default function PrintReportPage() {
                     </p>
                     <p className="text-[20px] font-semibold text-[#0b0d0e] tracking-[-0.02em]">
                       {b.count}
-                      <span className="text-[14px] text-[#55606a] font-normal ml-2">
-                        {formatAUD(b.totalValue)}
-                      </span>
+                      {b.tier !== 'pulse' && (
+                        <span className="text-[14px] text-[#55606a] font-normal ml-2">
+                          {formatAUD(b.totalValue)}
+                        </span>
+                      )}
                     </p>
                   </div>
                 ))}

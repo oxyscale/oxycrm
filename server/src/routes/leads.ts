@@ -204,19 +204,20 @@ router.get('/', (req, res, next) => {
     }
 
     // Contacted filter: a lead is "contacted" if it has any notes,
-    // emails, call logs, or tasks, OR if manually_contacted is set.
-    // This lets Jordan separate CSV-imported leads from ones he's
-    // actually engaged with.
+    // emails, call logs, or tasks, OR if manually_contacted is set,
+    // OR if the lead is in Pulse (pulse = spoken to by definition).
     if (contacted === 'true') {
       query += ` AND (
-        leads.manually_contacted = 1
+        leads.pipeline_stage = 'pulse'
+        OR leads.manually_contacted = 1
         OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = leads.id)
       )`;
     } else if (contacted === 'false') {
-      query += ` AND leads.manually_contacted = 0
+      query += ` AND leads.pipeline_stage != 'pulse'
+        AND leads.manually_contacted = 0
         AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
         AND NOT EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
         AND NOT EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
@@ -230,9 +231,11 @@ router.get('/', (req, res, next) => {
 
     // Compute "contacted" flag for each lead so the frontend can
     // show a pill without making extra queries per lead.
+    // Pulse leads are always contacted by definition.
     const contactedStmt = db.prepare(`
       SELECT CASE WHEN (
         ? = 1
+        OR ? = 1
         OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = ?)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = ?)
@@ -242,7 +245,8 @@ router.get('/', (req, res, next) => {
 
     for (const lead of leads) {
       const mc = lead.manuallyContacted ? 1 : 0;
-      const result = contactedStmt.get(mc, lead.id, lead.id, lead.id, lead.id) as { contacted: number };
+      const isPulse = lead.pipelineStage === 'pulse' ? 1 : 0;
+      const result = contactedStmt.get(mc, isPulse, lead.id, lead.id, lead.id, lead.id) as { contacted: number };
       lead.contacted = result.contacted === 1;
     }
 
@@ -667,16 +671,17 @@ router.get('/:id', (req, res, next) => {
     const lead = mapLeadRow(leadRow);
     const callLogs = callLogRows.map(mapCallLogRow);
 
-    // Compute contacted flag (includes manual override)
+    // Compute contacted flag (includes manual override + pulse = always contacted)
     const contactedResult = db.prepare(`
       SELECT CASE WHEN (
         ? = 1
+        OR ? = 1
         OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = ?)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = ?)
         OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = ?)
       ) THEN 1 ELSE 0 END AS contacted
-    `).get(lead.manuallyContacted ? 1 : 0, id, id, id, id) as { contacted: number };
+    `).get(lead.manuallyContacted ? 1 : 0, lead.pipelineStage === 'pulse' ? 1 : 0, id, id, id, id) as { contacted: number };
     lead.contacted = contactedResult.contacted === 1;
 
     res.json({

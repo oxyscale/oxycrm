@@ -153,10 +153,12 @@ router.get('/', (req, res, next) => {
     `).get(catParam) as { n: number }).n;
 
     // Total leads ever contacted (not window-scoped)
+    // Pulse leads are always contacted by definition
     const totalContactedCount = (db.prepare(`
       SELECT COUNT(*) AS n FROM leads
       WHERE (
-        manually_contacted = 1
+        pipeline_stage = 'pulse'
+        OR manually_contacted = 1
         OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
@@ -196,6 +198,8 @@ router.get('/', (req, res, next) => {
 
     // Determine contacted status for each pipeline lead
     const pipelineLeadsWithContacted = pipelineLeads.map((lead) => {
+      // Pulse leads are always contacted by definition
+      if (lead.tier === 'pulse') return { ...lead, contacted: true };
       if (lead.manuallyContacted === 1) return { ...lead, contacted: true };
       const hasActivity = (db.prepare(`
         SELECT 1 FROM notes WHERE lead_id = ?
