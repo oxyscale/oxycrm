@@ -14,7 +14,7 @@
 // share, or read off live during the meeting.
 // ============================================================
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -94,6 +94,11 @@ function rangeForPreset(preset: 'today' | 'week' | 'fortnight' | 'month' | 'quar
 export default function ReportsPage() {
   const navigate = useNavigate();
   const initialRange = defaultRange();
+
+  const [expandedTier, setExpandedTier] = useState<string | null>(null);
+  const toggleTier = useCallback((tier: string) => {
+    setExpandedTier((prev) => (prev === tier ? null : tier));
+  }, []);
 
   const [from, setFrom] = useState<string>(initialRange.from);
   const [to, setTo] = useState<string>(initialRange.to);
@@ -305,43 +310,73 @@ export default function ReportsPage() {
             />
           </div>
 
-          {/* Tier breakdown — active pipeline only */}
+          {/* Tier breakdown — clickable to expand leads */}
           <Section title="Pipeline by tier" icon={<TrendingUp size={14} />}>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {data.byTier.filter((t) => ['pulse', 'tier_1', 'tier_2', 'tier_3'].includes(t.tier)).map((t) => (
-                <div
+                <button
                   key={t.tier}
-                  className="bg-paper border border-hair-soft rounded-xl p-4"
+                  onClick={() => t.count > 0 && toggleTier(t.tier)}
+                  className={`text-left bg-paper border rounded-xl p-4 transition-all ${
+                    expandedTier === t.tier
+                      ? 'border-sky ring-1 ring-sky-hair'
+                      : 'border-hair-soft hover:border-hair-strong'
+                  } ${t.count > 0 ? 'cursor-pointer' : 'cursor-default'}`}
                 >
                   <p className="text-ink-dim text-[11px] uppercase tracking-wider">{t.label}</p>
                   <p className="text-ink text-2xl font-medium mt-1">{t.count}</p>
                   <p className="text-ink-muted text-xs mt-1">{formatAUD(t.totalValue)}</p>
-                </div>
+                </button>
               ))}
             </div>
-          </Section>
 
-          {/* New leads in window */}
-          <Section
-            title={`New leads (${data.newLeads.length})`}
-            icon={<Users size={14} />}
-          >
-            {data.newLeads.length === 0 ? (
-              <EmptyRow text="No new leads in this window." />
-            ) : (
-              <LeadTable
-                rows={data.newLeads.map((l) => ({
-                  id: l.id,
-                  name: l.name,
-                  company: l.company,
-                  category: l.category,
-                  tier: l.tier,
-                  dealValue: l.dealValue,
-                  whenLabel: formatLongDate(l.createdAt.split('T')[0]),
-                }))}
-                whenColumn="Added"
-                onOpen={(id) => navigate(`/leads/${id}`)}
-              />
+            {/* Expanded tier leads */}
+            {expandedTier && data.pipelineLeads.filter((l) => l.tier === expandedTier).length > 0 && (
+              <div className="mt-4 bg-paper border border-hair-soft rounded-xl overflow-hidden">
+                <div className="grid grid-cols-[1fr_100px_70px] gap-3 px-4 py-2.5 bg-tray text-ink-dim text-[11px] uppercase tracking-wider font-medium">
+                  <span>Lead</span>
+                  <span className="text-right">Value</span>
+                  <span className="text-center">Status</span>
+                </div>
+                {data.pipelineLeads
+                  .filter((l) => l.tier === expandedTier)
+                  .map((l, idx) => (
+                    <button
+                      key={l.id}
+                      onClick={() => navigate(`/leads/${l.id}`)}
+                      className={`w-full text-left grid grid-cols-[1fr_100px_70px] gap-3 px-4 py-3 hover:bg-tray transition-all items-center ${
+                        idx > 0 ? 'border-t border-hair-soft' : ''
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-ink text-sm font-medium truncate">{l.name}</p>
+                        {l.company && (
+                          <p className="text-ink-muted text-xs truncate flex items-center gap-1.5">
+                            <Building2 size={10} className="text-ink-dim flex-shrink-0" />
+                            <span className="truncate">{l.company}</span>
+                          </p>
+                        )}
+                        {l.latestNote && (
+                          <p className="text-ink-dim text-xs mt-0.5 truncate max-w-[400px]">
+                            {l.latestNote.slice(0, 80)}{l.latestNote.length > 80 ? '...' : ''}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-ink text-sm font-medium text-right">
+                        {l.dealValue ? formatAUD(l.dealValue) : <span className="text-ink-dim font-normal">--</span>}
+                      </span>
+                      <span className="text-center">
+                        <span className={`text-[10px] font-mono font-semibold uppercase tracking-[0.12em] px-2 py-0.5 rounded-full ${
+                          l.contacted
+                            ? 'bg-[rgba(16,185,129,0.08)] text-ok'
+                            : 'bg-[rgba(239,68,68,0.06)] text-risk'
+                        }`}>
+                          {l.contacted ? 'Yes' : 'No'}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+              </div>
             )}
           </Section>
 
