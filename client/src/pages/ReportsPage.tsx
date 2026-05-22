@@ -319,7 +319,7 @@ export default function ReportsPage() {
                   return order.indexOf(a.tier) - order.indexOf(b.tier);
                 })
                 .map((t) => {
-                  const weight = ({ tier_1: '75%', tier_2: '30%', tier_3: '10%', pulse: '5%' } as Record<string, string>)[t.tier];
+                  const weight = ({ tier_1: '80%', tier_2: '40%', tier_3: '20%', pulse: '10%' } as Record<string, string>)[t.tier];
                   return (
                     <button
                       key={t.tier}

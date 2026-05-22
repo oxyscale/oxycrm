@@ -231,10 +231,10 @@ router.get('/', (req, res, next) => {
 
     // Weighted pipeline value — close probability by tier
     const TIER_WEIGHTS: Record<string, number> = {
-      pulse: 0.05,   // 5%
-      tier_3: 0.10,  // 10%
-      tier_2: 0.30,  // 30%
-      tier_1: 0.75,  // 75%
+      pulse: 0.10,   // 10%
+      tier_3: 0.20,  // 20%
+      tier_2: 0.40,  // 40%
+      tier_1: 0.80,  // 80%
     };
     const weightedPipelineValue = byTier
       .filter((b) => b.tier in TIER_WEIGHTS)
