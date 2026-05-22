@@ -681,15 +681,15 @@ export default function HomePage() {
               )}
             </PanelCard>
 
-            {/* Follow-Up Queue */}
+            {/* Tasks Queue */}
             {followUpQueue.length > 0 && (
               <PanelCard
-                eyebrow="FOLLOW-UPS"
+                eyebrow="TASKS"
                 title="Today's queue"
                 elevated={overdueLeads.length > 0}
                 right={
                   <button
-                    onClick={() => navigate('/pipeline')}
+                    onClick={() => navigate('/tasks')}
                     className="text-sky-ink text-xs font-medium hover:underline inline-flex items-center gap-1"
                   >
                     View all <ArrowRight size={12} />

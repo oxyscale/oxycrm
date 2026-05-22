@@ -50,8 +50,14 @@ interface TaskRow {
   due_date: string;
   google_calendar_event_id: string | null;
   completed: number;
+  completed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface TaskWithLeadRow extends TaskRow {
+  lead_name: string;
+  lead_company: string | null;
 }
 
 interface Task {
@@ -61,8 +67,14 @@ interface Task {
   dueDate: string;
   googleCalendarEventId: string | null;
   completed: boolean;
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface TaskWithLead extends Task {
+  leadName: string;
+  leadCompany: string | null;
 }
 
 function mapTaskRow(row: TaskRow): Task {
@@ -73,8 +85,17 @@ function mapTaskRow(row: TaskRow): Task {
     dueDate: row.due_date,
     googleCalendarEventId: row.google_calendar_event_id,
     completed: row.completed === 1,
+    completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapTaskWithLeadRow(row: TaskWithLeadRow): TaskWithLead {
+  return {
+    ...mapTaskRow(row),
+    leadName: row.lead_name,
+    leadCompany: row.lead_company,
   };
 }
 
@@ -308,6 +329,108 @@ router.post('/leads/:leadId/tasks', async (req, res, next) => {
 });
 
 /**
+ * GET /api/tasks — global task list with lead info.
+ * Returns all tasks, ordered by: incomplete first (overdue, then upcoming),
+ * then completed (most recent first).
+ */
+router.get('/tasks', (req, res, next) => {
+  try {
+    const db = getDb();
+    const rows = db.prepare(`
+      SELECT t.*, l.name AS lead_name, l.company AS lead_company
+      FROM tasks t
+      JOIN leads l ON l.id = t.lead_id
+      ORDER BY t.completed ASC, t.due_date ASC, t.created_at ASC
+    `).all() as TaskWithLeadRow[];
+
+    res.json(rows.map(mapTaskWithLeadRow));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/tasks/stats — quick counts for the Tasks page header.
+ */
+router.get('/tasks/stats', (req, res, next) => {
+  try {
+    const db = getDb();
+    const today = new Date().toISOString().split('T')[0];
+
+    const overdue = (db.prepare(
+      'SELECT COUNT(*) AS n FROM tasks WHERE completed = 0 AND due_date < ?'
+    ).get(today) as { n: number }).n;
+
+    const dueToday = (db.prepare(
+      'SELECT COUNT(*) AS n FROM tasks WHERE completed = 0 AND due_date = ?'
+    ).get(today) as { n: number }).n;
+
+    const upcoming = (db.prepare(
+      'SELECT COUNT(*) AS n FROM tasks WHERE completed = 0 AND due_date > ?'
+    ).get(today) as { n: number }).n;
+
+    const completedTotal = (db.prepare(
+      'SELECT COUNT(*) AS n FROM tasks WHERE completed = 1'
+    ).get() as { n: number }).n;
+
+    res.json({ overdue, dueToday, upcoming, completedTotal });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /api/tasks/:id/complete — toggle task completion.
+ * Sets completed=1 and completed_at=now, or unsets both.
+ * Also logs an activity on the lead.
+ */
+router.patch('/tasks/:id/complete', (req, res, next) => {
+  try {
+    const db = getDb();
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      throw new ApiError(400, 'Invalid task ID');
+    }
+
+    const row = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined;
+    if (!row) {
+      throw new ApiError(404, 'Task not found');
+    }
+
+    const wasCompleted = row.completed === 1;
+    if (wasCompleted) {
+      // Un-complete
+      db.prepare(`
+        UPDATE tasks SET completed = 0, completed_at = NULL, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(id);
+    } else {
+      // Complete
+      db.prepare(`
+        UPDATE tasks SET completed = 1, completed_at = datetime('now'), updated_at = datetime('now')
+        WHERE id = ?
+      `).run(id);
+
+      // Activity log
+      db.prepare(`
+        INSERT INTO activities (lead_id, type, title, description, created_at)
+        VALUES (?, 'meeting', ?, ?, datetime('now'))
+      `).run(
+        row.lead_id,
+        `Task completed: ${row.label}`,
+        `Was due ${formatDueDateLong(row.due_date)}`
+      );
+    }
+
+    const updated = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow;
+    logger.info({ taskId: id, completed: !wasCompleted }, 'Task completion toggled');
+    res.json(mapTaskRow(updated));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * PATCH /api/tasks/:id — update label, due date, or completion status.
  */
 router.patch('/tasks/:id', (req, res, next) => {
@@ -333,6 +456,12 @@ router.patch('/tasks/:id', (req, res, next) => {
     if (updates.completed !== undefined) {
       setClauses.push('completed = @completed');
       params.completed = updates.completed ? 1 : 0;
+      // Set completed_at when marking complete, clear when unmarking
+      if (updates.completed) {
+        setClauses.push("completed_at = datetime('now')");
+      } else {
+        setClauses.push('completed_at = NULL');
+      }
     }
     if (setClauses.length === 0) {
       throw new ApiError(400, 'No fields to update');

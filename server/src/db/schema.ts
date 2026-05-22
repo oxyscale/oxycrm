@@ -573,6 +573,10 @@ export function initializeDatabase(db: Database.Database): void {
 
   // Ensure "Miller Leith Network" category exists (added May 2026)
   db.prepare("INSERT OR IGNORE INTO categories (name) VALUES ('Miller Leith Network')").run();
+
+  // Tasks — add completed_at timestamp (May 2026). NULL until user manually
+  // marks a task complete; used by the Tasks page to track completion history.
+  addColumnIfMissing(db, 'tasks', 'completed_at', 'TEXT DEFAULT NULL');
 }
 
 /**

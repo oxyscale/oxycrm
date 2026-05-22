@@ -162,8 +162,21 @@ export interface LeadTask {
   dueDate: string;
   googleCalendarEventId: string | null;
   completed: boolean;
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TaskWithLead extends LeadTask {
+  leadName: string;
+  leadCompany: string | null;
+}
+
+export interface TaskStats {
+  overdue: number;
+  dueToday: number;
+  upcoming: number;
+  completedTotal: number;
 }
 
 export async function getLeadTasks(leadId: number): Promise<LeadTask[]> {
@@ -192,6 +205,19 @@ export async function updateLeadTask(
 
 export async function deleteLeadTask(taskId: number): Promise<void> {
   return request<void>(`/tasks/${taskId}`, { method: 'DELETE' });
+}
+
+// Global tasks (all leads)
+export async function getAllTasks(): Promise<TaskWithLead[]> {
+  return request<TaskWithLead[]>('/tasks');
+}
+
+export async function getTaskStats(): Promise<TaskStats> {
+  return request<TaskStats>('/tasks/stats');
+}
+
+export async function completeTask(taskId: number): Promise<LeadTask> {
+  return request<LeadTask>(`/tasks/${taskId}/complete`, { method: 'PATCH' });
 }
 
 // ── Reports ───────────────────────────────────────────────────

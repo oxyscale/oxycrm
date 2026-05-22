@@ -15,6 +15,7 @@ import BookMeetingPage from './pages/BookMeetingPage';
 import SettingsPage from './pages/SettingsPage';
 import EmailBankPage from './pages/EmailBankPage';
 import ReportsPage from './pages/ReportsPage';
+import TasksPage from './pages/TasksPage';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -53,6 +54,7 @@ export default function App() {
                 <Route path="/pipeline" element={<PipelinePage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/projects/:id" element={<ProjectDetailPage />} />
+                <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/email-bank" element={<EmailBankPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
