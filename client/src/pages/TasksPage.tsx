@@ -5,7 +5,18 @@ import {
   CheckCircle2,
   ArrowRight,
   Trophy,
+  Check,
 } from 'lucide-react';
+
+// Today + N weeks as a YYYY-MM-DD string in local time.
+function addWeeksFromToday(weeks: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + weeks * 7);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
 import PanelCard from '../components/ui/PanelCard';
@@ -23,6 +34,12 @@ export default function TasksPage() {
   const initialTab = (searchParams.get('tab') as FilterTab) || null;
   const [activeTab, setActiveTab] = useState<FilterTab>(initialTab || 'overdue');
   const [completingId, setCompletingId] = useState<number | null>(null);
+  // Track which task + weeks combo we're currently scheduling, so the
+  // pill spins instead of the whole row freezing.
+  const [schedulingKey, setSchedulingKey] = useState<string | null>(null);
+  // Tasks we just scheduled in this session — show a brief "Scheduled"
+  // confirmation chip on the row so Jordan knows the click worked.
+  const [recentlyScheduled, setRecentlyScheduled] = useState<Record<number, { weeks: number; ts: number }>>({});
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -59,6 +76,39 @@ export default function TasksPage() {
     if (activeTab !== 'overdue') params.set('tab', activeTab);
     setSearchParams(params, { replace: true });
   }, [activeTab, setSearchParams]);
+
+  // Schedule a NEW task on the same lead with the same label, due in
+  // `weeks` weeks. The original task is untouched — this is the
+  // "next touch base" quick action so Jordan doesn't have to open
+  // the lead profile.
+  const handleQuickSchedule = async (task: TaskWithLead, weeks: number) => {
+    const key = `${task.id}-${weeks}`;
+    setSchedulingKey(key);
+    try {
+      await api.createLeadTask(task.leadId, {
+        label: task.label,
+        dueDate: addWeeksFromToday(weeks),
+      });
+      setRecentlyScheduled((prev) => ({
+        ...prev,
+        [task.id]: { weeks, ts: Date.now() },
+      }));
+      // Background refresh so the new task appears in Upcoming.
+      api.getAllTasks().then(setTasks).catch(() => {});
+      api.getTaskStats().then(setStats).catch(() => {});
+      // Auto-clear the confirmation chip after 4s.
+      setTimeout(() => {
+        setRecentlyScheduled((prev) => {
+          const { [task.id]: _omit, ...rest } = prev;
+          return rest;
+        });
+      }, 4000);
+    } catch (err) {
+      console.error('Failed to schedule follow-up:', err);
+    } finally {
+      setSchedulingKey(null);
+    }
+  };
 
   const handleComplete = async (taskId: number) => {
     setCompletingId(taskId);
@@ -287,6 +337,43 @@ export default function TasksPage() {
                       <span className="font-mono text-[11px] text-ink-dim tracking-wide">
                         {formatDate(task.dueDate)}
                       </span>
+
+                      {/* Quick-schedule a new "same label" task N weeks out.
+                          Hidden when the task is already completed. */}
+                      {!task.completed && (
+                        recentlyScheduled[task.id] ? (
+                          <span className="flex items-center gap-1 text-[11px] text-ok font-medium px-2 py-1 rounded-full bg-[rgba(16,185,129,0.08)]">
+                            <Check size={11} />
+                            +{recentlyScheduled[task.id].weeks}w scheduled
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            {[2, 4, 6, 8].map((weeks) => {
+                              const key = `${task.id}-${weeks}`;
+                              const isScheduling = schedulingKey === key;
+                              return (
+                                <button
+                                  key={weeks}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleQuickSchedule(task, weeks);
+                                  }}
+                                  disabled={schedulingKey !== null}
+                                  title={`Schedule "${task.label}" again in ${weeks} weeks (${addWeeksFromToday(weeks)})`}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-mono font-semibold tracking-wide px-2 py-1 rounded-full bg-tray text-ink-dim hover:bg-sky-wash hover:text-sky-ink disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {isScheduling ? (
+                                    <Loader2 size={11} className="animate-spin" />
+                                  ) : (
+                                    `${weeks}w`
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )
+                      )}
+
                       <button
                         onClick={() => navigate(`/leads/${task.leadId}`)}
                         className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full bg-tray hover:bg-sky-wash flex items-center justify-center text-ink-dim hover:text-sky-ink"

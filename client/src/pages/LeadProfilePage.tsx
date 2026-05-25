@@ -152,6 +152,18 @@ function humaniseDates(text: string): string {
   });
 }
 
+// Today + N weeks as a YYYY-MM-DD string. Anchored to local time so the
+// date that lands matches what the user sees on their wall calendar.
+function addWeeksFromToday(weeks: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + weeks * 7);
+  // Build YYYY-MM-DD in local time (don't use toISOString which is UTC).
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function stageLabel(stage: PipelineStage | null): string {
   if (!stage) return 'No tier';
   // Map legacy stages to their new labels for display
@@ -939,6 +951,32 @@ export default function LeadProfilePage() {
                 onChange={(e) => setTaskDate(e.target.value)}
                 className="bg-cream border border-hair-soft rounded-lg px-3 py-2 text-ink text-sm focus:outline-none focus:border-sky transition-all [color-scheme:light]"
               />
+            </div>
+
+            {/* Quick weeks — skip opening the calendar */}
+            <div>
+              <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">In</p>
+              <div className="flex gap-1.5">
+                {[2, 4, 6, 8].map((weeks) => {
+                  const target = addWeeksFromToday(weeks);
+                  const active = taskDate === target;
+                  return (
+                    <button
+                      key={weeks}
+                      type="button"
+                      onClick={() => setTaskDate(target)}
+                      title={`Due ${target}`}
+                      className={`text-sm rounded-full px-3 py-1.5 border transition-all whitespace-nowrap ${
+                        active
+                          ? 'bg-sky-wash border-sky-hair text-sky-ink'
+                          : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)] hover:text-ink'
+                      }`}
+                    >
+                      {weeks}w
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div>
