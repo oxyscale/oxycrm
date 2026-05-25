@@ -216,8 +216,12 @@ router.get('/', (req, res, next) => {
         OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = leads.id)
       )`;
     } else if (contacted === 'false') {
-      query += ` AND leads.pipeline_stage != 'pulse'
-        AND leads.manually_contacted = 0
+      // NULL-safe pulse check: pipeline_stage IS NULL OR != 'pulse'.
+      // Plain `!= 'pulse'` evaluates to NULL for NULL-stage leads which
+      // SQL treats as FALSE in WHERE — so leads with no tier (the
+      // default for new leads) would silently fall out of this filter.
+      query += ` AND (leads.pipeline_stage IS NULL OR leads.pipeline_stage != 'pulse')
+        AND COALESCE(leads.manually_contacted, 0) = 0
         AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
         AND NOT EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
         AND NOT EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
