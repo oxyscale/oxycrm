@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import * as api from '../services/api';
 import type { Lead } from '../types';
+import { decodeHtmlEntities } from '../utils/text';
 
 // Browser Speech Recognition types
 interface SpeechRecognitionEvent {
@@ -185,8 +186,10 @@ export default function ComposeEmailPage() {
           .filter(e => e.direction === 'sent')
           .slice(0, 5); // Last 5 sent emails for context
         if (sentEmails.length > 0) {
+          // Decode HTML entities so Claude sees real characters instead of
+          // "&amp;" / "&#39;" — otherwise it learns to write those too.
           existingContext = 'Here are Jordan\'s previously sent emails to this lead (use these to match his writing style and tone):\n\n' +
-            sentEmails.map(e => `Subject: ${e.subject}\n${e.bodySnippet || ''}`).join('\n---\n');
+            sentEmails.map(e => `Subject: ${decodeHtmlEntities(e.subject)}\n${decodeHtmlEntities(e.bodySnippet)}`).join('\n---\n');
         }
       } catch {
         // Non-critical — proceed without context

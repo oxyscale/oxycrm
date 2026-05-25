@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import * as api from '../services/api';
 import { recordLeadVisit } from '../utils/recentLeads';
+import { decodeHtmlEntities } from '../utils/text';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import PillButton from '../components/ui/PillButton';
 import type {
@@ -1529,10 +1530,13 @@ export default function LeadProfilePage() {
                         <div className="px-4 py-3 space-y-3">
                           {chronological.map((email) => {
                             const isSent = email.direction === 'sent';
-                            const isLong = (email.bodySnippet?.length || 0) > 200;
+                            // Decode HTML entities so "&amp;" / "&#39;" render
+                            // as "&" / "'" instead of literal escape sequences.
+                            const decodedBody = decodeHtmlEntities(email.bodySnippet);
+                            const isLong = decodedBody.length > 200;
                             const isExpanded = expandedEmails.has(email.id);
-                            const displayText = email.bodySnippet
-                              ? (isLong && !isExpanded ? email.bodySnippet.substring(0, 200) + '...' : email.bodySnippet)
+                            const displayText = decodedBody
+                              ? (isLong && !isExpanded ? decodedBody.substring(0, 200) + '...' : decodedBody)
                               : null;
 
                             return (
