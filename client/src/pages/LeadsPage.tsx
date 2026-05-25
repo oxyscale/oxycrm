@@ -265,12 +265,6 @@ export default function LeadsPage() {
         <table className="w-full table-fixed">
           <thead>
             <tr className="border-b border-hair-soft">
-              <th className="w-10 text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3 select-none cursor-pointer hover:text-ink-muted transition-colors" onClick={() => handleSort('queuePosition')}>
-                <span className="flex items-center gap-1">
-                  #
-                  {sortField === 'queuePosition' && <ArrowUpDown size={12} className="text-sky-ink" />}
-                </span>
-              </th>
               <th className="text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3 select-none cursor-pointer hover:text-ink-muted transition-colors" onClick={() => handleSort('name')}>
                 <span className="flex items-center gap-1">
                   Name
@@ -293,9 +287,6 @@ export default function LeadsPage() {
                 onClick={() => navigate(`/leads/${lead.id}`)}
                 className="border-b border-hair-soft hover:bg-[rgba(10,156,212,0.04)] transition-colors cursor-pointer"
               >
-                <td className="px-3 py-3 text-ink-dim text-sm">
-                  {lead.queuePosition}
-                </td>
                 <td className="px-3 py-3">
                   <div className="text-ink text-sm font-medium truncate">
                     {lead.name}
