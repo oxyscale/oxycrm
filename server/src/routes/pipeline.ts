@@ -78,7 +78,7 @@ function mapLeadRow(row: LeadRow): Lead {
 // ============================================================
 
 const PIPELINE_STAGES: [PipelineStage, ...PipelineStage[]] = [
-  'pulse', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost',
+  'tier_1', 'tier_2', 'tier_3', 'pulse', 'won', 'lost',
 ];
 
 const TEMPERATURES: [Temperature, ...Temperature[]] = ['hot', 'warm', 'cold'];

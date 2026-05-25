@@ -72,7 +72,7 @@ router.get('/', (req, res, next) => {
     `).all(catParam) as { tier: string; count: number; total_value: number }[];
 
     // Build the full set of tiers (even ones with 0) so the UI shows every column.
-    const byTier: TierBucket[] = (['pulse', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost'] as const).map(
+    const byTier: TierBucket[] = (['tier_1', 'tier_2', 'tier_3', 'pulse', 'won', 'lost'] as const).map(
       (t) => {
         const row = tierRows.find((r) => r.tier === t);
         return {

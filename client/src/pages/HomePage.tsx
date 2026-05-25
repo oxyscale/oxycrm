@@ -31,10 +31,10 @@ import type { ImportResult, DuplicateLead, Activity, Lead } from '../types';
 
 // ── Pipeline stage display config ────────────────────────────
 const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
-  pulse: { label: 'Pulse', color: '#8b5cf6' },
   tier_1: { label: 'Tier 1', color: '#0a9cd4' },
   tier_2: { label: 'Tier 2', color: '#f59e0b' },
   tier_3: { label: 'Tier 3', color: '#8a95a0' },
+  pulse: { label: 'Pulse', color: '#8b5cf6' },
   won: { label: 'Won', color: '#10b981' },
   lost: { label: 'Lost', color: '#ef4444' },
 };
