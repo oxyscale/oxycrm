@@ -785,9 +785,19 @@ export default function LeadProfilePage() {
 
   return (
     <div className="p-10 max-w-[1400px] mx-auto bg-cream min-h-full">
-      {/* ── Back button — always returns to the Leads list ─── */}
+      {/* ── Back button — returns to the Leads list with the user's
+          original filter / search / sort restored from sessionStorage. */}
       <button
-        onClick={() => navigate('/leads')}
+        onClick={() => {
+          let target = '/leads';
+          try {
+            const saved = sessionStorage.getItem('leads:return-url');
+            if (saved && saved.startsWith('/leads')) target = saved;
+          } catch {
+            // ignore — fall back to /leads
+          }
+          navigate(target);
+        }}
         className="flex items-center gap-2 text-ink-dim hover:text-sky-ink transition-all text-sm mb-6"
       >
         <ArrowLeft size={16} />
