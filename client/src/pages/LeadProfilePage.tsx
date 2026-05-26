@@ -785,13 +785,13 @@ export default function LeadProfilePage() {
 
   return (
     <div className="p-10 max-w-[1400px] mx-auto bg-cream min-h-full">
-      {/* ── Back button ─────────────────────────────────────── */}
+      {/* ── Back button — always returns to the Leads list ─── */}
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/leads')}
         className="flex items-center gap-2 text-ink-dim hover:text-sky-ink transition-all text-sm mb-6"
       >
         <ArrowLeft size={16} />
-        Back
+        Back to leads
       </button>
 
       {fieldUpdateError && (
