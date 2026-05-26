@@ -262,8 +262,7 @@ export default function PrintReportPage() {
                 <tr className="border-b-2 border-[#0a9cd4]">
                   <th className="text-left text-[10px] text-[#8a95a0] font-mono uppercase tracking-[0.2em] font-semibold py-2 pr-3">Lead</th>
                   <th className="text-left text-[10px] text-[#8a95a0] font-mono uppercase tracking-[0.2em] font-semibold py-2 pr-3 w-[70px]">Tier</th>
-                  <th className="text-right text-[10px] text-[#8a95a0] font-mono uppercase tracking-[0.2em] font-semibold py-2 pr-3 w-[80px]">Value</th>
-                  <th className="text-center text-[10px] text-[#8a95a0] font-mono uppercase tracking-[0.2em] font-semibold py-2 w-[70px]">Status</th>
+                  <th className="text-right text-[10px] text-[#8a95a0] font-mono uppercase tracking-[0.2em] font-semibold py-2 w-[80px]">Value</th>
                 </tr>
               </thead>
               <tbody>
@@ -306,19 +305,10 @@ export default function PrintReportPage() {
                           {tierLabel(lead.tier)}
                         </span>
                       </td>
-                      <td className="py-2.5 pr-3 text-right font-medium align-top">
+                      <td className="py-2.5 text-right font-medium align-top">
                         {lead.dealValue > 0 ? formatAUD(lead.dealValue) : (
                           <span className="text-[#b8bfc6]">--</span>
                         )}
-                      </td>
-                      <td className="py-2.5 text-center align-top">
-                        <span className={`text-[10px] font-mono font-semibold uppercase tracking-[0.18em] px-2 py-0.5 rounded-full ${
-                          lead.contacted
-                            ? 'bg-[rgba(16,185,129,0.1)] text-[#10b981]'
-                            : 'bg-[rgba(239,68,68,0.06)] text-[#ef4444]'
-                        }`}>
-                          {lead.contacted ? 'Yes' : 'No'}
-                        </span>
                       </td>
                     </tr>
                   );
