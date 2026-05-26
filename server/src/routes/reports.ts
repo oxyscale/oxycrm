@@ -16,6 +16,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
+import { todayInSydney } from '../util/dates.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'reports-routes' });
@@ -49,7 +50,7 @@ router.get('/', (req, res, next) => {
     const { from, to, category } = querySchema.parse(req.query);
 
     // Default window = last 14 days, inclusive of today.
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayInSydney();
     const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
       .toISOString()
       .split('T')[0];

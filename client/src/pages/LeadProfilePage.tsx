@@ -26,6 +26,7 @@ import {
 import * as api from '../services/api';
 import { recordLeadVisit } from '../utils/recentLeads';
 import { decodeHtmlEntities } from '../utils/text';
+import { todayInSydney } from '../utils/dates';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import PillButton from '../components/ui/PillButton';
 import type {
@@ -1769,7 +1770,7 @@ export default function LeadProfilePage() {
             ) : (
               <ul className="space-y-2.5">
                 {tasks.map((task) => {
-                  const today = new Date().toISOString().split('T')[0];
+                  const today = todayInSydney();
                   const overdue = !task.completed && task.dueDate < today;
                   const dueToday = !task.completed && task.dueDate === today;
                   return (

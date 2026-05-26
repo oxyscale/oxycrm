@@ -18,6 +18,7 @@ function addWeeksFromToday(weeks: number): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 import EyebrowLabel from '../components/ui/EyebrowLabel';
+import { todayInSydney } from '../utils/dates';
 import SectionHeading from '../components/ui/SectionHeading';
 import PanelCard from '../components/ui/PanelCard';
 import * as api from '../services/api';
@@ -41,7 +42,7 @@ export default function TasksPage() {
   // confirmation chip on the row so Jordan knows the click worked.
   const [recentlyScheduled, setRecentlyScheduled] = useState<Record<number, { weeks: number; ts: number }>>({});
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayInSydney();
 
   const loadData = useCallback(async () => {
     try {

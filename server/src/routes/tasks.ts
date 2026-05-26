@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { createEvent, findEventByTitlePrefix, updateEvent } from '../services/google-calendar.js';
+import { todayInSydney } from '../util/dates.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'tasks-routes' });
@@ -355,7 +356,7 @@ router.get('/tasks', (req, res, next) => {
 router.get('/tasks/stats', (req, res, next) => {
   try {
     const db = getDb();
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayInSydney();
 
     const overdue = (db.prepare(
       'SELECT COUNT(*) AS n FROM tasks WHERE completed = 0 AND due_date < ?'

@@ -7,6 +7,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
+import { todayInSydney } from '../util/dates.js';
 import type { Lead, CallLog, Callback, CallbackWithLead } from '../../../shared/types.js';
 import pino from 'pino';
 
@@ -175,7 +176,7 @@ router.get('/today', (req, res, next) => {
     const db = getDb();
 
     // Get today's date in YYYY-MM-DD format (matches how callback_date is stored)
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayInSydney();
 
     const rows = db.prepare(`
       SELECT
