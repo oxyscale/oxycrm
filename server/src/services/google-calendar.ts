@@ -343,7 +343,7 @@ export async function createEvent(params: CreateEventParams): Promise<CreateEven
   return result;
 }
 
-// ── Find + update helpers (Touch Base consolidation) ────────
+// ── Find + update helpers (same-label task consolidation) ───
 
 /**
  * Finds the first calendar event on `date` whose summary starts with
