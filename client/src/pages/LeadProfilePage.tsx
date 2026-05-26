@@ -328,6 +328,11 @@ export default function LeadProfilePage() {
   const [tasks, setTasks] = useState<api.LeadTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [togglingTaskId, setTogglingTaskId] = useState<number | null>(null);
+  // Inline edit state for tasks in the sidebar
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [editingTaskLabel, setEditingTaskLabel] = useState('');
+  const [editingTaskDate, setEditingTaskDate] = useState('');
+  const [savingTaskEdit, setSavingTaskEdit] = useState(false);
 
   // Managed categories for the category dropdown
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
@@ -462,6 +467,41 @@ export default function LeadProfilePage() {
   };
 
   // Delete a task (with confirmation)
+  // Start editing — pre-fill the form with the task's current values.
+  const startEditingTask = (task: api.LeadTask) => {
+    setEditingTaskId(task.id);
+    setEditingTaskLabel(task.label);
+    setEditingTaskDate(task.dueDate);
+  };
+
+  const cancelEditingTask = () => {
+    setEditingTaskId(null);
+    setEditingTaskLabel('');
+    setEditingTaskDate('');
+  };
+
+  // Save edits — label + due date. Backend mirrors the change to Google
+  // Calendar (in tasks.ts PATCH handler) so the calendar entry shifts too.
+  const handleSaveTaskEdit = async (taskId: number) => {
+    if (savingTaskEdit) return;
+    if (!editingTaskLabel.trim() || !editingTaskDate) return;
+    setSavingTaskEdit(true);
+    try {
+      const updated = await api.updateLeadTask(taskId, {
+        label: editingTaskLabel.trim(),
+        dueDate: editingTaskDate,
+      });
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+      cancelEditingTask();
+      // Refresh activity in case the server logged a change.
+      if (tab === 'activity') loadActivities();
+    } catch (err) {
+      console.error('Failed to update task:', err);
+    } finally {
+      setSavingTaskEdit(false);
+    }
+  };
+
   const handleDeleteTask = async (task: api.LeadTask) => {
     if (!confirm(`Delete task "${task.label}"?`)) return;
     try {
@@ -1773,6 +1813,61 @@ export default function LeadProfilePage() {
                   const today = todayInSydney();
                   const overdue = !task.completed && task.dueDate < today;
                   const dueToday = !task.completed && task.dueDate === today;
+                  const isEditing = editingTaskId === task.id;
+
+                  if (isEditing) {
+                    return (
+                      <li
+                        key={task.id}
+                        className="bg-sky-wash border border-sky-hair rounded-lg p-2.5 space-y-2"
+                      >
+                        <input
+                          type="text"
+                          value={editingTaskLabel}
+                          onChange={(e) => setEditingTaskLabel(e.target.value)}
+                          placeholder="Task name"
+                          className="w-full bg-paper border border-hair-soft rounded px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-sky transition-all"
+                        />
+                        <input
+                          type="date"
+                          value={editingTaskDate}
+                          onChange={(e) => setEditingTaskDate(e.target.value)}
+                          className="w-full bg-paper border border-hair-soft rounded px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-sky transition-all [color-scheme:light]"
+                        />
+                        {/* Push-back quick picks — same pattern as Set Task panel */}
+                        <div className="flex gap-1">
+                          {[2, 4, 6, 8].map((weeks) => (
+                            <button
+                              key={weeks}
+                              type="button"
+                              onClick={() => setEditingTaskDate(addWeeksFromToday(weeks))}
+                              className="flex-1 text-xs rounded-full px-2 py-1 border bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all"
+                            >
+                              {weeks}w
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={() => handleSaveTaskEdit(task.id)}
+                            disabled={savingTaskEdit || !editingTaskLabel.trim() || !editingTaskDate}
+                            className="flex-1 bg-ink text-white text-xs font-medium rounded-full px-3 py-1.5 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                          >
+                            {savingTaskEdit ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEditingTask}
+                            disabled={savingTaskEdit}
+                            className="text-ink-muted text-xs px-3 py-1.5 rounded-full hover:bg-[rgba(11,13,14,0.03)] transition-all disabled:opacity-40"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  }
+
                   return (
                     <li
                       key={task.id}
@@ -1794,8 +1889,14 @@ export default function LeadProfilePage() {
                           <Check size={10} className="text-white" />
                         ) : null}
                       </button>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm leading-snug ${task.completed ? 'text-ink-dim line-through' : 'text-ink-muted'}`}>
+                      {/* Click the body to edit (faster than reaching for the pencil) */}
+                      <button
+                        type="button"
+                        onClick={() => startEditingTask(task)}
+                        disabled={task.completed}
+                        className="flex-1 min-w-0 text-left disabled:cursor-default"
+                      >
+                        <p className={`text-sm leading-snug ${task.completed ? 'text-ink-dim line-through' : 'text-ink-muted hover:text-ink'}`}>
                           {task.label}
                         </p>
                         <p className={`text-[11px] mt-0.5 ${
@@ -1806,7 +1907,17 @@ export default function LeadProfilePage() {
                           {overdue ? 'Overdue · ' : dueToday ? 'Due today · ' : ''}
                           {humaniseDates(task.dueDate)}
                         </p>
-                      </div>
+                      </button>
+                      {!task.completed && (
+                        <button
+                          onClick={() => startEditingTask(task)}
+                          className="text-ink-faint hover:text-sky-ink transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                          aria-label="Edit task"
+                          title="Edit task"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDeleteTask(task)}
                         className="text-ink-faint hover:text-risk transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
