@@ -356,6 +356,14 @@ export async function updateLead(
   });
 }
 
+/**
+ * Permanently delete a lead. Cascades via FK to call_logs / notes /
+ * tasks / activities / emails_sent etc. Irreversible.
+ */
+export async function deleteLead(id: number): Promise<void> {
+  return request<void>(`/leads/${id}`, { method: 'DELETE' });
+}
+
 /** Toggle the manual contacted flag on a lead */
 export async function markLeadContacted(id: number, contacted: boolean): Promise<Lead> {
   return request<Lead>(`/leads/${id}`, {

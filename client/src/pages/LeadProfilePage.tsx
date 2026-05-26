@@ -328,6 +328,7 @@ export default function LeadProfilePage() {
   const [tasks, setTasks] = useState<api.LeadTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [togglingTaskId, setTogglingTaskId] = useState<number | null>(null);
+  const [deletingLead, setDeletingLead] = useState(false);
   // Inline edit state for tasks in the sidebar
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   const [editingTaskLabel, setEditingTaskLabel] = useState('');
@@ -467,6 +468,36 @@ export default function LeadProfilePage() {
   };
 
   // Delete a task (with confirmation)
+  // Permanently delete the lead. Confirms twice in the prompt copy
+  // because this cascades to call_logs, notes, tasks, emails, activities.
+  const handleDeleteLead = async () => {
+    if (!lead || deletingLead) return;
+    const ok = window.confirm(
+      `Delete ${lead.name}?\n\n` +
+      `This permanently removes the lead and ALL associated:\n` +
+      `  - transcripts / call logs\n` +
+      `  - notes\n` +
+      `  - tasks (and their calendar events stay on the calendar)\n` +
+      `  - sent emails record\n` +
+      `  - activity history\n\n` +
+      `This cannot be undone.`
+    );
+    if (!ok) return;
+    setDeletingLead(true);
+    try {
+      await api.deleteLead(lead.id);
+      // Clear the return-url so Back doesn't try to land on a stale filter
+      // that this lead might have populated.
+      try { sessionStorage.removeItem('leads:return-url'); } catch { /* ignore */ }
+      navigate('/leads');
+    } catch (err) {
+      console.error('Failed to delete lead:', err);
+      setFieldUpdateError(err instanceof Error ? err.message : 'Failed to delete lead');
+      setTimeout(() => setFieldUpdateError(null), 5000);
+      setDeletingLead(false);
+    }
+  };
+
   // Start editing — pre-fill the form with the task's current values.
   const startEditingTask = (task: api.LeadTask) => {
     setEditingTaskId(task.id);
@@ -902,6 +933,18 @@ export default function LeadProfilePage() {
 
         {/* Spacer */}
         <div className="flex-1" />
+
+        {/* Delete lead — small, sits to the left of the tier dropdown so
+            it's reachable but not prominent. Confirms before firing. */}
+        <button
+          onClick={handleDeleteLead}
+          disabled={deletingLead}
+          title="Delete this lead (permanent)"
+          className="flex items-center gap-1.5 text-ink-dim hover:text-risk transition-colors text-xs px-2.5 py-1.5 rounded-full hover:bg-[rgba(239,68,68,0.06)] disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {deletingLead ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+          {deletingLead ? 'Deleting...' : 'Delete'}
+        </button>
 
         {/* Pipeline stage dropdown */}
         <div className="relative">
