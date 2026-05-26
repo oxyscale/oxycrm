@@ -299,8 +299,8 @@ export default function ComposeEmailPage() {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3">
         <p className="text-ink-muted">Lead not found</p>
-        <button onClick={() => navigate(-1)} className="text-sky-ink text-sm hover:underline">
-          Go back
+        <button onClick={() => navigate('/leads')} className="text-sky-ink text-sm hover:underline">
+          Back to leads
         </button>
       </div>
     );

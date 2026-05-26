@@ -759,9 +759,9 @@ export default function LeadProfilePage() {
             variant="primary"
             size="md"
             trailing="none"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate('/leads')}
           >
-            Go back
+            Back to leads
           </PillButton>
         </div>
       </div>
@@ -956,6 +956,7 @@ export default function LeadProfilePage() {
       {/* ── Set Task panel ───────────────────────────────────── */}
       {showSetTask && (
         <div
+          id="set-task-panel"
           className="bg-paper border border-sky-hair rounded-xl p-5 mb-8 -mt-6"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && taskLabel.trim() && taskDate && !creatingTask) {
@@ -1044,6 +1045,7 @@ export default function LeadProfilePage() {
             <div className="flex-1 min-w-[180px]">
               <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1.5">Or custom</p>
               <input
+                id="set-task-label-input"
                 type="text"
                 value={taskLabel}
                 onChange={(e) => setTaskLabel(e.target.value)}
@@ -1793,7 +1795,19 @@ export default function LeadProfilePage() {
                 Tasks
               </h3>
               <button
-                onClick={() => setShowSetTask(true)}
+                onClick={() => {
+                  setShowSetTask(true);
+                  // Scroll to the Set Task panel (which renders at top of
+                  // page) and focus its first input so the click feels
+                  // like it took you somewhere.
+                  setTimeout(() => {
+                    document.getElementById('set-task-panel')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start',
+                    });
+                    document.getElementById('set-task-label-input')?.focus();
+                  }, 50);
+                }}
                 className="text-sky-ink text-xs hover:underline flex items-center gap-1"
               >
                 <Plus size={12} />
