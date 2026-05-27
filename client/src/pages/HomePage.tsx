@@ -606,8 +606,16 @@ export default function HomePage() {
             )}
 
             {importResult && (
-              <div className="bg-sky-wash border border-sky-hair rounded-xl p-3.5 mt-4">
-                <p className="text-sky-ink text-sm font-medium">
+              <div className={`rounded-xl p-3.5 mt-4 border ${
+                importResult.imported === 0 && importResult.skipped > 0
+                  ? 'bg-[rgba(239,68,68,0.06)] border-[rgba(239,68,68,0.22)]'
+                  : 'bg-sky-wash border-sky-hair'
+              }`}>
+                <p className={`text-sm font-medium ${
+                  importResult.imported === 0 && importResult.skipped > 0
+                    ? 'text-risk'
+                    : 'text-sky-ink'
+                }`}>
                   {importResult.imported} leads imported
                 </p>
                 {importResult.skipped > 0 && (
@@ -617,6 +625,15 @@ export default function HomePage() {
                   <p className="text-warn text-xs mt-1">
                     {importResult.duplicates} duplicates found
                   </p>
+                )}
+                {importResult.errors && importResult.errors.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {importResult.errors.slice(0, 3).map((err, idx) => (
+                      <p key={idx} className="text-ink-muted text-xs leading-snug">
+                        {err}
+                      </p>
+                    ))}
+                  </div>
                 )}
               </div>
             )}

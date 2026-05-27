@@ -846,14 +846,62 @@ router.post('/import', upload.single('file'), (req, res, next) => {
 
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
-        // Support common column name variants (headers already lowercased + underscored)
-        const name = (row.name || row.contact_name || row.full_name || row.lead_name || row.first_name || '')?.trim();
-        const phone = (row.phone || row.phone_number || row.telephone || row.mobile || row.tel || '')?.trim();
+        // Support a wide range of CSV column-name conventions. Headers
+        // are already lowercased + underscored by the normaliser above.
+        // Order: most specific match first, then fall back to generic.
+        let name = (
+          row.name
+          || row.contact_name
+          || row.contact
+          || row.lead
+          || row.lead_name
+          || row.full_name
+          || row.fullname
+          || row.client
+          || row.client_name
+          || row.person
+          || row.prospect
+          || row.who
+          || ''
+        )?.trim();
+
+        // Fallback: combine first + last name (or given + surname / etc.)
+        if (!name) {
+          const first = (row.first_name || row.firstname || row.given_name || row.first || '')?.trim();
+          const last = (row.last_name || row.lastname || row.surname || row.family_name || row.last || '')?.trim();
+          if (first || last) {
+            name = `${first} ${last}`.trim();
+          }
+        }
+
+        const phone = (
+          row.phone
+          || row.phone_number
+          || row.phonenumber
+          || row.telephone
+          || row.mobile
+          || row.mobile_number
+          || row.mobile_phone
+          || row.tel
+          || row.contact_number
+          || row.contact_phone
+          || row.cell
+          || row.cell_phone
+          || ''
+        )?.trim();
 
         // Name is required — phone can be empty (user may have email/website to find it later)
         if (!name) {
           result.skipped++;
-          result.errors.push(`Row ${i + 2}: Missing required field (name)`);
+          // Surface the actual headers in the first error so the user can
+          // see which column in their CSV holds the name and rename it.
+          if (result.errors.length === 0) {
+            const headers = Object.keys(row).join(', ');
+            result.errors.push(
+              `No name column detected. Your CSV's columns are: [${headers}]. ` +
+              `Rename one of them to "name" (or use "first_name" + "last_name") and re-upload.`
+            );
+          }
           continue;
         }
 
