@@ -807,12 +807,20 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       throw new ApiError(400, 'Invalid CSV format');
     }
 
-    // Normalise column headers to lowercase with underscores so
-    // "Name", "Phone Number", "Company Name" etc. all work.
+    // Normalise column headers to snake_case so "Name", "Phone Number",
+    // "categoryName" (Apify camelCase) etc. all map to the same lookup
+    // keys. Order matters: split camelCase BEFORE lowercasing.
     records = records.map((row) => {
       const normalised: Record<string, string> = {};
       for (const [key, value] of Object.entries(row)) {
-        normalised[key.trim().toLowerCase().replace(/\s+/g, '_')] = value;
+        const snake = key
+          .trim()
+          // Insert _ at every camelCase boundary: "categoryName" -> "category_Name"
+          .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+          // Then lowercase + collapse any whitespace / dashes to _
+          .toLowerCase()
+          .replace(/[\s-]+/g, '_');
+        normalised[snake] = value;
       }
       return normalised;
     });
@@ -847,10 +855,13 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
         // Support a wide range of CSV column-name conventions. Headers
-        // are already lowercased + underscored by the normaliser above.
-        // Order: most specific match first, then fall back to generic.
+        // are already lowercased + snake_cased by the normaliser above
+        // (camelCase like 'categoryName' becomes 'category_name').
+        // Order: most specific match first.
         let name = (
           row.name
+          || row.title                  // Apify Google Places scraper
+          || row.business_name
           || row.contact_name
           || row.contact
           || row.lead
@@ -876,6 +887,7 @@ router.post('/import', upload.single('file'), (req, res, next) => {
 
         const phone = (
           row.phone
+          || row.phone_unformatted      // Apify
           || row.phone_number
           || row.phonenumber
           || row.telephone
@@ -923,14 +935,60 @@ router.post('/import', upload.single('file'), (req, res, next) => {
 
         currentPos++;
 
+        // Apify Google Places scrapers put a comma-separated string in
+        // 'emails' — take the first one.
+        let email = (
+          row.email
+          || row.email_address
+          || row.e_mail
+          || row.contact_email
+          || ''
+        ).trim();
+        if (!email && row.emails) {
+          email = String(row.emails).split(/[,;]/)[0]?.trim() || '';
+        }
+
+        const website = (
+          row.website
+          || row.website_url           // Apify
+          || row.websiteurl
+          || row.web
+          || row.url
+          || row.homepage
+          || row.site
+          || ''
+        ).trim();
+
+        // Google Maps url, not the business website — only use as last resort.
+        const fallbackUrl = (row.google_maps_url || row.maps_url || '').trim();
+
         insertStmt.run({
           name,
-          company: (row.company || row.company_name || row.organisation || row.organization || row.business || '').trim() || null,
+          // 'business' could be the company name; for Apify rows we already
+          // captured the business in `title` which became `name`. Fall back
+          // to address fields if no company column exists so the lead card
+          // isn't blank.
+          company: (
+            row.company
+            || row.company_name
+            || row.organisation
+            || row.organization
+            || row.business
+            || row.business_name
+            || ''
+          ).trim() || null,
           phone: phone || '',
-          email: (row.email || row.email_address || row.e_mail || '').trim() || null,
-          website: (row.website || row.url || row.web || '').trim() || null,
+          email: email || null,
+          website: website || fallbackUrl || null,
           leadType,
-          category: categoryOverride || (row.category || row.industry || row.sector || '').trim() || null,
+          category: categoryOverride || (
+            row.category
+            || row.category_name        // Apify
+            || row.industry
+            || row.sector
+            || row.type
+            || ''
+          ).trim() || null,
           queuePosition: currentPos,
         });
 
