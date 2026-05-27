@@ -941,8 +941,13 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
         <h3 className="text-ink font-medium text-base mb-1">Find &amp; merge duplicate leads</h3>
         <div className="text-ink-muted text-sm mb-4 space-y-2">
           <p>
-            <span className="text-ink font-medium">How leads are grouped:</span> by phone number (last 9 digits only, so +61, 0 and no-prefix variants all match as the same number). Leads with no phone are grouped by name + company.
+            <span className="text-ink font-medium">How leads are grouped (3 passes):</span>
           </p>
+          <ol className="list-decimal list-inside ml-2 space-y-1 text-ink-muted text-sm">
+            <li><span className="text-ink">Phone number</span> — last 9 digits only, so +61, 0 and no-prefix variants match.</li>
+            <li><span className="text-ink">Name + company</span> — for leads with no phone, exact match on both.</li>
+            <li><span className="text-ink">Business-name-as-name</span> — when a lead's <em>name</em> equals its <em>company</em> (typical of scrapes / CSV imports with no individual contact), it folds into the real-person lead at the same company. Different real people at the same company are NEVER merged.</li>
+          </ol>
           <p>
             <span className="text-ink font-medium">Which one is kept (the survivor):</span> the lead with the highest total activity — notes + tasks + sent emails + call logs + activity history + manual contact flag + pulse stage + deal value + AI summary. The richest record wins. Tie-breaker: oldest record.
           </p>

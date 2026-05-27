@@ -462,6 +462,104 @@ router.post('/dedupe', (req, res, next) => {
         phones: b.phones.join('||'),
       }));
 
+    // ── Pass 3: business-name-as-name duplicates ──────────────
+    // CSV / scrape imports often put the BUSINESS NAME in the `name`
+    // field when there's no individual contact. So you end up with
+    // "Method Recruitment" / "Method Recruitment" alongside the real
+    // person "Kate Shute" / "Method Recruitment" at the same company.
+    // The phone numbers differ (one's a head-office, one's Kate's
+    // mobile), so the existing phone-key pass misses them.
+    //
+    // Strategy per company:
+    //   - Find ungrouped leads where name == company (business-only)
+    //   - Find the SINGLE best ungrouped real-person lead at the same
+    //     company (highest activity score, tie-break by oldest)
+    //   - Group all the biz-only leads with that one real person — so
+    //     the biz duplicate folds INTO the real person on merge
+    //   - If there's no real person, group the biz-only leads together
+    //   - Importantly: we never pull >1 real person into a group, so
+    //     two genuine contacts at the same company never get merged
+    //     against each other
+    const alreadyGroupedIds = new Set<number>();
+    for (const g of allGroups) {
+      for (const id of g.ids.split(',').map((s) => parseInt(s, 10))) {
+        if (!isNaN(id)) alreadyGroupedIds.add(id);
+      }
+    }
+
+    interface AllLeadInfo { id: number; name: string; company: string }
+    const ungrouped: AllLeadInfo[] = allLeads
+      .filter((l) => !alreadyGroupedIds.has(l.id))
+      .map((l) => ({
+        id: l.id,
+        name: (l.name || '').trim(),
+        company: (l.company || '').trim(),
+      }));
+
+    // Index ungrouped leads by their company (case-insensitive).
+    const byCompany = new Map<string, { biz: AllLeadInfo[]; people: AllLeadInfo[] }>();
+    for (const l of ungrouped) {
+      if (!l.company) continue;
+      const ck = l.company.toLowerCase();
+      let entry = byCompany.get(ck);
+      if (!entry) {
+        entry = { biz: [], people: [] };
+        byCompany.set(ck, entry);
+      }
+      if (l.name && l.name.toLowerCase() === ck) {
+        entry.biz.push(l);
+      } else if (l.name) {
+        entry.people.push(l);
+      }
+    }
+
+    // Lightweight activity-score query — same shape as pickSurvivor below.
+    const scoreLead = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM notes WHERE lead_id = @id)
+        + (SELECT COUNT(*) FROM tasks WHERE lead_id = @id)
+        + (SELECT COUNT(*) FROM emails_sent WHERE lead_id = @id)
+        + (SELECT COUNT(*) FROM call_logs WHERE lead_id = @id)
+        + (SELECT COUNT(*) FROM activities WHERE lead_id = @id) AS score
+    `);
+
+    for (const [companyKey, { biz, people }] of byCompany.entries()) {
+      if (biz.length === 0) continue;
+
+      // Pick at most ONE real person to receive the biz dupes. Score
+      // them, pick the highest. Oldest id tie-break.
+      let target: AllLeadInfo | null = null;
+      if (people.length > 0) {
+        let bestScore = -1;
+        for (const p of people) {
+          const row = scoreLead.get({ id: p.id }) as { score: number } | undefined;
+          const s = row?.score ?? 0;
+          if (s > bestScore || (s === bestScore && target && p.id < target.id)) {
+            bestScore = s;
+            target = p;
+          }
+          if (target === null) target = p; // seed
+        }
+      }
+
+      const groupIds: number[] = [...biz.map((b) => b.id)];
+      const groupNames: string[] = [...biz.map((b) => b.name)];
+      if (target) {
+        groupIds.push(target.id);
+        groupNames.push(target.name);
+      }
+
+      // Only push if it's an actual duplicate (>1 lead in group)
+      if (groupIds.length > 1) {
+        allGroups.push({
+          group_key: `biz:${companyKey}`,
+          ids: groupIds.join(','),
+          names: groupNames.join('||'),
+          phones: '',
+        });
+      }
+    }
+
     // For each group, pick the survivor: lead with the HIGHEST total
     // activity across notes + tasks + emails + call_logs + activity rows.
     // This protects rich leads — a row with lots of notes but no calls
