@@ -462,34 +462,52 @@ router.post('/dedupe', (req, res, next) => {
         phones: b.phones.join('||'),
       }));
 
-    // For each group, pick the survivor: lead id with most call_logs then oldest id.
+    // For each group, pick the survivor: lead with the HIGHEST total
+    // activity across notes + tasks + emails + call_logs + activity rows.
+    // This protects rich leads — a row with lots of notes but no calls
+    // beats a row with one call and nothing else. Manually_contacted +
+    // pulse stage count as 1 point each so an explicit "I've touched
+    // this" beats a blank duplicate.
+    // Ties broken by oldest id (most established record).
     interface Plan {
       groupKey: string;
       survivorId: number;
+      survivorScore: number;
       duplicateIds: number[];
       sample: { name: string; phone: string };
     }
 
     const pickSurvivor = db.prepare(`
-      SELECT l.id, COUNT(cl.id) AS call_count
+      SELECT l.id,
+        (
+          (SELECT COUNT(*) FROM notes WHERE lead_id = l.id)
+          + (SELECT COUNT(*) FROM tasks WHERE lead_id = l.id)
+          + (SELECT COUNT(*) FROM emails_sent WHERE lead_id = l.id)
+          + (SELECT COUNT(*) FROM call_logs WHERE lead_id = l.id)
+          + (SELECT COUNT(*) FROM activities WHERE lead_id = l.id)
+          + CASE WHEN l.manually_contacted = 1 THEN 1 ELSE 0 END
+          + CASE WHEN l.pipeline_stage = 'pulse' THEN 1 ELSE 0 END
+          + CASE WHEN l.deal_value > 0 THEN 1 ELSE 0 END
+          + CASE WHEN l.consolidated_summary IS NOT NULL AND l.consolidated_summary != '' THEN 1 ELSE 0 END
+        ) AS score
       FROM leads l
-      LEFT JOIN call_logs cl ON cl.lead_id = l.id
       WHERE l.id IN (SELECT value FROM json_each(@ids))
-      GROUP BY l.id
-      ORDER BY call_count DESC, l.id ASC
+      ORDER BY score DESC, l.id ASC
       LIMIT 1
     `);
 
     const plans: Plan[] = allGroups.map((g) => {
       const ids = g.ids.split(',').map((s) => parseInt(s, 10)).filter((n) => !isNaN(n));
-      const survivor = pickSurvivor.get({ ids: JSON.stringify(ids) }) as { id: number } | undefined;
+      const survivor = pickSurvivor.get({ ids: JSON.stringify(ids) }) as { id: number; score: number } | undefined;
       const survivorId = survivor?.id ?? ids[0];
+      const survivorScore = survivor?.score ?? 0;
       const duplicateIds = ids.filter((id) => id !== survivorId);
       const firstName = g.names.split('||')[0] || '';
       const firstPhone = g.phones.split('||')[0] || '';
       return {
         groupKey: g.group_key,
         survivorId,
+        survivorScore,
         duplicateIds,
         sample: { name: firstName, phone: firstPhone },
       };

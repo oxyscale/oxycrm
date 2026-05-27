@@ -314,6 +314,7 @@ export interface DedupeResult {
   plans?: Array<{
     groupKey: string;
     survivorId: number;
+    survivorScore?: number;
     duplicateIds: number[];
     sample: { name: string; phone: string };
   }>;

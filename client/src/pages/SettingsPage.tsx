@@ -939,9 +939,20 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
       {/* Dedupe */}
       <div className="bg-paper border border-hair-soft rounded-xl p-6">
         <h3 className="text-ink font-medium text-base mb-1">Find &amp; merge duplicate leads</h3>
-        <p className="text-ink-muted text-sm mb-4">
-          Groups leads by phone number (last 9 digits, so +61 / 0 prefix variants match). For each group, the lead with the most call history is kept; the others are deleted and their call logs, notes, and emails are reassigned to the survivor.
-        </p>
+        <div className="text-ink-muted text-sm mb-4 space-y-2">
+          <p>
+            <span className="text-ink font-medium">How leads are grouped:</span> by phone number (last 9 digits only, so +61, 0 and no-prefix variants all match as the same number). Leads with no phone are grouped by name + company.
+          </p>
+          <p>
+            <span className="text-ink font-medium">Which one is kept (the survivor):</span> the lead with the highest total activity — notes + tasks + sent emails + call logs + activity history + manual contact flag + pulse stage + deal value + AI summary. The richest record wins. Tie-breaker: oldest record.
+          </p>
+          <p>
+            <span className="text-ink font-medium">What happens to the others:</span> deleted. All their notes, tasks, emails, calls, and activity are reassigned to the survivor first — nothing is lost.
+          </p>
+          <p className="text-ink-dim text-xs">
+            Hit Preview to see exactly which lead survives in each group before you commit.
+          </p>
+        </div>
 
         <div className="flex items-center gap-3">
           <button
@@ -980,9 +991,18 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
                 {preview.plans && preview.plans.length > 0 && (
                   <div className="max-h-64 overflow-y-auto mt-2 space-y-1">
                     {preview.plans.slice(0, 30).map((p) => (
-                      <div key={p.groupKey} className="text-ink-muted text-xs flex items-center justify-between py-1 border-b border-hair-soft last:border-b-0">
-                        <span className="truncate">{p.sample.name}</span>
-                        <span className="text-ink-dim ml-3 flex-shrink-0">{p.sample.phone || 'no phone'} · {p.duplicateIds.length + 1} copies</span>
+                      <div key={p.groupKey} className="text-ink-muted text-xs py-1.5 border-b border-hair-soft last:border-b-0">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="truncate">{p.sample.name}</span>
+                          <span className="text-ink-dim flex-shrink-0">
+                            {p.sample.phone || 'no phone'} · {p.duplicateIds.length + 1} copies
+                          </span>
+                        </div>
+                        <p className="text-ink-dim text-[11px] mt-0.5">
+                          Survivor: lead #{p.survivorId}
+                          {typeof p.survivorScore === 'number' ? ` (activity score ${p.survivorScore})` : ''}
+                          {p.duplicateIds.length > 0 && ` · deleting #${p.duplicateIds.join(', #')}`}
+                        </p>
                       </div>
                     ))}
                     {preview.plans.length > 30 && (
