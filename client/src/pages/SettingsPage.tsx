@@ -947,18 +947,25 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
   };
 
   const handleUndoConfirm = async () => {
-    if (!undoFile || !undoPreview || undoPreview.matched === 0) return;
+    if (!undoFile || !undoPreview || undoPreview.toDelete === 0) return;
+    const protectedNote = undoPreview.protected > 0
+      ? `\n\n${undoPreview.protected} lead${undoPreview.protected === 1 ? '' : 's'} matched but are PROTECTED (have notes/tasks/calls/emails or are in a tier) — those will NOT be touched.`
+      : '';
     const ok = window.confirm(
-      `Permanently delete ${undoPreview.matched} lead${undoPreview.matched === 1 ? '' : 's'}?\n\n` +
-      `Every call log, note, task, email and activity on these leads will be deleted with them. This cannot be undone.`,
+      `Permanently delete ${undoPreview.toDelete} lead${undoPreview.toDelete === 1 ? '' : 's'}?` +
+      protectedNote +
+      `\n\nEvery call log, note, task, email and activity on the deleted leads will go with them. This cannot be undone.`,
     );
     if (!ok) return;
     setUndoDeleting(true);
     setUndoError(null);
     try {
       const r = await api.undoImport(undoFile, false);
+      const protectedNote = r.protected > 0
+        ? ` ${r.protected} kept (had business activity attached).`
+        : '';
       setUndoResult(
-        `Deleted ${r.deleted} lead${r.deleted === 1 ? '' : 's'} (out of ${r.csvRows} CSV rows). Hard refresh the Leads page to confirm.`,
+        `Deleted ${r.deleted} lead${r.deleted === 1 ? '' : 's'} (out of ${r.csvRows} CSV rows).${protectedNote} Hard refresh the Leads page to confirm.`,
       );
       setUndoPreview(null);
       setUndoFile(null);
@@ -1145,20 +1152,20 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
             {undoPreviewing ? 'Scanning...' : 'Preview matches'}
           </button>
 
-          {undoPreview && undoPreview.matched > 0 && (
+          {undoPreview && undoPreview.toDelete > 0 && (
             <button
               onClick={handleUndoConfirm}
               disabled={undoDeleting}
               className="bg-risk text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-red-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {undoDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              {undoDeleting ? 'Deleting...' : `Delete ${undoPreview.matched} matched lead${undoPreview.matched === 1 ? '' : 's'}`}
+              {undoDeleting ? 'Deleting...' : `Delete ${undoPreview.toDelete} lead${undoPreview.toDelete === 1 ? '' : 's'}`}
             </button>
           )}
         </div>
 
         {undoPreview && (
-          <div className="mt-4">
+          <div className="mt-4 space-y-3">
             {undoPreview.matched === 0 ? (
               <div className="bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.25)] rounded-lg p-3">
                 <p className="text-warn text-sm flex items-center gap-2">
@@ -1167,25 +1174,63 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
                 </p>
               </div>
             ) : (
-              <div className="bg-cream border border-hair-soft rounded-lg p-3">
-                <p className="text-ink-muted text-sm mb-2 flex items-center gap-2">
-                  <AlertTriangle size={14} className="text-warn" />
-                  {undoPreview.matched} of {undoPreview.csvRows} CSV row{undoPreview.csvRows === 1 ? '' : 's'} match leads in your DB and would be deleted.
-                </p>
+              <>
+                {/* Summary line — what would happen */}
+                <div className="bg-cream border border-hair-soft rounded-lg p-3">
+                  <p className="text-ink text-sm font-medium mb-1">
+                    {undoPreview.matched} of {undoPreview.csvRows} CSV row{undoPreview.csvRows === 1 ? '' : 's'} matched leads in your DB.
+                  </p>
+                  <ul className="text-ink-muted text-sm space-y-0.5 mt-1.5">
+                    <li className="flex items-center gap-2">
+                      <span className="inline-block w-2 h-2 rounded-full bg-risk flex-shrink-0" />
+                      <span><span className="font-medium text-ink">{undoPreview.toDelete}</span> will be deleted (untouched scrape rows)</span>
+                    </li>
+                    {undoPreview.protected > 0 && (
+                      <li className="flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 rounded-full bg-ok flex-shrink-0" />
+                        <span><span className="font-medium text-ink">{undoPreview.protected}</span> protected — kept because you've worked them (notes, tasks, calls, emails, deal value, or placed in a tier)</span>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+
+                {/* Sample of what WILL be deleted */}
                 {undoPreview.sample.length > 0 && (
-                  <div className="mt-2 max-h-48 overflow-y-auto">
+                  <div className="bg-cream border border-hair-soft rounded-lg p-3">
                     <p className="text-ink-dim text-[11px] uppercase tracking-wider font-medium mb-1.5">
-                      Sample (first {undoPreview.sample.length})
+                      To be deleted · sample (first {undoPreview.sample.length})
                     </p>
-                    {undoPreview.sample.map((s) => (
-                      <div key={s.id} className="text-ink-muted text-xs py-1 border-b border-hair-soft last:border-b-0 flex items-center justify-between gap-3">
-                        <span className="truncate">{s.name}</span>
-                        <span className="text-ink-dim flex-shrink-0">{s.phone}</span>
-                      </div>
-                    ))}
+                    <div className="max-h-40 overflow-y-auto">
+                      {undoPreview.sample.map((s) => (
+                        <div key={s.id} className="text-ink-muted text-xs py-1 border-b border-hair-soft last:border-b-0 flex items-center justify-between gap-3">
+                          <span className="truncate">{s.name}</span>
+                          <span className="text-ink-dim flex-shrink-0">{s.phone}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
-              </div>
+
+                {/* Sample of what's PROTECTED — so Jordan can sanity-check */}
+                {undoPreview.protectedSample.length > 0 && (
+                  <div className="bg-[rgba(16,185,129,0.05)] border border-[rgba(16,185,129,0.2)] rounded-lg p-3">
+                    <p className="text-ok text-[11px] uppercase tracking-wider font-medium mb-1.5">
+                      Will be kept · sample (first {undoPreview.protectedSample.length})
+                    </p>
+                    <div className="max-h-40 overflow-y-auto">
+                      {undoPreview.protectedSample.map((s) => (
+                        <div key={s.id} className="text-ink-muted text-xs py-1 border-b border-[rgba(16,185,129,0.15)] last:border-b-0 flex items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-ink">{s.name}</div>
+                            {s.reason && <div className="text-ink-dim text-[11px]">{s.reason}</div>}
+                          </div>
+                          <span className="text-ink-dim flex-shrink-0">{s.phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

@@ -186,9 +186,18 @@ export interface UndoImportResult {
   dryRun: boolean;
   csvRows: number;
   csvPhonesFound: number;
+  /** Total leads whose phone matches a row in the CSV. */
   matched: number;
+  /** Leads matched but PROTECTED from deletion (have notes/tasks/calls/
+   *  emails/activity, are placed in a pipeline tier, have a deal value,
+   *  or are manually flagged contacted). These stay put. */
+  protected: number;
+  /** Leads that WILL be deleted (matched - protected). */
+  toDelete: number;
   deleted: number;
   sample: { id: number; name: string; phone: string }[];
+  /** First 10 protected leads with the reason they were spared. */
+  protectedSample: { id: number; name: string; phone: string; reason: string | null }[];
 }
 
 /**

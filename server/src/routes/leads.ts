@@ -460,35 +460,104 @@ router.post('/undo-import', upload.single('file'), (req, res, next) => {
     }
 
     // Build the same normalised key for every existing lead and find
-    // those whose key is in the CSV's set. Doing this in JS (not SQL)
-    // is fine — even with 10k leads it's milliseconds.
-    const allLeads = db.prepare(
-      "SELECT id, name, phone FROM leads WHERE phone IS NOT NULL AND phone != ''",
-    ).all() as { id: number; name: string; phone: string }[];
+    // those whose key is in the CSV's set. Each match is then classified
+    // as DELETABLE (untouched scrape row — safe to remove) or PROTECTED
+    // (has been worked since import — leave it alone). The protection
+    // rules are intentionally broad: any sign Jordan has done ANYTHING
+    // with the lead means it stays. This is the safety net so re-uploading
+    // a CSV can never accidentally wipe a real client whose phone happens
+    // to be in the file.
+    const allLeads = db.prepare(`
+      SELECT
+        l.id,
+        l.name,
+        l.phone,
+        l.pipeline_stage,
+        l.manually_contacted,
+        l.consolidated_summary,
+        l.deal_value,
+        (SELECT COUNT(*) FROM notes        WHERE notes.lead_id        = l.id) AS notes_count,
+        (SELECT COUNT(*) FROM tasks        WHERE tasks.lead_id        = l.id) AS tasks_count,
+        (SELECT COUNT(*) FROM call_logs    WHERE call_logs.lead_id    = l.id) AS calls_count,
+        (SELECT COUNT(*) FROM emails_sent  WHERE emails_sent.lead_id  = l.id) AS emails_count,
+        (SELECT COUNT(*) FROM activities   WHERE activities.lead_id   = l.id) AS activities_count
+      FROM leads l
+      WHERE l.phone IS NOT NULL AND l.phone != ''
+    `).all() as {
+      id: number; name: string; phone: string;
+      pipeline_stage: string | null;
+      manually_contacted: number;
+      consolidated_summary: string | null;
+      deal_value: number;
+      notes_count: number; tasks_count: number; calls_count: number;
+      emails_count: number; activities_count: number;
+    }[];
 
-    const matches: { id: number; name: string; phone: string }[] = [];
-    for (const lead of allLeads) {
-      const digits = lead.phone.replace(/\D/g, '');
-      if (digits.length >= 9 && phoneKeys.has(digits.slice(-9))) {
-        matches.push(lead);
-      }
+    interface MatchRow {
+      id: number; name: string; phone: string;
+      protectedReason: string | null;
     }
 
+    function protectionReason(lead: typeof allLeads[number]): string | null {
+      // Lead is in any pipeline tier = intentional placement by Jordan.
+      if (lead.pipeline_stage !== null) {
+        return `In ${lead.pipeline_stage.replace('_', ' ')}`;
+      }
+      if (lead.manually_contacted === 1) return 'Marked contacted';
+      if (lead.deal_value > 0) return `Has deal value $${lead.deal_value}`;
+      if (lead.consolidated_summary && lead.consolidated_summary.trim().length > 0) {
+        return 'Has consolidated summary';
+      }
+      if (lead.notes_count > 0)      return `${lead.notes_count} note(s)`;
+      if (lead.tasks_count > 0)      return `${lead.tasks_count} task(s)`;
+      if (lead.calls_count > 0)      return `${lead.calls_count} call log(s)`;
+      if (lead.emails_count > 0)     return `${lead.emails_count} email(s)`;
+      if (lead.activities_count > 0) return `${lead.activities_count} activity row(s)`;
+      return null;
+    }
+
+    const deletable: MatchRow[] = [];
+    const protectedRows: MatchRow[] = [];
+    for (const lead of allLeads) {
+      const digits = lead.phone.replace(/\D/g, '');
+      if (digits.length < 9) continue;
+      if (!phoneKeys.has(digits.slice(-9))) continue;
+
+      const reason = protectionReason(lead);
+      const row: MatchRow = {
+        id: lead.id, name: lead.name, phone: lead.phone, protectedReason: reason,
+      };
+      if (reason) protectedRows.push(row);
+      else deletable.push(row);
+    }
+
+    const matched = deletable.length + protectedRows.length;
+
     if (dryRun) {
-      logger.info({ csvRows: records.length, csvPhones: phoneKeys.size, matched: matches.length }, 'Undo-import dry-run');
+      logger.info(
+        { csvRows: records.length, csvPhones: phoneKeys.size, matched, deletable: deletable.length, protected: protectedRows.length },
+        'Undo-import dry-run',
+      );
       res.json({
         dryRun: true,
         csvRows: records.length,
         csvPhonesFound: phoneKeys.size,
-        matched: matches.length,
+        matched,
+        protected: protectedRows.length,
+        toDelete: deletable.length,
         deleted: 0,
-        sample: matches.slice(0, 20).map((m) => ({ id: m.id, name: m.name, phone: m.phone })),
+        sample: deletable.slice(0, 20).map((m) => ({ id: m.id, name: m.name, phone: m.phone })),
+        protectedSample: protectedRows.slice(0, 10).map((m) => ({
+          id: m.id, name: m.name, phone: m.phone, reason: m.protectedReason,
+        })),
       });
       return;
     }
 
-    // Real deletion. ON DELETE CASCADE handles call_logs, notes, tasks,
-    // activities, emails_sent, projects.
+    // Real deletion — ONLY the deletable set. Protected rows never go
+    // near the DELETE statement, so even a malformed match list can't
+    // touch them. ON DELETE CASCADE handles call_logs/notes/etc on the
+    // deletable rows.
     const deleteStmt = db.prepare('DELETE FROM leads WHERE id = ?');
     let deleted = 0;
     const tx = db.transaction((ids: number[]) => {
@@ -497,16 +566,24 @@ router.post('/undo-import', upload.single('file'), (req, res, next) => {
         deleted += r.changes;
       }
     });
-    tx(matches.map((m) => m.id));
+    tx(deletable.map((m) => m.id));
 
-    logger.info({ csvRows: records.length, matched: matches.length, deleted }, 'Undo-import complete');
+    logger.info(
+      { csvRows: records.length, matched, deleted, protected: protectedRows.length },
+      'Undo-import complete',
+    );
     res.json({
       dryRun: false,
       csvRows: records.length,
       csvPhonesFound: phoneKeys.size,
-      matched: matches.length,
+      matched,
+      protected: protectedRows.length,
+      toDelete: deletable.length,
       deleted,
-      sample: matches.slice(0, 20).map((m) => ({ id: m.id, name: m.name, phone: m.phone })),
+      sample: deletable.slice(0, 20).map((m) => ({ id: m.id, name: m.name, phone: m.phone })),
+      protectedSample: protectedRows.slice(0, 10).map((m) => ({
+        id: m.id, name: m.name, phone: m.phone, reason: m.protectedReason,
+      })),
     });
   } catch (err) {
     next(err);
