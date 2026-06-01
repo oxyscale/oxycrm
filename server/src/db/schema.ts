@@ -609,6 +609,39 @@ export function initializeDatabase(db: Database.Database): void {
     WHERE pipeline_stage = 'pulse'
       AND (deal_value IS NULL OR deal_value = 0)
   `).run();
+
+  // ============================================================
+  // Duplicate flags — populated by the duplicate scan.
+  //
+  // Each row is "suspect lead might be a duplicate of target lead, here
+  // are the reasons, the user has/hasn't dismissed it yet."
+  // - suspect_lead_id  : the row that's most likely the dup (untouched)
+  // - target_lead_id   : the existing real contact it might belong to
+  // - reasons          : JSON array of strings like ["phone match",
+  //                      "name token: smaart"]
+  // - confidence       : 'high' (phone/email/domain) or 'medium' (tokens)
+  // - dismissed_at     : non-null = Jordan said "not a dup, leave alone"
+  //
+  // PRIMARY KEY (suspect, target) so re-running the scan upserts cleanly.
+  // ============================================================
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS duplicate_flags (
+      suspect_lead_id INTEGER NOT NULL,
+      target_lead_id INTEGER NOT NULL,
+      confidence TEXT NOT NULL DEFAULT 'medium',
+      reasons TEXT NOT NULL DEFAULT '[]',
+      detected_at TEXT NOT NULL DEFAULT (datetime('now')),
+      dismissed_at TEXT,
+      PRIMARY KEY (suspect_lead_id, target_lead_id),
+      FOREIGN KEY (suspect_lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+      FOREIGN KEY (target_lead_id) REFERENCES leads(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_duplicate_flags_suspect
+      ON duplicate_flags(suspect_lead_id) WHERE dismissed_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_duplicate_flags_target
+      ON duplicate_flags(target_lead_id) WHERE dismissed_at IS NULL;
+  `);
 }
 
 /**

@@ -862,6 +862,11 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
   const [sanitiseResult, setSanitiseResult] = useState<string | null>(null);
   const [sanitiseError, setSanitiseError] = useState<string | null>(null);
 
+  // Scan for duplicate leads (populates inline pills on the Leads page).
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+
   // Undo-a-CSV-import — upload the original file, preview matching leads
   // by phone number, then confirm to delete the batch.
   const [undoFile, setUndoFile] = useState<File | null>(null);
@@ -975,6 +980,28 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
       setUndoError(err instanceof Error ? err.message : 'Delete failed');
     } finally {
       setUndoDeleting(false);
+    }
+  };
+
+  const handleScanDuplicates = async () => {
+    setScanning(true);
+    setScanError(null);
+    setScanResult(null);
+    try {
+      const r = await api.scanDuplicates();
+      const lines = [`Flagged ${r.flagged} duplicate pair${r.flagged === 1 ? '' : 's'}.`];
+      if (r.twoTouchedSkipped > 0) {
+        lines.push(`Skipped ${r.twoTouchedSkipped} pair${r.twoTouchedSkipped === 1 ? '' : 's'} where both leads have business activity (safety — won't merge two real contacts).`);
+      }
+      if (r.dismissedSkipped > 0) {
+        lines.push(`Skipped ${r.dismissedSkipped} previously-dismissed pair${r.dismissedSkipped === 1 ? '' : 's'}.`);
+      }
+      lines.push('Open the Leads page to work through the flagged pills.');
+      setScanResult(lines.join(' '));
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'Scan failed');
+    } finally {
+      setScanning(false);
     }
   };
 
@@ -1112,6 +1139,37 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
         {resetError && (
           <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
             <p className="text-risk text-sm">{resetError}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Scan for duplicate leads */}
+      <div className="bg-paper border border-hair-soft rounded-xl p-6">
+        <h3 className="text-ink font-medium text-base mb-1">Scan for duplicate leads</h3>
+        <p className="text-ink-muted text-sm mb-4">
+          Walks every lead and flags pairs that look like the same person or business. Matches on <span className="text-ink">phone</span>, <span className="text-ink">email</span>, <span className="text-ink">website domain</span>, and <span className="text-ink">name / company word overlap</span> (after stripping noise words like "recruitment", "agency", "Pty Ltd", state names). Two leads where both have business activity are never flagged against each other — only scrape clutter gets surfaced.
+        </p>
+        <p className="text-ink-muted text-sm mb-4">
+          Each flagged pair shows up as an inline pill on the Leads page with <span className="text-ink">Fold</span> (merge into the existing contact, fills blanks only — never overwrites), <span className="text-ink">Dismiss</span> (not a duplicate, hide forever), and <span className="text-ink">Open</span> (jump to the existing contact to sanity-check) buttons. Re-runnable any time.
+        </p>
+
+        <button
+          onClick={handleScanDuplicates}
+          disabled={scanning}
+          className="bg-ink text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {scanning ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
+          {scanning ? 'Scanning...' : 'Scan for duplicates'}
+        </button>
+
+        {scanResult && (
+          <div className="mt-4 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
+            <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />{scanResult}</p>
+          </div>
+        )}
+        {scanError && (
+          <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
+            <p className="text-risk text-sm">{scanError}</p>
           </div>
         )}
       </div>

@@ -1960,4 +1960,530 @@ router.post('/next', (req, res, next) => {
   }
 });
 
+// ============================================================
+// Duplicate scan + flag management
+//
+// Builds an inline-pill duplicate-detection system Jordan can work
+// through on the Leads page. Match signals (any one fires a flag):
+//
+//   HIGH confidence:
+//     - phone last-9 digits match
+//     - email exact match (case-insensitive)
+//     - website / email domain root match (e.g. dixonappointments)
+//
+//   MEDIUM confidence:
+//     - name token overlap after stripping business noise words
+//     - company token overlap
+//     - cross-field: lead A's name tokens overlap lead B's company
+//       tokens (or vice versa) — catches the "biz-name scrape row vs
+//       real person at that company" case
+//
+// Suspect / target roles are decided by activity score (notes + tasks
+// + call logs + emails + activities + tier + manually_contacted +
+// deal_value). Higher score = target (kept on fold). Lower = suspect
+// (folded into target).
+//
+// Dismissals are persisted, so re-running the scan respects "Jordan
+// already said these two aren't duplicates."
+// ============================================================
+
+// Noise words stripped from names/companies before token comparison.
+// These are the words common to many businesses in a category — they
+// add no identifying signal so we drop them before comparing.
+const NOISE_WORDS = new Set([
+  'recruitment', 'recruiting', 'agency', 'agencies', 'employment',
+  'services', 'service', 'group', 'holdings', 'partners', 'partner',
+  'pty', 'ltd', 'llc', 'inc', 'co', 'the', 'and', 'of', 'for', 'in', 'at',
+  'melbourne', 'sydney', 'brisbane', 'perth', 'adelaide',
+  'australia', 'australian', 'au', 'victoria', 'vic', 'nsw',
+  'queensland', 'qld', 'wa', 'sa', 'tas', 'act', 'nt',
+  'it', 'marketing', 'finance', 'sales', 'accounting',
+  'construction', 'engineering', 'executive', 'search', 'network',
+  'office', 'centre', 'center', 'company', 'companies', 'business',
+  'consulting', 'consultancy', 'consultants', 'consultant',
+]);
+
+function normalizeTokens(text: string | null | undefined): Set<string> {
+  if (!text) return new Set();
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length >= 2 && !NOISE_WORDS.has(t)),
+  );
+}
+
+function phoneKey(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : null;
+}
+
+function domainRoot(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const m = url.toLowerCase().match(/(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+)\./);
+  return m && m[1].length >= 3 ? m[1] : null;
+}
+
+function emailDomainRoot(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const m = email.toLowerCase().match(/@([a-z0-9-]+)\./);
+  return m && m[1].length >= 3 ? m[1] : null;
+}
+
+interface ScanLead {
+  id: number;
+  name: string;
+  company: string | null;
+  phone: string;
+  email: string | null;
+  website: string | null;
+  pipeline_stage: string | null;
+  manually_contacted: number;
+  consolidated_summary: string | null;
+  deal_value: number;
+  notes_count: number;
+  tasks_count: number;
+  calls_count: number;
+  emails_count: number;
+  activities_count: number;
+}
+
+/**
+ * Activity score — higher = more "worked." Drives suspect vs target
+ * assignment (target stays, suspect folds into it).
+ */
+function activityScore(lead: ScanLead): number {
+  return (
+    lead.notes_count
+    + lead.tasks_count
+    + lead.calls_count
+    + lead.emails_count
+    + lead.activities_count
+    + (lead.manually_contacted === 1 ? 1 : 0)
+    + (lead.pipeline_stage ? 2 : 0)
+    + (lead.deal_value > 0 ? 1 : 0)
+    + (lead.consolidated_summary && lead.consolidated_summary.trim() ? 1 : 0)
+  );
+}
+
+/**
+ * Compute the match reasons + confidence between two leads. Returns
+ * null if they don't match on any signal.
+ */
+function matchPair(a: ScanLead, b: ScanLead): { reasons: string[]; confidence: 'high' | 'medium' } | null {
+  const reasons: string[] = [];
+  let highConfidence = false;
+
+  // HIGH: phone last-9 match.
+  const pa = phoneKey(a.phone);
+  const pb = phoneKey(b.phone);
+  if (pa && pb && pa === pb) {
+    reasons.push('Same phone number');
+    highConfidence = true;
+  }
+
+  // HIGH: email exact match.
+  const ea = a.email?.trim().toLowerCase();
+  const eb = b.email?.trim().toLowerCase();
+  if (ea && eb && ea === eb) {
+    reasons.push('Same email address');
+    highConfidence = true;
+  }
+
+  // HIGH: website OR email domain root match.
+  const da = domainRoot(a.website) || emailDomainRoot(a.email);
+  const db = domainRoot(b.website) || emailDomainRoot(b.email);
+  if (da && db && da === db) {
+    reasons.push(`Same domain (${da})`);
+    highConfidence = true;
+  }
+
+  // MEDIUM: token overlap across name/company combinations.
+  const nameTokensA = normalizeTokens(a.name);
+  const nameTokensB = normalizeTokens(b.name);
+  const compTokensA = normalizeTokens(a.company);
+  const compTokensB = normalizeTokens(b.company);
+
+  function overlap(setA: Set<string>, setB: Set<string>): string[] {
+    if (setA.size === 0 || setB.size === 0) return [];
+    const hits: string[] = [];
+    for (const t of setA) if (setB.has(t)) hits.push(t);
+    return hits;
+  }
+
+  // Combine name + company on each side — Jordan's mental model is
+  // "if any identifier word matches across these two leads, flag it."
+  const allA = new Set<string>([...nameTokensA, ...compTokensA]);
+  const allB = new Set<string>([...nameTokensB, ...compTokensB]);
+  const hits = overlap(allA, allB);
+
+  if (hits.length > 0) {
+    // Only add a token reason if we haven't already matched on a
+    // stronger signal — keeps the reason list short and useful.
+    if (!highConfidence) {
+      reasons.push(`Shared identifier: ${hits.slice(0, 3).join(', ')}`);
+    }
+  } else if (!highConfidence) {
+    // No phone/email/domain match AND no token overlap → not a dup.
+    return null;
+  }
+
+  return {
+    reasons,
+    confidence: highConfidence ? 'high' : 'medium',
+  };
+}
+
+/**
+ * POST /api/leads/scan-duplicates
+ *
+ * Walks the lead set, finds candidate duplicate pairs, upserts them
+ * into duplicate_flags. Respects existing dismissals (re-discovered
+ * pairs with dismissed_at set stay dismissed).
+ *
+ * Skips pairs where BOTH leads have business activity — never
+ * suggests merging two real contacts against each other. The pair
+ * has to have a clear suspect (untouched scrape row) and a clear
+ * target (worked lead) OR both be untouched.
+ */
+router.post('/scan-duplicates', (_req, res, next) => {
+  try {
+    const db = getDb();
+
+    const leads = db.prepare(`
+      SELECT
+        l.id, l.name, COALESCE(l.company, '') AS company,
+        COALESCE(l.phone, '') AS phone,
+        l.email, l.website,
+        l.pipeline_stage, l.manually_contacted,
+        l.consolidated_summary, l.deal_value,
+        (SELECT COUNT(*) FROM notes        WHERE notes.lead_id        = l.id) AS notes_count,
+        (SELECT COUNT(*) FROM tasks        WHERE tasks.lead_id        = l.id) AS tasks_count,
+        (SELECT COUNT(*) FROM call_logs    WHERE call_logs.lead_id    = l.id) AS calls_count,
+        (SELECT COUNT(*) FROM emails_sent  WHERE emails_sent.lead_id  = l.id) AS emails_count,
+        (SELECT COUNT(*) FROM activities   WHERE activities.lead_id   = l.id) AS activities_count
+      FROM leads l
+    `).all() as ScanLead[];
+
+    // Build inverted indices so we only compare pairs that share at
+    // least one signal. Each lead's id goes into every bucket it
+    // belongs to; pair candidates are then "any two ids that share a
+    // bucket."
+    const buckets = new Map<string, number[]>();
+    const addToBucket = (key: string, id: number) => {
+      let arr = buckets.get(key);
+      if (!arr) { arr = []; buckets.set(key, arr); }
+      arr.push(id);
+    };
+
+    const leadById = new Map<number, ScanLead>();
+    for (const lead of leads) {
+      leadById.set(lead.id, lead);
+
+      const pk = phoneKey(lead.phone);
+      if (pk) addToBucket(`phone:${pk}`, lead.id);
+
+      const ek = lead.email?.trim().toLowerCase();
+      if (ek) addToBucket(`email:${ek}`, lead.id);
+
+      const dk = domainRoot(lead.website) || emailDomainRoot(lead.email);
+      if (dk) addToBucket(`domain:${dk}`, lead.id);
+
+      const tokens = new Set<string>([
+        ...normalizeTokens(lead.name),
+        ...normalizeTokens(lead.company),
+      ]);
+      for (const t of tokens) addToBucket(`token:${t}`, lead.id);
+    }
+
+    // Walk every bucket; any pair sharing a bucket is a candidate.
+    // Use a Set keyed by "min,max" to dedupe pairs that share multiple
+    // buckets (we re-run matchPair for the full reason list anyway).
+    const candidatePairs = new Set<string>();
+    for (const ids of buckets.values()) {
+      if (ids.length < 2) continue;
+      // Skip extremely common token buckets — if more than 50 leads
+      // share a single token, it's a stopword we missed (or a brand
+      // term used across a category) and pairing all of them would
+      // explode the result set. Stronger signals (phone/email/domain)
+      // are always small buckets, so this only kicks in on tokens.
+      if (ids.length > 50) continue;
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const a = Math.min(ids[i], ids[j]);
+          const b = Math.max(ids[i], ids[j]);
+          candidatePairs.add(`${a},${b}`);
+        }
+      }
+    }
+
+    // Existing dismissals — preserve so we don't re-flag dismissed pairs.
+    const dismissed = new Set<string>(
+      (db.prepare(
+        'SELECT suspect_lead_id, target_lead_id FROM duplicate_flags WHERE dismissed_at IS NOT NULL',
+      ).all() as { suspect_lead_id: number; target_lead_id: number }[])
+        .map((r) => `${r.suspect_lead_id},${r.target_lead_id}`),
+    );
+
+    // Clear existing ACTIVE flags before re-populating (dismissals stay).
+    db.prepare('DELETE FROM duplicate_flags WHERE dismissed_at IS NULL').run();
+
+    const upsert = db.prepare(`
+      INSERT INTO duplicate_flags
+        (suspect_lead_id, target_lead_id, confidence, reasons, detected_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+      ON CONFLICT (suspect_lead_id, target_lead_id) DO NOTHING
+    `);
+
+    let inserted = 0;
+    let dismissedSkipped = 0;
+    let twoTouchedSkipped = 0;
+
+    const tx = db.transaction(() => {
+      for (const key of candidatePairs) {
+        const [aId, bId] = key.split(',').map((s) => parseInt(s, 10));
+        const a = leadById.get(aId);
+        const b = leadById.get(bId);
+        if (!a || !b) continue;
+
+        const match = matchPair(a, b);
+        if (!match) continue;
+
+        // Decide suspect / target by activity score. Target = higher.
+        const sa = activityScore(a);
+        const sb = activityScore(b);
+
+        // Safety: never suggest merging two leads that BOTH have
+        // meaningful activity. That would risk losing real client
+        // history if the user clicks Fold. The dedupe-as-cleanup
+        // story is "kill the scrape clutter," not "merge clients."
+        const aTouched = sa > 0;
+        const bTouched = sb > 0;
+        if (aTouched && bTouched) {
+          twoTouchedSkipped++;
+          continue;
+        }
+
+        const targetId = sb > sa ? bId : aId;
+        const suspectId = targetId === bId ? aId : bId;
+
+        // Honour dismissals — both directions, since the original flag
+        // might have been recorded the other way around.
+        if (
+          dismissed.has(`${suspectId},${targetId}`)
+          || dismissed.has(`${targetId},${suspectId}`)
+        ) {
+          dismissedSkipped++;
+          continue;
+        }
+
+        upsert.run(
+          suspectId,
+          targetId,
+          match.confidence,
+          JSON.stringify(match.reasons),
+        );
+        inserted++;
+      }
+    });
+    tx();
+
+    logger.info({ inserted, dismissedSkipped, twoTouchedSkipped, candidates: candidatePairs.size }, 'Duplicate scan complete');
+    res.json({ flagged: inserted, dismissedSkipped, twoTouchedSkipped });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/leads/duplicate-flags
+ *
+ * Returns active flags with both leads' summary info, ordered by
+ * confidence DESC then detection date. Used by the Leads page to
+ * render inline "Likely duplicate of X" pills.
+ */
+router.get('/duplicate-flags', (_req, res, next) => {
+  try {
+    const db = getDb();
+    const rows = db.prepare(`
+      SELECT
+        f.suspect_lead_id, f.target_lead_id, f.confidence, f.reasons,
+        f.detected_at,
+        s.name AS s_name, s.company AS s_company, s.phone AS s_phone,
+        t.name AS t_name, t.company AS t_company, t.phone AS t_phone,
+        t.email AS t_email, t.website AS t_website
+      FROM duplicate_flags f
+      JOIN leads s ON s.id = f.suspect_lead_id
+      JOIN leads t ON t.id = f.target_lead_id
+      WHERE f.dismissed_at IS NULL
+      ORDER BY
+        CASE f.confidence WHEN 'high' THEN 0 ELSE 1 END,
+        f.detected_at DESC
+    `).all() as Array<{
+      suspect_lead_id: number; target_lead_id: number;
+      confidence: string; reasons: string; detected_at: string;
+      s_name: string; s_company: string | null; s_phone: string;
+      t_name: string; t_company: string | null; t_phone: string;
+      t_email: string | null; t_website: string | null;
+    }>;
+
+    res.json(rows.map((r) => ({
+      suspectId: r.suspect_lead_id,
+      targetId: r.target_lead_id,
+      confidence: r.confidence,
+      reasons: safeJsonParse<string[]>(r.reasons, []),
+      detectedAt: r.detected_at,
+      suspect: { id: r.suspect_lead_id, name: r.s_name, company: r.s_company, phone: r.s_phone },
+      target: {
+        id: r.target_lead_id, name: r.t_name, company: r.t_company,
+        phone: r.t_phone, email: r.t_email, website: r.t_website,
+      },
+    })));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/leads/:suspectId/fold-into/:targetId
+ *
+ * Safe field-level merge: target keeps every populated field, suspect
+ * only contributes to fields where target is empty. Then reassign all
+ * activity (call_logs, notes, tasks, emails_sent, activities, projects,
+ * callbacks, email_drafts) and delete the suspect row.
+ *
+ * The target's existing mobile is NEVER overwritten by a head-office
+ * switchboard, the target's personal email NEVER replaced by an info@
+ * address, etc. This is the protection Jordan asked for repeatedly.
+ */
+router.post('/:suspectId/fold-into/:targetId', (req, res, next) => {
+  try {
+    const db = getDb();
+    const suspectId = parseInt(req.params.suspectId, 10);
+    const targetId = parseInt(req.params.targetId, 10);
+    if (isNaN(suspectId) || isNaN(targetId) || suspectId === targetId) {
+      throw new ApiError(400, 'Invalid suspect/target ids');
+    }
+
+    const target = db.prepare('SELECT * FROM leads WHERE id = ?').get(targetId) as LeadRow | undefined;
+    const suspect = db.prepare('SELECT * FROM leads WHERE id = ?').get(suspectId) as LeadRow | undefined;
+    if (!target || !suspect) {
+      throw new ApiError(404, 'Lead not found');
+    }
+
+    // Compute the field-level updates target needs. Only fields that
+    // are blank/null on target get filled from suspect. Nothing on
+    // target ever gets overwritten with a suspect value.
+    const updates: Record<string, unknown> = {};
+    const fillIfEmpty = (field: keyof LeadRow, value: unknown) => {
+      const current = target[field];
+      const targetEmpty =
+        current === null
+        || current === undefined
+        || (typeof current === 'string' && current.trim() === '');
+      const suspectHasValue =
+        value !== null
+        && value !== undefined
+        && !(typeof value === 'string' && (value as string).trim() === '');
+      if (targetEmpty && suspectHasValue) {
+        updates[field] = value;
+      }
+    };
+
+    fillIfEmpty('phone', suspect.phone);
+    fillIfEmpty('email', suspect.email);
+    fillIfEmpty('website', suspect.website);
+    fillIfEmpty('company', suspect.company);
+    fillIfEmpty('category', suspect.category);
+    fillIfEmpty('company_info', suspect.company_info);
+
+    const reassignTables = [
+      'call_logs', 'notes', 'tasks', 'activities', 'emails_sent',
+      'projects', 'callbacks', 'email_drafts',
+    ];
+
+    let rowsReassigned = 0;
+
+    const tx = db.transaction(() => {
+      // 1) Reassign every child row.
+      for (const table of reassignTables) {
+        const r = db.prepare(`UPDATE ${table} SET lead_id = ? WHERE lead_id = ?`).run(targetId, suspectId);
+        rowsReassigned += r.changes;
+      }
+
+      // 2) Apply the field-level fills to target.
+      const setClauses: string[] = [];
+      const params: Record<string, unknown> = { id: targetId };
+      for (const [field, value] of Object.entries(updates)) {
+        setClauses.push(`${field} = @${field}`);
+        params[field] = value;
+      }
+      if (setClauses.length > 0) {
+        setClauses.push("updated_at = datetime('now')");
+        db.prepare(`UPDATE leads SET ${setClauses.join(', ')} WHERE id = @id`).run(params);
+      }
+
+      // 3) Drop any remaining duplicate_flags that reference the suspect
+      //    (FK cascade handles this on DELETE, but be explicit).
+      db.prepare('DELETE FROM duplicate_flags WHERE suspect_lead_id = ? OR target_lead_id = ?')
+        .run(suspectId, suspectId);
+
+      // 4) Delete the suspect row.
+      db.prepare('DELETE FROM leads WHERE id = ?').run(suspectId);
+    });
+    tx();
+
+    logger.info({ suspectId, targetId, fieldsFilled: Object.keys(updates), rowsReassigned }, 'Lead folded');
+    res.json({
+      success: true,
+      survivorId: targetId,
+      fieldsFilled: Object.keys(updates),
+      rowsReassigned,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/leads/:suspectId/dismiss-duplicate-of/:targetId
+ *
+ * "These two aren't a duplicate, leave me alone." Sets dismissed_at on
+ * the flag so future scans skip the pair. Lead rows are untouched.
+ */
+router.post('/:suspectId/dismiss-duplicate-of/:targetId', (req, res, next) => {
+  try {
+    const db = getDb();
+    const suspectId = parseInt(req.params.suspectId, 10);
+    const targetId = parseInt(req.params.targetId, 10);
+    if (isNaN(suspectId) || isNaN(targetId)) {
+      throw new ApiError(400, 'Invalid suspect/target ids');
+    }
+
+    // Upsert so we always have a row to mark dismissed even if the
+    // pair was inserted in the reverse order.
+    db.prepare(`
+      INSERT INTO duplicate_flags
+        (suspect_lead_id, target_lead_id, confidence, reasons, detected_at, dismissed_at)
+      VALUES (?, ?, 'medium', '[]', datetime('now'), datetime('now'))
+      ON CONFLICT (suspect_lead_id, target_lead_id) DO UPDATE SET
+        dismissed_at = datetime('now')
+    `).run(suspectId, targetId);
+
+    // Same pair flagged in the other direction (target→suspect rather
+    // than suspect→target) — dismiss that too if it exists.
+    db.prepare(`
+      UPDATE duplicate_flags SET dismissed_at = datetime('now')
+      WHERE suspect_lead_id = ? AND target_lead_id = ?
+    `).run(targetId, suspectId);
+
+    logger.info({ suspectId, targetId }, 'Duplicate flag dismissed');
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

@@ -180,6 +180,52 @@ export async function sanitizeCategories(): Promise<{ cleaned: number }> {
   });
 }
 
+// ── Duplicate flagging (inline pills on Leads page) ───────────────
+
+export interface DuplicateFlag {
+  suspectId: number;
+  targetId: number;
+  confidence: 'high' | 'medium';
+  reasons: string[];
+  detectedAt: string;
+  suspect: { id: number; name: string; company: string | null; phone: string };
+  target: {
+    id: number; name: string; company: string | null; phone: string;
+    email: string | null; website: string | null;
+  };
+}
+
+/** Walks every lead, builds match candidates, upserts active flags. */
+export async function scanDuplicates(): Promise<{
+  flagged: number;
+  dismissedSkipped: number;
+  twoTouchedSkipped: number;
+}> {
+  return request('/leads/scan-duplicates', { method: 'POST' });
+}
+
+/** Active (non-dismissed) flags. The Leads page uses these to render
+ *  inline "Likely duplicate of X" pills under each suspect row. */
+export async function getDuplicateFlags(): Promise<DuplicateFlag[]> {
+  return request<DuplicateFlag[]>('/leads/duplicate-flags');
+}
+
+/** Safe field-level merge: target keeps everything, suspect contributes
+ *  only to target's empty fields. Activity reassigned, suspect deleted. */
+export async function foldLead(suspectId: number, targetId: number): Promise<{
+  success: true;
+  survivorId: number;
+  fieldsFilled: string[];
+  rowsReassigned: number;
+}> {
+  return request(`/leads/${suspectId}/fold-into/${targetId}`, { method: 'POST' });
+}
+
+/** "Not a duplicate." Sets dismissed_at on the flag — future scans skip. */
+export async function dismissDuplicate(suspectId: number, targetId: number): Promise<{ success: true }> {
+  return request(`/leads/${suspectId}/dismiss-duplicate-of/${targetId}`, { method: 'POST' });
+}
+
 // ── Undo a CSV import ────────────────────────────────────────
 
 export interface UndoImportResult {

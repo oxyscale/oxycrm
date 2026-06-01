@@ -31,6 +31,12 @@ export default function LeadsPage() {
   // leads.category, which used to pollute the filter. The managed list is the
   // single source of truth — if it's not there, it doesn't show up.
   const [categories, setCategories] = useState<string[]>([]);
+  // Duplicate flags keyed by suspect lead id → flag info. The row for
+  // each suspect lead shows a "Likely duplicate of X" pill with Fold /
+  // Dismiss / Open buttons. Populated once on mount; updated locally as
+  // Jordan acts on each pill (no full reload needed).
+  const [flagsBySuspect, setFlagsBySuspect] = useState<Map<number, api.DuplicateFlag>>(new Map());
+  const [foldingId, setFoldingId] = useState<number | null>(null);
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [filterCategory, setFilterCategory] = useState<string>(searchParams.get('cat') || 'all');
   const [filterContacted, setFilterContacted] = useState<'all' | 'contacted' | 'not_contacted'>(
@@ -77,6 +83,63 @@ export default function LeadsPage() {
   useEffect(() => {
     api.getCategories().then(setCategories).catch(() => { /* non-critical */ });
   }, []);
+
+  // Load duplicate flags so we can render the inline pills.
+  useEffect(() => {
+    api.getDuplicateFlags()
+      .then((flags) => {
+        const m = new Map<number, api.DuplicateFlag>();
+        for (const f of flags) m.set(f.suspectId, f);
+        setFlagsBySuspect(m);
+      })
+      .catch(() => { /* non-critical — pills just won't show */ });
+  }, []);
+
+  const handleFoldLead = async (flag: api.DuplicateFlag) => {
+    const ok = window.confirm(
+      `Fold "${flag.suspect.name}" into "${flag.target.name}"?\n\n` +
+      `${flag.target.name} keeps all its fields. Any blank fields on ${flag.target.name} will be filled in from "${flag.suspect.name}" if available (phone, email, website, etc.). Nothing existing gets overwritten.\n\n` +
+      `Any activity on "${flag.suspect.name}" moves to "${flag.target.name}". The duplicate row is then deleted.`,
+    );
+    if (!ok) return;
+    setFoldingId(flag.suspectId);
+    try {
+      await api.foldLead(flag.suspectId, flag.targetId);
+      // Remove the folded lead from the list + drop the flag.
+      setLeads((prev) => prev.filter((l) => l.id !== flag.suspectId));
+      setFlagsBySuspect((prev) => {
+        const next = new Map(prev);
+        next.delete(flag.suspectId);
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to fold lead:', err);
+      alert(err instanceof Error ? err.message : 'Failed to fold lead');
+    } finally {
+      setFoldingId(null);
+    }
+  };
+
+  const handleDismissDuplicate = async (flag: api.DuplicateFlag) => {
+    // Optimistic — drop the pill straight away; if the server call fails
+    // we restore it below.
+    setFlagsBySuspect((prev) => {
+      const next = new Map(prev);
+      next.delete(flag.suspectId);
+      return next;
+    });
+    try {
+      await api.dismissDuplicate(flag.suspectId, flag.targetId);
+    } catch (err) {
+      console.error('Failed to dismiss flag:', err);
+      // Restore the flag on failure so the user can retry.
+      setFlagsBySuspect((prev) => {
+        const next = new Map(prev);
+        next.set(flag.suspectId, flag);
+        return next;
+      });
+    }
+  };
 
   // Close recent leads dropdown when clicking outside
   useEffect(() => {
@@ -323,6 +386,62 @@ export default function LeadsPage() {
                       </>
                     )}
                   </div>
+                  {/* Duplicate flag pill — fires when the scan identified
+                      this lead as likely the same as another in the DB.
+                      Click Fold to merge (target keeps everything, blanks
+                      get filled from this row, activity moves over).
+                      Click Dismiss to mark "not a dup" forever. */}
+                  {flagsBySuspect.has(lead.id) && (() => {
+                    const flag = flagsBySuspect.get(lead.id)!;
+                    return (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className={`mt-2 inline-flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
+                          flag.confidence === 'high'
+                            ? 'bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.22)]'
+                            : 'bg-[rgba(245,158,11,0.06)] border border-[rgba(245,158,11,0.22)]'
+                        }`}
+                      >
+                        <span className={flag.confidence === 'high' ? 'text-risk font-medium' : 'text-warn font-medium'}>
+                          {flag.confidence === 'high' ? 'Match' : 'Possible match'}
+                        </span>
+                        <span className="text-ink-muted">
+                          Likely duplicate of <span className="text-ink font-medium">{flag.target.name}</span>
+                          {flag.target.company && <span className="text-ink-dim"> at {flag.target.company}</span>}
+                        </span>
+                        <span className="text-ink-dim text-[11px]">
+                          ({flag.reasons.join(' · ')})
+                        </span>
+                        <div className="flex items-center gap-1.5 ml-1">
+                          <button
+                            type="button"
+                            onClick={() => handleFoldLead(flag)}
+                            disabled={foldingId === flag.suspectId}
+                            className="text-ink-muted hover:text-ink text-[11px] font-medium px-2 py-0.5 rounded-full bg-paper border border-hair-soft hover:border-hair-strong transition-all disabled:opacity-50"
+                          >
+                            {foldingId === flag.suspectId ? 'Folding...' : 'Fold'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDismissDuplicate(flag)}
+                            className="text-ink-dim hover:text-ink-muted text-[11px] px-2 py-0.5 transition-all"
+                          >
+                            Dismiss
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              rememberLeadProfileReturn();
+                              navigate(`/leads/${flag.targetId}`);
+                            }}
+                            className="text-sky-ink hover:underline text-[11px] font-medium px-1"
+                          >
+                            Open {flag.target.name.split(' ')[0]} →
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="px-3 py-3 overflow-hidden">
                   {lead.category && (
