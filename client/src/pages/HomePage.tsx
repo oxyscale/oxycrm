@@ -151,15 +151,25 @@ export default function HomePage() {
     }, 3000);
   };
 
-  // Load category options when the create lead form opens
+  // Pull the managed category list whenever either form opens. Also exposed
+  // as a callable so successful import / create can refresh it inline (new
+  // categories the user typed in just got auto-added server-side).
+  const reloadCategoryOptions = useCallback(async () => {
+    try {
+      setLoadingCategories(true);
+      const cats = await api.getCategories();
+      setCategoryOptions(cats);
+    } catch {
+      /* non-critical */
+    } finally {
+      setLoadingCategories(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (!showCreateLead) return;
-    setLoadingCategories(true);
-    api.getCategories()
-      .then((cats) => setCategoryOptions(cats))
-      .catch(() => { /* non-critical */ })
-      .finally(() => setLoadingCategories(false));
-  }, [showCreateLead]);
+    if (!showCreateLead && !showImport) return;
+    reloadCategoryOptions();
+  }, [showCreateLead, showImport, reloadCategoryOptions]);
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -223,6 +233,11 @@ export default function HomePage() {
 
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
+
+      // Pull the managed-categories list again in case the server just
+      // auto-created the typed name. Keeps the datalist in sync without
+      // requiring a page refresh.
+      reloadCategoryOptions();
     } catch (err) {
       setImportError(err instanceof Error ? err.message : 'Failed to import leads');
     } finally {
@@ -269,6 +284,10 @@ export default function HomePage() {
 
       const freshLeads = await api.getLeads({ status: 'not_called' });
       setLeads(freshLeads);
+
+      // Refresh the dropdown so a newly-created category name appears in
+      // future Add Lead / Import dialogs immediately.
+      reloadCategoryOptions();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create lead');
     } finally {
@@ -498,19 +517,28 @@ export default function HomePage() {
                 <EyebrowLabel variant="bare" className="mb-2">
                   Category
                 </EyebrowLabel>
-                <select
+                {/* Combo input: pick a managed category OR type a new one.
+                    New names get auto-added to Settings > Categories on save
+                    so the managed list grows organically as Jordan expands. */}
+                <input
+                  type="text"
+                  list="lead-category-options"
                   value={newLead.category}
                   onChange={(e) =>
                     setNewLead((prev) => ({ ...prev, category: e.target.value }))
                   }
+                  placeholder="Select or type a new category"
                   className={tempInputClass}
                   disabled={loadingCategories}
-                >
-                  <option value="">Select category</option>
+                />
+                <datalist id="lead-category-options">
                   {categoryOptions.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
+                    <option key={cat} value={cat} />
                   ))}
-                </select>
+                </datalist>
+                <p className="text-ink-dim text-xs mt-1.5">
+                  Pick an existing one or type a new name — new categories auto-save to Settings.
+                </p>
               </div>
             </div>
 
@@ -519,7 +547,7 @@ export default function HomePage() {
               size="md"
               icon={creating ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
               onClick={handleCreateLead}
-              disabled={!newLead.name.trim() || creating}
+              disabled={!newLead.name.trim() || !newLead.category.trim() || creating}
             >
               {creating ? 'Creating…' : 'Add lead'}
             </PillButton>
@@ -536,15 +564,28 @@ export default function HomePage() {
           >
             <div className="mb-4 max-w-md">
               <EyebrowLabel variant="bare" className="mb-2">
-                Category (optional)
+                Category
               </EyebrowLabel>
+              {/* Required. Applied to every lead in this batch regardless of
+                  what the CSV's own category column says. If the typed value
+                  isn't in the managed list yet, the server auto-creates it
+                  so it appears in Settings > Categories straight after. */}
               <input
                 type="text"
+                list="import-category-options"
                 value={importCategory}
                 onChange={(e) => setImportCategory(e.target.value)}
-                placeholder="e.g. Recruitment, Property Styling, SaaS…"
+                placeholder="Select or type a new category"
                 className={tempInputClass}
               />
+              <datalist id="import-category-options">
+                {categoryOptions.map((cat) => (
+                  <option key={cat} value={cat} />
+                ))}
+              </datalist>
+              <p className="text-ink-dim text-xs mt-1.5">
+                Required. Applied to every lead in this CSV. New names auto-save to your managed Categories.
+              </p>
             </div>
 
             <div
@@ -593,10 +634,15 @@ export default function HomePage() {
                 size="md"
                 icon={<Upload size={16} />}
                 onClick={handleImport}
-                disabled={!selectedFile || importing}
+                disabled={!selectedFile || !importCategory.trim() || importing}
               >
                 {importing ? 'Importing…' : 'Import leads'}
               </PillButton>
+              {!importCategory.trim() && selectedFile && (
+                <p className="text-ink-dim text-xs mt-2">
+                  Pick or type a category above to enable import.
+                </p>
+              )}
             </div>
 
             {importError && (

@@ -893,6 +893,15 @@ router.post('/', (req, res, next) => {
     const now = new Date().toISOString();
 
     const createLead = db.transaction(() => {
+      // Auto-add this category to the managed list if the user typed a new
+      // name. Case-insensitive uniqueness is enforced by the categories
+      // table's COLLATE NOCASE on `name`, so INSERT OR IGNORE handles
+      // duplicates without throwing.
+      if (payload.category && payload.category.trim()) {
+        db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)')
+          .run(payload.category.trim());
+      }
+
       // Get next queue position
       const maxPosRow = db.prepare(
         'SELECT COALESCE(MAX(queue_position), 0) as max_pos FROM leads'
@@ -960,8 +969,16 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       throw new ApiError(400, 'leadType must be "new" or "callback"');
     }
 
-    // Optional category override — applies to all leads in this batch
+    // Optional category override — applies to all leads in this batch.
+    // If the user typed a new category name in the import form, auto-add
+    // it to the managed `categories` table so it appears in dropdowns
+    // straight away. INSERT OR IGNORE is idempotent against the
+    // case-insensitive UNIQUE index.
     const categoryOverride = (req.body.category as string)?.trim() || null;
+    if (categoryOverride) {
+      db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)')
+        .run(categoryOverride);
+    }
 
     // Parse the CSV from the uploaded buffer, stripping BOM if present
     const csvContent = req.file.buffer.toString('utf-8').replace(/^﻿/, '');
