@@ -261,9 +261,28 @@ app.use('/api/categories', categoriesRouter);
 // --- Serve React frontend in production ---
 if (process.env.NODE_ENV === 'production') {
   const clientDistPath = path.resolve(process.cwd(), '../client/dist');
-  app.use(express.static(clientDistPath));
-  // All non-API routes serve the React app (client-side routing)
+
+  // Hashed asset files (Vite puts a content hash in every filename, e.g.
+  // index-Bkn8I_Ix.js) are content-addressed — when content changes the
+  // URL changes too. Safe to cache aggressively forever, which avoids
+  // re-downloading on every page load.
+  app.use('/assets', express.static(path.join(clientDistPath, 'assets'), {
+    maxAge: '1y',
+    immutable: true,
+  }));
+
+  // Everything else (favicon, robots.txt, etc.) gets default static serving.
+  app.use(express.static(clientDistPath, { index: false }));
+
+  // The HTML shell is the entry point that points at the latest bundle.
+  // It MUST NEVER be cached — if a user's browser holds an old index.html
+  // it'll keep loading the old bundle even after a deploy. That's why
+  // we were seeing "Back to leads" labels persist after the new code
+  // had shipped. no-store forces the browser to revalidate on every load.
   app.get('*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 }
