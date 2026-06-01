@@ -491,12 +491,14 @@ export default function LeadProfilePage() {
     setDeletingLead(true);
     try {
       await api.deleteLead(lead.id);
-      // Clear the return-url so Back doesn't try to land on a stale filter
-      // that this lead might have populated. The lead is gone, so always
-      // bounce to /leads — the source page they came from might be empty
-      // or stale.
+      // Return to wherever the user came from (with their filter intact),
+      // not bare /leads. If they were on /leads?status=not_contacted and
+      // deleted a junk lead, they want to keep ploughing through the rest
+      // of the Not Contacted queue — not land on the unfiltered list.
+      // Falls back to /leads if there's no saved URL (e.g. direct link).
+      const target = getLeadProfileReturn() || '/leads';
       clearLeadProfileReturn();
-      navigate('/leads');
+      navigate(target);
     } catch (err) {
       console.error('Failed to delete lead:', err);
       setFieldUpdateError(err instanceof Error ? err.message : 'Failed to delete lead');
