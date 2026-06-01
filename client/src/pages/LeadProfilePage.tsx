@@ -27,6 +27,11 @@ import * as api from '../services/api';
 import { recordLeadVisit } from '../utils/recentLeads';
 import { decodeHtmlEntities } from '../utils/text';
 import { todayInSydney, parseTimestamp } from '../utils/dates';
+import {
+  getLeadProfileReturn,
+  clearLeadProfileReturn,
+  getLeadProfileBackLabel,
+} from '../utils/leadProfileNav';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import PillButton from '../components/ui/PillButton';
 import type {
@@ -487,8 +492,10 @@ export default function LeadProfilePage() {
     try {
       await api.deleteLead(lead.id);
       // Clear the return-url so Back doesn't try to land on a stale filter
-      // that this lead might have populated.
-      try { sessionStorage.removeItem('leads:return-url'); } catch { /* ignore */ }
+      // that this lead might have populated. The lead is gone, so always
+      // bounce to /leads — the source page they came from might be empty
+      // or stale.
+      clearLeadProfileReturn();
       navigate('/leads');
     } catch (err) {
       console.error('Failed to delete lead:', err);
@@ -816,23 +823,22 @@ export default function LeadProfilePage() {
 
   return (
     <div className="p-10 max-w-[1400px] mx-auto bg-cream min-h-full">
-      {/* ── Back button — returns to the Leads list with the user's
-          original filter / search / sort restored from sessionStorage. */}
+      {/* ── Back button — returns the user to wherever they came from.
+          Tasks, Pipeline, Reports, Email Bank, the Home page or Leads
+          — anything that stashed a return URL via rememberLeadProfileReturn().
+          Falls back to /leads if nothing was saved (e.g. lead profile was
+          opened directly via deep link). The label adapts to the
+          destination so it always reads correctly. */}
       <button
         onClick={() => {
-          let target = '/leads';
-          try {
-            const saved = sessionStorage.getItem('leads:return-url');
-            if (saved && saved.startsWith('/leads')) target = saved;
-          } catch {
-            // ignore — fall back to /leads
-          }
-          navigate(target);
+          const saved = getLeadProfileReturn();
+          clearLeadProfileReturn();
+          navigate(saved || '/leads');
         }}
         className="flex items-center gap-2 text-ink-dim hover:text-sky-ink transition-all text-sm mb-6"
       >
         <ArrowLeft size={16} />
-        Back to leads
+        {getLeadProfileBackLabel(getLeadProfileReturn())}
       </button>
 
       {fieldUpdateError && (

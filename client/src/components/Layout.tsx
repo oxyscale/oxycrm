@@ -6,6 +6,7 @@ import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useAuth } from '../hooks/useAuth';
 import { getLastVisitedLead } from '../utils/recentLeads';
+import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import * as api from '../services/api';
 
 const navItems = [
@@ -122,6 +123,7 @@ export default function Layout() {
                   if (path === '/leads' && !location.pathname.startsWith('/leads/')) {
                     const last = getLastVisitedLead();
                     if (last) {
+                      rememberLeadProfileReturn();
                       navigate(`/leads/${last.id}`);
                       return;
                     }

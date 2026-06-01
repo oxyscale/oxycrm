@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, X, User, Building2, Phone, ArrowRight, Clock } from 'lucide-react';
 import { searchLeads } from '../services/api';
 import { getRecentLeads, type RecentLead } from '../utils/recentLeads';
+import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import type { Lead, CallLog } from '../types';
 
 type SearchResult = Lead & { lastCallLog: CallLog | null };
@@ -108,6 +109,10 @@ export default function SearchBar() {
 
   const selectResult = useCallback(
     (lead: SearchResult) => {
+      // Stash the page the user is ACTUALLY on (the Cmd+K overlay is
+      // transparent over whatever page they had open) so the lead profile
+      // back button returns there.
+      rememberLeadProfileReturn();
       closeSearch();
       navigate(`/leads/${lead.id}`);
     },
@@ -135,6 +140,7 @@ export default function SearchBar() {
     } else if (e.key === 'Enter' && listLength > 0) {
       e.preventDefault();
       if (isShowingRecent) {
+        rememberLeadProfileReturn();
         closeSearch();
         navigate(`/leads/${recentLeads[selectedIndex].id}`);
       } else {
@@ -240,6 +246,7 @@ export default function SearchBar() {
                         <button
                           data-search-item
                           onClick={() => {
+                            rememberLeadProfileReturn();
                             closeSearch();
                             navigate(`/leads/${recent.id}`);
                           }}

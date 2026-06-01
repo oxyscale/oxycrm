@@ -28,6 +28,7 @@ import PanelCard from '../components/ui/PanelCard';
 import PriorityRow from '../components/ui/PriorityRow';
 import * as api from '../services/api';
 import { todayInSydney, parseTimestamp } from '../utils/dates';
+import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import type { ImportResult, DuplicateLead, Activity, Lead } from '../types';
 
 // ── Pipeline stage display config ────────────────────────────
@@ -872,7 +873,10 @@ export default function HomePage() {
                           </span>
                         }
                         body={task.label}
-                        onClick={() => navigate(`/leads/${task.leadId}`)}
+                        onClick={() => {
+                          rememberLeadProfileReturn();
+                          navigate(`/leads/${task.leadId}`);
+                        }}
                         right={
                           <>
                             <span className="font-mono text-[11px] text-ink-dim tracking-wide">
@@ -886,6 +890,7 @@ export default function HomePage() {
                                 icon={<ArrowRight size={13} />}
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  rememberLeadProfileReturn();
                                   navigate(`/leads/${task.leadId}`);
                                 }}
                               >
@@ -931,7 +936,10 @@ export default function HomePage() {
                     return (
                       <button
                         key={activity.id}
-                        onClick={() => navigate(`/leads/${activity.leadId}`)}
+                        onClick={() => {
+                          rememberLeadProfileReturn();
+                          navigate(`/leads/${activity.leadId}`);
+                        }}
                         className="w-full text-left p-2.5 rounded-lg hover:bg-tray transition-all group"
                       >
                         <div className="flex items-start gap-3">

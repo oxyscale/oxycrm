@@ -19,6 +19,7 @@ function addWeeksFromToday(weeks: number): string {
 }
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import { todayInSydney } from '../utils/dates';
+import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import SectionHeading from '../components/ui/SectionHeading';
 import PanelCard from '../components/ui/PanelCard';
 import * as api from '../services/api';
@@ -311,7 +312,10 @@ export default function TasksPage() {
                     {/* Task info */}
                     <div
                       className="flex-1 min-w-0 cursor-pointer"
-                      onClick={() => navigate(`/leads/${task.leadId}`)}
+                      onClick={() => {
+                        rememberLeadProfileReturn();
+                        navigate(`/leads/${task.leadId}`);
+                      }}
                     >
                       <p className={`text-[14px] font-medium ${task.completed ? 'line-through text-ink-dim' : 'text-ink'}`}>
                         {task.label}
@@ -376,7 +380,10 @@ export default function TasksPage() {
                       )}
 
                       <button
-                        onClick={() => navigate(`/leads/${task.leadId}`)}
+                        onClick={() => {
+                          rememberLeadProfileReturn();
+                          navigate(`/leads/${task.leadId}`);
+                        }}
                         className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full bg-tray hover:bg-sky-wash flex items-center justify-center text-ink-dim hover:text-sky-ink"
                         title="Open lead"
                       >

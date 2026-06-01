@@ -37,6 +37,7 @@ import * as api from '../services/api';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
 import { todayInSydney } from '../utils/dates';
+import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -356,7 +357,10 @@ export default function ReportsPage() {
                   .map((l, idx) => (
                     <button
                       key={l.id}
-                      onClick={() => navigate(`/leads/${l.id}`)}
+                      onClick={() => {
+                        rememberLeadProfileReturn();
+                        navigate(`/leads/${l.id}`);
+                      }}
                       className={`w-full text-left grid grid-cols-[1fr_100px] gap-3 px-4 py-3 hover:bg-tray transition-all items-center ${
                         idx > 0 ? 'border-t border-hair-soft' : ''
                       }`}
@@ -403,7 +407,10 @@ export default function ReportsPage() {
                   whenLabel: formatLongDate(l.closedAt.split('T')[0]),
                 }))}
                 whenColumn="Closed"
-                onOpen={(id) => navigate(`/leads/${id}`)}
+                onOpen={(id) => {
+                  rememberLeadProfileReturn();
+                  navigate(`/leads/${id}`);
+                }}
               />
             )}
           </Section>
@@ -427,7 +434,10 @@ export default function ReportsPage() {
                   whenLabel: formatLongDate(l.closedAt.split('T')[0]),
                 }))}
                 whenColumn="Closed"
-                onOpen={(id) => navigate(`/leads/${id}`)}
+                onOpen={(id) => {
+                  rememberLeadProfileReturn();
+                  navigate(`/leads/${id}`);
+                }}
               />
             )}
           </Section>
@@ -448,7 +458,10 @@ export default function ReportsPage() {
                   return (
                     <button
                       key={t.id}
-                      onClick={() => navigate(`/leads/${t.leadId}`)}
+                      onClick={() => {
+                        rememberLeadProfileReturn();
+                        navigate(`/leads/${t.leadId}`);
+                      }}
                       className={`w-full text-left px-4 py-3 flex items-center gap-4 hover:bg-tray transition-all ${
                         idx > 0 ? 'border-t border-hair-soft' : ''
                       }`}

@@ -13,6 +13,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import * as api from '../services/api';
+import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import type { Lead, PipelineStage } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
@@ -301,7 +302,10 @@ export default function PipelinePage() {
                           {/* Clickable lead info */}
                           <div
                             className="cursor-pointer"
-                            onClick={() => navigate(`/leads/${lead.id}`)}
+                            onClick={() => {
+                              rememberLeadProfileReturn();
+                              navigate(`/leads/${lead.id}`);
+                            }}
                           >
                             <p className="text-ink text-sm font-medium truncate hover:text-sky-ink transition-colors">
                               {lead.name}

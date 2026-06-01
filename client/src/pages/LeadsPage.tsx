@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import * as api from '../services/api';
 import { getRecentLeads, type RecentLead } from '../utils/recentLeads';
+import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import type { Lead } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
@@ -212,14 +213,7 @@ export default function LeadsPage() {
                       type="button"
                       onClick={() => {
                         setSearchFocused(false);
-                        try {
-                          sessionStorage.setItem(
-                            'leads:return-url',
-                            `/leads${window.location.search || ''}`,
-                          );
-                        } catch {
-                          // ignore — non-critical
-                        }
+                        rememberLeadProfileReturn();
                         navigate(`/leads/${recent.id}`);
                       }}
                       className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-tray transition-colors"
@@ -303,18 +297,7 @@ export default function LeadsPage() {
               <tr
                 key={lead.id}
                 onClick={() => {
-                  // Remember which Leads URL the user was on (filter +
-                  // search + sort) so the Lead Profile Back button can
-                  // restore it instead of dumping them on the unfiltered
-                  // list. Saved per-session — clears on browser close.
-                  try {
-                    sessionStorage.setItem(
-                      'leads:return-url',
-                      `/leads${window.location.search || ''}`,
-                    );
-                  } catch {
-                    // sessionStorage can fail in private mode — non-critical.
-                  }
+                  rememberLeadProfileReturn();
                   navigate(`/leads/${lead.id}`);
                 }}
                 className="border-b border-hair-soft hover:bg-[rgba(10,156,212,0.04)] transition-colors cursor-pointer"

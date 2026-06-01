@@ -25,6 +25,7 @@ import StatCard from '../components/ui/StatCard';
 import PanelCard from '../components/ui/PanelCard';
 import PillButton from '../components/ui/PillButton';
 import * as api from '../services/api';
+import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import type { EmailDraftWithLead } from '../types';
 
 type StatusFilter = 'ready' | 'pending' | 'failed' | 'all';
@@ -561,7 +562,10 @@ export default function EmailBankPage() {
                 size="sm"
                 trailing="none"
                 icon={<ExternalLink size={13} />}
-                onClick={() => navigate(`/leads/${selected.leadId}`)}
+                onClick={() => {
+                  rememberLeadProfileReturn();
+                  navigate(`/leads/${selected.leadId}`);
+                }}
               >
                 Open lead
               </PillButton>
@@ -586,7 +590,10 @@ export default function EmailBankPage() {
             elevated
             right={
               <button
-                onClick={() => navigate(`/leads/${selected.leadId}`)}
+                onClick={() => {
+                  rememberLeadProfileReturn();
+                  navigate(`/leads/${selected.leadId}`);
+                }}
                 className="text-sky-ink text-xs font-medium hover:underline inline-flex items-center gap-1"
               >
                 Open lead <ExternalLink size={12} />
