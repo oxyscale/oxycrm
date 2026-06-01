@@ -60,13 +60,18 @@ export async function syncSentEmails(): Promise<{ matched: number; total: number
   // Check both gmail_message_id (synced/Resend IDs) and gmail_copy_id
   // (IDs of copies inserted into Gmail Sent folder after Resend sends).
   const checkDuplicate = db.prepare('SELECT id FROM emails_sent WHERE gmail_message_id = ? OR gmail_copy_id = ?');
+  // Explicit ISO timestamps with Z suffix. The schema default
+  // `datetime('now')` returns UTC without a timezone marker, which the
+  // browser's `new Date(str)` parser then treats as LOCAL time — a 10-hour
+  // miss for Sydney users (UTC noon shows as "02:00 am"). Passing an
+  // ISO-with-Z string makes the round-trip unambiguous.
   const insertEmail = db.prepare(`
-    INSERT INTO emails_sent (lead_id, to_address, from_address, subject, body_snippet, gmail_message_id, source, direction)
-    VALUES (?, ?, ?, ?, ?, ?, 'gmail', ?)
+    INSERT INTO emails_sent (lead_id, to_address, from_address, subject, body_snippet, gmail_message_id, source, direction, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'gmail', ?, ?)
   `);
   const insertActivity = db.prepare(`
-    INSERT INTO activities (lead_id, type, title, description, metadata)
-    VALUES (?, 'email', ?, ?, ?)
+    INSERT INTO activities (lead_id, type, title, description, metadata, created_at)
+    VALUES (?, 'email', ?, ?, ?, ?)
   `);
 
   for (const msg of messages) {
@@ -89,8 +94,23 @@ export async function syncSentEmails(): Promise<{ matched: number; total: number
       const toHeader = headers.find((h) => h.name === 'To')?.value || '';
       const ccHeader = headers.find((h) => h.name === 'Cc')?.value || '';
       const fromHeader = headers.find((h) => h.name === 'From')?.value || '';
+      const dateHeader = headers.find((h) => h.name === 'Date')?.value || '';
       const subject = headers.find((h) => h.name === 'Subject')?.value || '(No subject)';
       const snippet = msgResponse.data.snippet || null;
+
+      // Use the Gmail Date header for the activity timestamp so the timeline
+      // reflects when the email was actually sent/received, not when the
+      // sync loop happened to pick it up (can be 60s+ later, or much longer
+      // if Gmail auth was disconnected). Falls back to now if the header is
+      // missing or unparseable. Always emit ISO-with-Z so the browser parses
+      // it as UTC.
+      let createdAt: string;
+      if (dateHeader) {
+        const parsed = new Date(dateHeader);
+        createdAt = isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+      } else {
+        createdAt = new Date().toISOString();
+      }
 
       const recipientEmails = parseEmailAddresses(toHeader);
       const ccEmails = parseEmailAddresses(ccHeader);
@@ -112,12 +132,12 @@ export async function syncSentEmails(): Promise<{ matched: number; total: number
 
           if (!lead) continue;
 
-          insertEmail.run(lead.id, recipientEmail, senderEmail, subject, snippet, msg.id, 'sent');
+          insertEmail.run(lead.id, recipientEmail, senderEmail, subject, snippet, msg.id, 'sent', createdAt);
 
           const activityTitle = `Email sent: ${subject}`;
           const activityDesc = snippet ? snippet.slice(0, 200) : null;
           const metadata = JSON.stringify({ gmailMessageId: msg.id, toAddress: recipientEmail, from: senderEmail, source: 'gmail' });
-          insertActivity.run(lead.id, activityTitle, activityDesc, metadata);
+          insertActivity.run(lead.id, activityTitle, activityDesc, metadata, createdAt);
 
           matched++;
           logger.info({ leadId: lead.id, leadName: lead.name, subject, direction: 'sent' }, 'Auto-logged Gmail sent email');
@@ -131,12 +151,12 @@ export async function syncSentEmails(): Promise<{ matched: number; total: number
         if (!lead) continue;
 
         const toAddress = recipientEmails[0] || myEmail;
-        insertEmail.run(lead.id, toAddress, senderEmail, subject, snippet, msg.id, 'received');
+        insertEmail.run(lead.id, toAddress, senderEmail, subject, snippet, msg.id, 'received', createdAt);
 
         const activityTitle = `Email received: ${subject}`;
         const activityDesc = snippet ? snippet.slice(0, 200) : null;
         const metadata = JSON.stringify({ gmailMessageId: msg.id, fromAddress: senderEmail, source: 'gmail' });
-        insertActivity.run(lead.id, activityTitle, activityDesc, metadata);
+        insertActivity.run(lead.id, activityTitle, activityDesc, metadata, createdAt);
 
         matched++;
         logger.info({ leadId: lead.id, leadName: lead.name, subject, direction: 'received' }, 'Auto-logged Gmail received email');

@@ -27,7 +27,7 @@ import StatCard from '../components/ui/StatCard';
 import PanelCard from '../components/ui/PanelCard';
 import PriorityRow from '../components/ui/PriorityRow';
 import * as api from '../services/api';
-import { todayInSydney } from '../utils/dates';
+import { todayInSydney, parseTimestamp } from '../utils/dates';
 import type { ImportResult, DuplicateLead, Activity, Lead } from '../types';
 
 // ── Pipeline stage display config ────────────────────────────
@@ -279,7 +279,7 @@ export default function HomePage() {
   // ── Helpers ──────────────────────────────────────────────────
 
   const formatTimeAgo = (dateStr: string): string => {
-    const diff = Date.now() - new Date(dateStr).getTime();
+    const diff = Date.now() - parseTimestamp(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return 'Just now';
     if (mins < 60) return `${mins}m ago`;

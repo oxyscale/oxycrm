@@ -29,6 +29,29 @@ export function todayInSydney(): string {
 }
 
 /**
+ * Parses a server-supplied timestamp string into a Date that the browser
+ * will correctly convert to local time.
+ *
+ * Why this exists: SQLite's `datetime('now')` writes UTC time as
+ * "2026-06-01 02:24:33" with no timezone marker. The browser's
+ * `new Date(str)` parser then treats that as LOCAL time — wrong by the
+ * UTC offset (10-11 hours for Sydney). The Note insert paths use
+ * `new Date().toISOString()` which produces a properly-suffixed
+ * "...Z" string, but historical rows and some auto-sync inserts use
+ * the bare SQLite format.
+ *
+ * This helper detects "no timezone hint" strings and appends 'Z' before
+ * parsing, so any stored timestamp displays as the correct local time
+ * regardless of how it was written. Idempotent — strings that already
+ * have a Z suffix or offset pass through untouched.
+ */
+export function parseTimestamp(value: string): Date {
+  const hasTimezone = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(value);
+  const normalised = hasTimezone ? value : `${value.replace(' ', 'T')}Z`;
+  return new Date(normalised);
+}
+
+/**
  * Returns today + N days as YYYY-MM-DD in Sydney time.
  * Use negative N to go backwards.
  */

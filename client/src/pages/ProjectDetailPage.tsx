@@ -13,6 +13,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import * as api from '../services/api';
+import { parseTimestamp } from '../utils/dates';
 import type { Project, ProjectTask, ProjectStatus } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 
@@ -198,7 +199,7 @@ export default function ProjectDetailPage() {
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '--';
-    return new Date(dateStr).toLocaleDateString('en-AU', {
+    return parseTimestamp(dateStr).toLocaleDateString('en-AU', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',

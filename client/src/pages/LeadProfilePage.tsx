@@ -26,7 +26,7 @@ import {
 import * as api from '../services/api';
 import { recordLeadVisit } from '../utils/recentLeads';
 import { decodeHtmlEntities } from '../utils/text';
-import { todayInSydney } from '../utils/dates';
+import { todayInSydney, parseTimestamp } from '../utils/dates';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import PillButton from '../components/ui/PillButton';
 import type {
@@ -59,7 +59,7 @@ type Tab = 'activity' | 'transcripts' | 'notes' | 'emails';
 // ── Helpers ──────────────────────────────────────────────────
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-AU', {
+  return parseTimestamp(dateStr).toLocaleDateString('en-AU', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -69,7 +69,7 @@ function formatDate(dateStr: string) {
 }
 
 function formatShortDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-AU', {
+  return parseTimestamp(dateStr).toLocaleDateString('en-AU', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',

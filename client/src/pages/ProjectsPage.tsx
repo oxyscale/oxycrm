@@ -9,6 +9,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import * as api from '../services/api';
+import { parseTimestamp } from '../utils/dates';
 import type { Project, ProjectStatus, Lead } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
@@ -128,7 +129,7 @@ export default function ProjectsPage() {
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '--';
-    return new Date(dateStr).toLocaleDateString('en-AU', {
+    return parseTimestamp(dateStr).toLocaleDateString('en-AU', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
