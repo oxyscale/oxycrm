@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Save,
   Loader2,
@@ -862,6 +862,16 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
   const [sanitiseResult, setSanitiseResult] = useState<string | null>(null);
   const [sanitiseError, setSanitiseError] = useState<string | null>(null);
 
+  // Undo-a-CSV-import — upload the original file, preview matching leads
+  // by phone number, then confirm to delete the batch.
+  const [undoFile, setUndoFile] = useState<File | null>(null);
+  const [undoPreviewing, setUndoPreviewing] = useState(false);
+  const [undoDeleting, setUndoDeleting] = useState(false);
+  const [undoPreview, setUndoPreview] = useState<api.UndoImportResult | null>(null);
+  const [undoResult, setUndoResult] = useState<string | null>(null);
+  const [undoError, setUndoError] = useState<string | null>(null);
+  const undoFileInputRef = useRef<HTMLInputElement>(null);
+
   const handleRename = async () => {
     if (!renameFrom.trim() || !renameTo.trim()) return;
     setRenaming(true);
@@ -911,6 +921,53 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
       setResetError(err instanceof Error ? err.message : 'Reset failed');
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleUndoFileSelect = (file: File | null) => {
+    setUndoFile(file);
+    setUndoPreview(null);
+    setUndoResult(null);
+    setUndoError(null);
+  };
+
+  const handleUndoPreview = async () => {
+    if (!undoFile) return;
+    setUndoPreviewing(true);
+    setUndoError(null);
+    setUndoResult(null);
+    try {
+      const r = await api.undoImport(undoFile, true);
+      setUndoPreview(r);
+    } catch (err) {
+      setUndoError(err instanceof Error ? err.message : 'Preview failed');
+    } finally {
+      setUndoPreviewing(false);
+    }
+  };
+
+  const handleUndoConfirm = async () => {
+    if (!undoFile || !undoPreview || undoPreview.matched === 0) return;
+    const ok = window.confirm(
+      `Permanently delete ${undoPreview.matched} lead${undoPreview.matched === 1 ? '' : 's'}?\n\n` +
+      `Every call log, note, task, email and activity on these leads will be deleted with them. This cannot be undone.`,
+    );
+    if (!ok) return;
+    setUndoDeleting(true);
+    setUndoError(null);
+    try {
+      const r = await api.undoImport(undoFile, false);
+      setUndoResult(
+        `Deleted ${r.deleted} lead${r.deleted === 1 ? '' : 's'} (out of ${r.csvRows} CSV rows). Hard refresh the Leads page to confirm.`,
+      );
+      setUndoPreview(null);
+      setUndoFile(null);
+      if (undoFileInputRef.current) undoFileInputRef.current.value = '';
+      onChanged();
+    } catch (err) {
+      setUndoError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setUndoDeleting(false);
     }
   };
 
@@ -1048,6 +1105,99 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
         {resetError && (
           <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
             <p className="text-risk text-sm">{resetError}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Undo a CSV import */}
+      <div className="bg-paper border border-hair-soft rounded-xl p-6">
+        <h3 className="text-ink font-medium text-base mb-1">Undo a CSV import</h3>
+        <p className="text-ink-muted text-sm mb-4">
+          Regret an import? Re-upload the same CSV. We'll match leads by phone number (last 9 digits, so +61 vs 0 vs no-prefix variants all collapse) and delete the matching batch — call logs, notes, tasks, emails all go with them. Two steps: preview the count first, then confirm.
+        </p>
+
+        <div className="flex items-center gap-3 mb-4">
+          <input
+            ref={undoFileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={(e) => handleUndoFileSelect(e.target.files?.[0] || null)}
+            className="block text-sm text-ink-muted file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-medium file:bg-tray file:text-ink hover:file:bg-[rgba(11,13,14,0.06)] file:cursor-pointer"
+          />
+          {undoFile && (
+            <button
+              onClick={() => handleUndoFileSelect(null)}
+              className="text-ink-dim hover:text-risk text-sm"
+              title="Clear selection"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleUndoPreview}
+            disabled={!undoFile || undoPreviewing || undoDeleting}
+            className="border border-hair-strong text-ink text-sm font-medium rounded-full px-5 py-2 hover:bg-[rgba(11,13,14,0.03)] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {undoPreviewing ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
+            {undoPreviewing ? 'Scanning...' : 'Preview matches'}
+          </button>
+
+          {undoPreview && undoPreview.matched > 0 && (
+            <button
+              onClick={handleUndoConfirm}
+              disabled={undoDeleting}
+              className="bg-risk text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-red-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {undoDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {undoDeleting ? 'Deleting...' : `Delete ${undoPreview.matched} matched lead${undoPreview.matched === 1 ? '' : 's'}`}
+            </button>
+          )}
+        </div>
+
+        {undoPreview && (
+          <div className="mt-4">
+            {undoPreview.matched === 0 ? (
+              <div className="bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.25)] rounded-lg p-3">
+                <p className="text-warn text-sm flex items-center gap-2">
+                  <AlertTriangle size={14} />
+                  Found {undoPreview.csvPhonesFound} phone number{undoPreview.csvPhonesFound === 1 ? '' : 's'} in the CSV but no leads matched. The batch may have already been deleted, or these phones don't exist in your leads.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-cream border border-hair-soft rounded-lg p-3">
+                <p className="text-ink-muted text-sm mb-2 flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-warn" />
+                  {undoPreview.matched} of {undoPreview.csvRows} CSV row{undoPreview.csvRows === 1 ? '' : 's'} match leads in your DB and would be deleted.
+                </p>
+                {undoPreview.sample.length > 0 && (
+                  <div className="mt-2 max-h-48 overflow-y-auto">
+                    <p className="text-ink-dim text-[11px] uppercase tracking-wider font-medium mb-1.5">
+                      Sample (first {undoPreview.sample.length})
+                    </p>
+                    {undoPreview.sample.map((s) => (
+                      <div key={s.id} className="text-ink-muted text-xs py-1 border-b border-hair-soft last:border-b-0 flex items-center justify-between gap-3">
+                        <span className="truncate">{s.name}</span>
+                        <span className="text-ink-dim flex-shrink-0">{s.phone}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {undoResult && (
+          <div className="mt-4 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
+            <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />{undoResult}</p>
+          </div>
+        )}
+        {undoError && (
+          <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
+            <p className="text-risk text-sm">{undoError}</p>
           </div>
         )}
       </div>

@@ -180,6 +180,45 @@ export async function sanitizeCategories(): Promise<{ cleaned: number }> {
   });
 }
 
+// ── Undo a CSV import ────────────────────────────────────────
+
+export interface UndoImportResult {
+  dryRun: boolean;
+  csvRows: number;
+  csvPhonesFound: number;
+  matched: number;
+  deleted: number;
+  sample: { id: number; name: string; phone: string }[];
+}
+
+/**
+ * Re-uploads a CSV used in a previous import and deletes every lead
+ * whose phone (last 9 digits, country-code normalised) matches a row
+ * in the file. Pass `dryRun: true` to preview the count + sample first.
+ */
+export async function undoImport(file: File, dryRun: boolean): Promise<UndoImportResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const qs = dryRun ? '?dryRun=true' : '';
+  const res = await fetch(`${BASE_URL}/leads/undo-import${qs}`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    let message: string;
+    try {
+      const parsed = JSON.parse(errorBody);
+      message = parsed.error || parsed.message || `Undo import failed: ${res.status}`;
+    } catch {
+      message = `Undo import failed: ${res.status} ${res.statusText}`;
+    }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
 // ── Tasks ─────────────────────────────────────────────────────
 
 export interface LeadTask {

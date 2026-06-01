@@ -374,6 +374,146 @@ router.post('/reset-pipeline', (req, res, next) => {
 });
 
 /**
+ * POST /api/leads/undo-import
+ *
+ * Accepts the SAME CSV used in a previous import and deletes every
+ * lead whose phone matches one in the file. Use case: Jordan dumps a
+ * 1000-row Apify scrape into the CRM, decides it's mostly junk, wants
+ * the whole batch gone. He re-uploads the original CSV; we match by
+ * phone (last 9 digits, country-code normalised) and delete.
+ *
+ * Two modes via `?dryRun=true`:
+ *   - dryRun: returns matched count + a sample of names, no deletion.
+ *   - real:   deletes matching leads (cascades via FK).
+ *
+ * Returns { matched, deleted, sample[] } so the UI can preview the
+ * impact before committing.
+ */
+router.post('/undo-import', upload.single('file'), (req, res, next) => {
+  try {
+    const db = getDb();
+    if (!req.file) {
+      throw new ApiError(400, 'No CSV file uploaded');
+    }
+
+    const dryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+
+    // Same parse pipeline as the main importer — strip BOM, parse CSV,
+    // normalise headers to snake_case.
+    const csvContent = req.file.buffer.toString('utf-8').replace(/^﻿/, '');
+    let records: Record<string, string>[];
+    try {
+      records = parse(csvContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+        relax_column_count: true,
+      });
+    } catch (csvErr) {
+      logger.error({ err: csvErr }, 'Undo-import CSV parse failed');
+      throw new ApiError(400, 'Invalid CSV format');
+    }
+
+    records = records.map((row) => {
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(row)) {
+        const snake = k.trim()
+          .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+          .toLowerCase()
+          .replace(/[\s-]+/g, '_');
+        out[snake] = v;
+      }
+      return out;
+    });
+
+    // Pull every plausible phone field from each row, normalise to the
+    // last 9 digits. Same shape as the dedupe pass — keeps +61, 0 and
+    // no-prefix variants collapsing to the same key.
+    const phoneKeys = new Set<string>();
+    for (const row of records) {
+      const raw = (
+        row.phone
+        || row.phone_unformatted
+        || row.phone_number
+        || row.phonenumber
+        || row.mobile
+        || row.mobile_number
+        || row.mobile_phone
+        || row.tel
+        || row.contact_number
+        || row.contact_phone
+        || row.cell
+        || row.cell_phone
+        || ''
+      );
+      const digits = String(raw).replace(/\D/g, '');
+      if (digits.length >= 9) {
+        phoneKeys.add(digits.slice(-9));
+      }
+    }
+
+    if (phoneKeys.size === 0) {
+      throw new ApiError(
+        400,
+        'Couldn\'t find any phone numbers in the CSV. Match-by-phone is the only mechanism this endpoint supports.',
+      );
+    }
+
+    // Build the same normalised key for every existing lead and find
+    // those whose key is in the CSV's set. Doing this in JS (not SQL)
+    // is fine — even with 10k leads it's milliseconds.
+    const allLeads = db.prepare(
+      "SELECT id, name, phone FROM leads WHERE phone IS NOT NULL AND phone != ''",
+    ).all() as { id: number; name: string; phone: string }[];
+
+    const matches: { id: number; name: string; phone: string }[] = [];
+    for (const lead of allLeads) {
+      const digits = lead.phone.replace(/\D/g, '');
+      if (digits.length >= 9 && phoneKeys.has(digits.slice(-9))) {
+        matches.push(lead);
+      }
+    }
+
+    if (dryRun) {
+      logger.info({ csvRows: records.length, csvPhones: phoneKeys.size, matched: matches.length }, 'Undo-import dry-run');
+      res.json({
+        dryRun: true,
+        csvRows: records.length,
+        csvPhonesFound: phoneKeys.size,
+        matched: matches.length,
+        deleted: 0,
+        sample: matches.slice(0, 20).map((m) => ({ id: m.id, name: m.name, phone: m.phone })),
+      });
+      return;
+    }
+
+    // Real deletion. ON DELETE CASCADE handles call_logs, notes, tasks,
+    // activities, emails_sent, projects.
+    const deleteStmt = db.prepare('DELETE FROM leads WHERE id = ?');
+    let deleted = 0;
+    const tx = db.transaction((ids: number[]) => {
+      for (const id of ids) {
+        const r = deleteStmt.run(id);
+        deleted += r.changes;
+      }
+    });
+    tx(matches.map((m) => m.id));
+
+    logger.info({ csvRows: records.length, matched: matches.length, deleted }, 'Undo-import complete');
+    res.json({
+      dryRun: false,
+      csvRows: records.length,
+      csvPhonesFound: phoneKeys.size,
+      matched: matches.length,
+      deleted,
+      sample: matches.slice(0, 20).map((m) => ({ id: m.id, name: m.name, phone: m.phone })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/leads/sanitize-categories
  *
  * Sets `category = NULL` on every lead whose category isn't in the
