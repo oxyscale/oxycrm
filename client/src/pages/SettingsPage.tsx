@@ -1382,8 +1382,17 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
         )}
       </div>
 
-      {/* Dedupe */}
-      <div className="bg-paper border border-hair-soft rounded-xl p-6">
+      {/* Legacy bulk-merge dedupe (kept as a fallback for power users).
+          The "Scan for duplicates" card above is the primary path now —
+          it has fuzzy matching and per-row Fold/Dismiss. This bulk one
+          only catches exact phone / exact name+company matches and is
+          all-or-nothing. Hidden by default; toggleable in case Jordan
+          ever wants to nuke many at once. */}
+      <details className="bg-paper border border-hair-soft rounded-xl p-6">
+        <summary className="text-ink-dim text-sm cursor-pointer select-none hover:text-ink-muted">
+          Legacy bulk dedupe (exact-match only — use "Scan for duplicates" above instead)
+        </summary>
+        <div className="mt-4">
         <h3 className="text-ink font-medium text-base mb-1">Find &amp; merge duplicate leads</h3>
         <div className="text-ink-muted text-sm mb-4 space-y-2">
           <p>
@@ -1476,7 +1485,8 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
             <p className="text-risk text-sm">{dedupeError}</p>
           </div>
         )}
-      </div>
+        </div>
+      </details>
     </div>
   );
 }
