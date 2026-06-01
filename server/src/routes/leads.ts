@@ -374,6 +374,62 @@ router.post('/reset-pipeline', (req, res, next) => {
 });
 
 /**
+ * POST /api/leads/sanitize-categories
+ *
+ * Sets `category = NULL` on every lead whose category isn't in the
+ * managed `categories` table (case-insensitive). Cleans up junk
+ * categories injected by raw CSV / Apify imports so the Leads page
+ * dropdown can stay limited to Jordan's curated list.
+ *
+ * Idempotent. Returns the number of rows cleaned.
+ */
+router.post('/sanitize-categories', (_req, res, next) => {
+  try {
+    const db = getDb();
+
+    const managed = db.prepare('SELECT name FROM categories').all() as { name: string }[];
+    if (managed.length === 0) {
+      throw new ApiError(400, 'No managed categories exist — add at least one in Settings first');
+    }
+
+    // Build a case-insensitive set of valid category names.
+    const valid = new Set(managed.map((r) => r.name.toLowerCase()));
+
+    // SQLite has no SETOF in WHERE — pull candidate rows into JS, filter,
+    // then null out the affected ones in a single transaction.
+    const candidates = db.prepare(
+      "SELECT id, category FROM leads WHERE category IS NOT NULL AND category != ''",
+    ).all() as { id: number; category: string }[];
+
+    const toClean = candidates.filter((l) => !valid.has(l.category.toLowerCase()));
+
+    if (toClean.length === 0) {
+      logger.info('Category sanitisation: nothing to clean');
+      res.json({ cleaned: 0 });
+      return;
+    }
+
+    const cleanStmt = db.prepare(
+      "UPDATE leads SET category = NULL, updated_at = datetime('now') WHERE id = ?",
+    );
+    const tx = db.transaction((ids: number[]) => {
+      let n = 0;
+      for (const id of ids) {
+        const r = cleanStmt.run(id);
+        n += r.changes;
+      }
+      return n;
+    });
+    const cleaned = tx(toClean.map((l) => l.id));
+
+    logger.info({ cleaned, sampleSkipped: toClean.slice(0, 5).map((l) => l.category) }, 'Unmanaged categories nulled out');
+    res.json({ cleaned });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/leads/delete-all
  * Permanently deletes every lead and all associated data (call logs,
  * notes, tasks, activities, emails, projects). CASCADE FKs handle

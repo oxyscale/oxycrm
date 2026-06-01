@@ -125,13 +125,26 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteManagedCategory = async (cat: api.Category) => {
-    if (!confirm(`Delete category "${cat.name}"? This won't remove it from existing leads.`)) return;
+  // Track which category is mid-confirmation so we can render the modal.
+  const [deletingCategory, setDeletingCategory] = useState<api.Category | null>(null);
+
+  const handleDeleteManagedCategory = (cat: api.Category) => {
+    // Always go through the modal so the lead count + the "also delete
+    // leads" option are visible before any destructive action runs.
+    setDeletingCategory(cat);
+  };
+
+  const confirmDeleteCategory = async (cat: api.Category, deleteLeads: boolean) => {
     try {
-      await api.deleteCategory(cat.id);
+      await api.deleteCategory(cat.id, { deleteLeads });
       setManagedCategories((prev) => prev.filter((c) => c.id !== cat.id));
+      setDeletingCategory(null);
+      // If leads were deleted, refresh the available-categories cache so
+      // other downstream tabs (Cleanup section, etc.) see the new state.
+      if (deleteLeads) loadCategories();
     } catch (err) {
       console.error('Failed to delete category:', err);
+      alert(err instanceof Error ? err.message : 'Failed to delete category');
     }
   };
 
@@ -328,10 +341,17 @@ export default function SettingsPage() {
                   key={cat.id}
                   className="flex items-center justify-between bg-cream border border-hair-soft rounded-lg px-4 py-3 group"
                 >
-                  <span className="text-ink text-sm font-medium">{cat.name}</span>
+                  <span className="text-ink text-sm font-medium">
+                    {cat.name}
+                    {typeof cat.lead_count === 'number' && cat.lead_count > 0 && (
+                      <span className="text-ink-dim text-xs font-normal ml-2">
+                        · {cat.lead_count} lead{cat.lead_count === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </span>
                   <button
                     onClick={() => handleDeleteManagedCategory(cat)}
-                    className="text-ink-dim hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                    className="text-ink-dim hover:text-risk transition-colors opacity-0 group-hover:opacity-100"
                     title="Delete category"
                   >
                     <Trash2 size={14} />
@@ -691,6 +711,121 @@ export default function SettingsPage() {
 
       {tab === 'account' && <AccountSection />}
 
+      {/* Delete-category confirmation modal. Renders over the page when
+          deletingCategory is set, showing the lead count and the two
+          destructive options. Property Styling cleanup runs through this. */}
+      {deletingCategory && (
+        <DeleteCategoryModal
+          category={deletingCategory}
+          onConfirm={(deleteLeads) => confirmDeleteCategory(deletingCategory, deleteLeads)}
+          onCancel={() => setDeletingCategory(null)}
+        />
+      )}
+
+    </div>
+  );
+}
+
+// ── Delete category confirmation modal ─────────────────────────────
+//
+// Shown when the user clicks the trash icon next to a managed category.
+// If the category has leads attached, offers two destructive paths:
+//   - Delete category only — leads keep the string but lose the dropdown
+//   - Delete category AND every lead carrying it (cascades through FK)
+// If there are no leads, the second option is hidden.
+
+function DeleteCategoryModal({
+  category,
+  onConfirm,
+  onCancel,
+}: {
+  category: api.Category;
+  onConfirm: (deleteLeads: boolean) => void;
+  onCancel: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const leadCount = category.lead_count ?? 0;
+
+  const handle = async (deleteLeads: boolean) => {
+    if (deleteLeads && leadCount > 0) {
+      // Double-confirm for the cascade-delete path since it nukes everything
+      // attached to the lead (call logs, notes, tasks, emails, activities).
+      const ok = window.confirm(
+        `Permanently delete the category "${category.name}" AND all ${leadCount} lead${leadCount === 1 ? '' : 's'} that carry it?\n\n` +
+        `Every call log, note, task, email and activity attached to those leads will go with them. This cannot be undone.`,
+      );
+      if (!ok) return;
+    }
+    setSubmitting(true);
+    onConfirm(deleteLeads);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6" onClick={onCancel}>
+      <div
+        className="bg-paper border border-hair-soft rounded-2xl shadow-xl p-7 max-w-md w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 mb-4">
+          <div className="bg-[rgba(239,68,68,0.1)] rounded-full p-2 flex-shrink-0 mt-0.5">
+            <AlertTriangle size={18} className="text-risk" />
+          </div>
+          <div>
+            <h2 className="text-ink text-lg font-medium tracking-tight">Delete "{category.name}"?</h2>
+            {leadCount > 0 ? (
+              <p className="text-ink-muted text-sm mt-1.5">
+                {leadCount} lead{leadCount === 1 ? '' : 's'} currently carry this category.
+                Choose what to do with them below.
+              </p>
+            ) : (
+              <p className="text-ink-muted text-sm mt-1.5">
+                No leads currently use this category — safe to delete.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2 mt-5">
+          {leadCount > 0 && (
+            <button
+              onClick={() => handle(false)}
+              disabled={submitting}
+              className="w-full text-left border border-hair-soft rounded-lg px-4 py-3 hover:bg-tray transition-all disabled:opacity-40"
+            >
+              <div className="text-ink text-sm font-medium">Delete category only</div>
+              <div className="text-ink-dim text-xs mt-0.5">
+                The {leadCount} lead{leadCount === 1 ? '' : 's'} stay, but their category string remains as-is.
+              </div>
+            </button>
+          )}
+          <button
+            onClick={() => handle(true)}
+            disabled={submitting}
+            className="w-full text-left border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.04)] rounded-lg px-4 py-3 hover:bg-[rgba(239,68,68,0.08)] transition-all disabled:opacity-40"
+          >
+            <div className="text-risk text-sm font-medium">
+              {leadCount > 0
+                ? `Delete category AND all ${leadCount} lead${leadCount === 1 ? '' : 's'}`
+                : 'Delete category'}
+            </div>
+            {leadCount > 0 && (
+              <div className="text-ink-dim text-xs mt-0.5">
+                Cascades through call logs, notes, tasks, emails, activities. Irreversible.
+              </div>
+            )}
+          </button>
+        </div>
+
+        <div className="flex justify-end mt-5">
+          <button
+            onClick={onCancel}
+            disabled={submitting}
+            className="text-ink-muted text-sm hover:text-ink transition-colors px-4 py-2 disabled:opacity-40"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -720,6 +855,12 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteResult, setDeleteResult] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Sanitise unmanaged categories (null-out any lead.category that isn't
+  // in the managed Settings > Categories list).
+  const [sanitising, setSanitising] = useState(false);
+  const [sanitiseResult, setSanitiseResult] = useState<string | null>(null);
+  const [sanitiseError, setSanitiseError] = useState<string | null>(null);
 
   const handleRename = async () => {
     if (!renameFrom.trim() || !renameTo.trim()) return;
@@ -770,6 +911,30 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
       setResetError(err instanceof Error ? err.message : 'Reset failed');
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleSanitiseCategories = async () => {
+    if (!window.confirm(
+      'Clean up unmanaged categories?\n\n' +
+      'Any lead whose category is NOT in your Settings > Categories list will have its category set to "no category". The lead itself stays. This is what removes the junk strings the Apify scrapes injected (Employment agency, Roofing contractor, Nursing agency, etc.).\n\n' +
+      'Re-runnable any time, idempotent.',
+    )) return;
+    setSanitising(true);
+    setSanitiseError(null);
+    setSanitiseResult(null);
+    try {
+      const r = await api.sanitizeCategories();
+      setSanitiseResult(
+        r.cleaned === 0
+          ? 'Nothing to clean — every lead already has a managed category or no category at all.'
+          : `Cleaned ${r.cleaned} lead${r.cleaned === 1 ? '' : 's'}. Their category is now empty and you can re-tag them from the Leads page.`,
+      );
+      onChanged();
+    } catch (err) {
+      setSanitiseError(err instanceof Error ? err.message : 'Sanitise failed');
+    } finally {
+      setSanitising(false);
     }
   };
 
@@ -883,6 +1048,34 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
         {resetError && (
           <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
             <p className="text-risk text-sm">{resetError}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Sanitise unmanaged categories */}
+      <div className="bg-paper border border-hair-soft rounded-xl p-6">
+        <h3 className="text-ink font-medium text-base mb-1">Clean up unmanaged categories</h3>
+        <p className="text-ink-muted text-sm mb-4">
+          Apify scrapes inject raw category strings into leads (e.g. <em>Employment agency, Roofing contractor, Nursing agency</em>). This clears any lead category that isn't in your managed <span className="text-ink font-medium">Categories</span> list — leads stay, just lose the rogue category. Re-runnable any time.
+        </p>
+
+        <button
+          onClick={handleSanitiseCategories}
+          disabled={sanitising}
+          className="bg-ink text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {sanitising ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} />}
+          {sanitising ? 'Cleaning...' : 'Clean up unmanaged categories'}
+        </button>
+
+        {sanitiseResult && (
+          <div className="mt-4 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
+            <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />{sanitiseResult}</p>
+          </div>
+        )}
+        {sanitiseError && (
+          <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
+            <p className="text-risk text-sm">{sanitiseError}</p>
           </div>
         )}
       </div>

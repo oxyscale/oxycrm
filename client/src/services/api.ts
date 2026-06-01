@@ -136,6 +136,10 @@ export interface Category {
   id: number;
   name: string;
   created_at: string;
+  /** Count of leads whose `category` matches this category name (case-insensitive).
+   *  Lets the Settings UI show "Property Styling · 12 leads" and prompt
+   *  Jordan with a "delete the leads too?" option when the count is > 0. */
+  lead_count?: number;
 }
 
 export async function getManagedCategories(): Promise<Category[]> {
@@ -149,8 +153,31 @@ export async function createCategory(name: string): Promise<Category> {
   });
 }
 
-export async function deleteCategory(id: number): Promise<void> {
-  await request<void>(`/categories/${id}`, { method: 'DELETE' });
+/**
+ * Delete a managed category. By default only removes the dropdown entry;
+ * leads keep their category string. Pass `deleteLeads: true` to also
+ * delete every lead currently carrying this category (cascades through
+ * FK so call logs, notes, tasks, activities, emails all go with them).
+ */
+export async function deleteCategory(
+  id: number,
+  options?: { deleteLeads?: boolean },
+): Promise<{ name: string; leadsDeleted: number }> {
+  const qs = options?.deleteLeads ? '?deleteLeads=true' : '';
+  return request<{ name: string; leadsDeleted: number }>(`/categories/${id}${qs}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Set `category = NULL` on every lead whose category isn't in the managed
+ * list. Cleans up the junk categories CSV/Apify imports inject into the
+ * lead.category field. Returns the count cleaned.
+ */
+export async function sanitizeCategories(): Promise<{ cleaned: number }> {
+  return request<{ cleaned: number }>('/leads/sanitize-categories', {
+    method: 'POST',
+  });
 }
 
 // ── Tasks ─────────────────────────────────────────────────────

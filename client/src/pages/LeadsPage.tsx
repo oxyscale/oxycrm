@@ -24,6 +24,12 @@ export default function LeadsPage() {
   // Restore filter state from URL params (so back-button preserves filters)
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  // Category dropdown is sourced from the managed categories list (Settings >
+  // Categories), NOT from distinct values in the loaded leads. Apify imports
+  // dump raw scrape strings like "Roofing contractor" / "Nursing agency" into
+  // leads.category, which used to pollute the filter. The managed list is the
+  // single source of truth — if it's not there, it doesn't show up.
+  const [categories, setCategories] = useState<string[]>([]);
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [filterCategory, setFilterCategory] = useState<string>(searchParams.get('cat') || 'all');
   const [filterContacted, setFilterContacted] = useState<'all' | 'contacted' | 'not_contacted'>(
@@ -65,6 +71,12 @@ export default function LeadsPage() {
     loadLeads();
   }, [filterContacted]);
 
+  // Pull managed categories once on mount so the filter dropdown stays in
+  // sync with Settings without needing a page refresh after edits there.
+  useEffect(() => {
+    api.getCategories().then(setCategories).catch(() => { /* non-critical */ });
+  }, []);
+
   // Close recent leads dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -90,8 +102,6 @@ export default function LeadsPage() {
       setLoading(false);
     }
   };
-
-  const categories = [...new Set(leads.map((l) => l.category).filter(Boolean))] as string[];
 
   const filtered = leads
     .filter((lead) => {
