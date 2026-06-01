@@ -426,12 +426,17 @@ router.post('/undo-import', upload.single('file'), (req, res, next) => {
       return out;
     });
 
-    // Pull every plausible phone field from each row, normalise to the
-    // last 9 digits. Same shape as the dedupe pass — keeps +61, 0 and
-    // no-prefix variants collapsing to the same key.
+    // Build two match sets from the CSV:
+    //   - phoneKeys: last 9 digits of every populated phone column.
+    //     Country-code-agnostic (+61 / 0 / no-prefix all collapse).
+    //   - nameKeys: lowercased trimmed business name for rows with NO
+    //     usable phone. Catches Apify scrape rows that came in with just
+    //     a name + address (no phone) and would otherwise be invisible
+    //     to a phone-only match.
     const phoneKeys = new Set<string>();
+    const nameKeys = new Set<string>();
     for (const row of records) {
-      const raw = (
+      const rawPhone = (
         row.phone
         || row.phone_unformatted
         || row.phone_number
@@ -446,16 +451,41 @@ router.post('/undo-import', upload.single('file'), (req, res, next) => {
         || row.cell_phone
         || ''
       );
-      const digits = String(raw).replace(/\D/g, '');
+      const digits = String(rawPhone).replace(/\D/g, '');
       if (digits.length >= 9) {
         phoneKeys.add(digits.slice(-9));
+        continue; // phone is the stronger signal — don't dilute name set
+      }
+
+      // Phone unusable. Fall back to the row's name field (same alias
+      // ladder the importer uses). Skips rows with no usable name too.
+      const rawName = (
+        row.name
+        || row.title
+        || row.business_name
+        || row.contact_name
+        || row.contact
+        || row.lead
+        || row.lead_name
+        || row.full_name
+        || row.fullname
+        || row.client
+        || row.client_name
+        || row.person
+        || row.prospect
+        || row.who
+        || ''
+      );
+      const nameKey = String(rawName).trim().toLowerCase();
+      if (nameKey.length >= 2) {
+        nameKeys.add(nameKey);
       }
     }
 
-    if (phoneKeys.size === 0) {
+    if (phoneKeys.size === 0 && nameKeys.size === 0) {
       throw new ApiError(
         400,
-        'Couldn\'t find any phone numbers in the CSV. Match-by-phone is the only mechanism this endpoint supports.',
+        'Couldn\'t find any phone numbers or names in the CSV to match against. Nothing to undo.',
       );
     }
 
@@ -467,6 +497,8 @@ router.post('/undo-import', upload.single('file'), (req, res, next) => {
     // with the lead means it stays. This is the safety net so re-uploading
     // a CSV can never accidentally wipe a real client whose phone happens
     // to be in the file.
+    // Pull EVERY lead — not just phone-bearing ones — so the name-key
+    // fallback can catch no-phone scrape rows.
     const allLeads = db.prepare(`
       SELECT
         l.id,
@@ -482,7 +514,6 @@ router.post('/undo-import', upload.single('file'), (req, res, next) => {
         (SELECT COUNT(*) FROM emails_sent  WHERE emails_sent.lead_id  = l.id) AS emails_count,
         (SELECT COUNT(*) FROM activities   WHERE activities.lead_id   = l.id) AS activities_count
       FROM leads l
-      WHERE l.phone IS NOT NULL AND l.phone != ''
     `).all() as {
       id: number; name: string; phone: string;
       pipeline_stage: string | null;
@@ -518,17 +549,33 @@ router.post('/undo-import', upload.single('file'), (req, res, next) => {
 
     const deletable: MatchRow[] = [];
     const protectedRows: MatchRow[] = [];
-    for (const lead of allLeads) {
-      const digits = lead.phone.replace(/\D/g, '');
-      if (digits.length < 9) continue;
-      if (!phoneKeys.has(digits.slice(-9))) continue;
+    const seenIds = new Set<number>();
 
+    function classify(lead: typeof allLeads[number]) {
+      if (seenIds.has(lead.id)) return;
+      seenIds.add(lead.id);
       const reason = protectionReason(lead);
       const row: MatchRow = {
         id: lead.id, name: lead.name, phone: lead.phone, protectedReason: reason,
       };
       if (reason) protectedRows.push(row);
       else deletable.push(row);
+    }
+
+    for (const lead of allLeads) {
+      // Try phone match first (strongest signal).
+      const phone = lead.phone || '';
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length >= 9 && phoneKeys.has(digits.slice(-9))) {
+        classify(lead);
+        continue;
+      }
+      // Fallback: name match for leads whose CSV row didn't have a phone.
+      // Lowercased + trimmed, must be >=2 chars to avoid silly matches.
+      const nameKey = (lead.name || '').trim().toLowerCase();
+      if (nameKey.length >= 2 && nameKeys.has(nameKey)) {
+        classify(lead);
+      }
     }
 
     const matched = deletable.length + protectedRows.length;
