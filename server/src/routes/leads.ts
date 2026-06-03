@@ -1077,12 +1077,19 @@ router.get('/search', (req, res, next) => {
  */
 router.get('/:id', (req, res, next) => {
   try {
-    const db = getDb();
     const id = parseInt(req.params.id, 10);
 
     if (isNaN(id)) {
-      throw new ApiError(400, 'Invalid lead ID');
+      // Non-numeric path segment — fall through to the next matching
+      // route. This is what lets later routes like /duplicate-flags
+      // work even though they're declared after this generic /:id
+      // handler in the file. Without this, "duplicate-flags" gets
+      // parsed as an id, isNaN catches it, the previous code threw 400
+      // and the client silently failed to fetch the flags.
+      return next();
     }
+
+    const db = getDb();
 
     const leadRow = db.prepare('SELECT * FROM leads WHERE id = ?').get(id) as LeadRow | undefined;
     if (!leadRow) {
