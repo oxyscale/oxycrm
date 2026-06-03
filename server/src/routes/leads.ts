@@ -1988,19 +1988,24 @@ router.post('/next', (req, res, next) => {
 // ============================================================
 
 // Noise words stripped from names/companies before token comparison.
-// These are the words common to many businesses in a category — they
-// add no identifying signal so we drop them before comparing.
+// These add no identifying signal — every recruitment business has them.
 const NOISE_WORDS = new Set([
   'recruitment', 'recruiting', 'agency', 'agencies', 'employment',
   'services', 'service', 'group', 'holdings', 'partners', 'partner',
-  'pty', 'ltd', 'llc', 'inc', 'co', 'the', 'and', 'of', 'for', 'in', 'at',
-  'melbourne', 'sydney', 'brisbane', 'perth', 'adelaide',
+  'pty', 'ltd', 'llc', 'inc', 'corp', 'corporation', 'limited',
+  'incorporated', 'enterprises', 'industries', 'solutions', 'systems',
+  'international', 'global', 'national', 'co', 'the', 'and', 'of',
+  'for', 'in', 'at', 'on', 'with',
+  'melbourne', 'sydney', 'brisbane', 'perth', 'adelaide', 'canberra',
   'australia', 'australian', 'au', 'victoria', 'vic', 'nsw',
   'queensland', 'qld', 'wa', 'sa', 'tas', 'act', 'nt',
-  'it', 'marketing', 'finance', 'sales', 'accounting',
+  'it', 'marketing', 'finance', 'sales', 'accounting', 'admin',
+  'administration', 'support', 'operations', 'hr', 'logistics',
   'construction', 'engineering', 'executive', 'search', 'network',
   'office', 'centre', 'center', 'company', 'companies', 'business',
   'consulting', 'consultancy', 'consultants', 'consultant',
+  'staffing', 'talent', 'people', 'careers', 'career', 'jobs', 'job',
+  'professional', 'professionals',
 ]);
 
 function normalizeTokens(text: string | null | undefined): Set<string> {
@@ -2100,34 +2105,61 @@ function matchPair(a: ScanLead, b: ScanLead): { reasons: string[]; confidence: '
     highConfidence = true;
   }
 
-  // MEDIUM: token overlap across name/company combinations.
+  // MEDIUM: token-based match. STRICT version — designed to avoid the
+  // first-name/last-name false positives that blew up the v1 scan
+  // (4878 flags on 1187 leads).
+  //
+  // Two conditions must both hold:
+  //   (1) Subset containment — one lead's combined name+company tokens
+  //       must be FULLY contained in the other's. So "Smaart Recruitment"
+  //       {smaart} ⊆ "James Whitcombe at Smaart Recruitment"
+  //       {james, whitcombe, smaart} ✓. But "Robert Half" {robert, half}
+  //       vs "Robert Smith" {robert, smith} → neither is a subset of the
+  //       other → no false match on the shared first name.
+  //
+  //   (2) At least one of the matching tokens must appear in a COMPANY
+  //       field on either side. Filters out coincidental name-only
+  //       overlaps (two strangers sharing a first or surname). The biz-
+  //       row use case still works because the real-person lead has the
+  //       business identifier in its company field.
   const nameTokensA = normalizeTokens(a.name);
   const nameTokensB = normalizeTokens(b.name);
   const compTokensA = normalizeTokens(a.company);
   const compTokensB = normalizeTokens(b.company);
 
-  function overlap(setA: Set<string>, setB: Set<string>): string[] {
-    if (setA.size === 0 || setB.size === 0) return [];
-    const hits: string[] = [];
-    for (const t of setA) if (setB.has(t)) hits.push(t);
-    return hits;
-  }
-
-  // Combine name + company on each side — Jordan's mental model is
-  // "if any identifier word matches across these two leads, flag it."
   const allA = new Set<string>([...nameTokensA, ...compTokensA]);
   const allB = new Set<string>([...nameTokensB, ...compTokensB]);
-  const hits = overlap(allA, allB);
 
-  if (hits.length > 0) {
-    // Only add a token reason if we haven't already matched on a
-    // stronger signal — keeps the reason list short and useful.
-    if (!highConfidence) {
-      reasons.push(`Shared identifier: ${hits.slice(0, 3).join(', ')}`);
-    }
-  } else if (!highConfidence) {
-    // No phone/email/domain match AND no token overlap → not a dup.
-    return null;
+  const sharedTokens = [...allA].filter((t) => allB.has(t));
+
+  if (sharedTokens.length === 0) {
+    return highConfidence ? { reasons, confidence: 'high' } : null;
+  }
+
+  // Subset check — smaller side must be entirely contained in larger.
+  // Using ≤ on size lets ties go either way; both pass when sets are equal.
+  const smaller = allA.size <= allB.size ? allA : allB;
+  const larger = allA.size <= allB.size ? allB : allA;
+  const isSubset = [...smaller].every((t) => larger.has(t));
+
+  if (!isSubset) {
+    return highConfidence ? { reasons, confidence: 'high' } : null;
+  }
+
+  // Company-field requirement — at least one shared token must appear
+  // in the COMPANY field of A or B. Two leads sharing only a first/last
+  // name (e.g. "Robert" appearing in both names) won't fire.
+  const anyCompanyMatch = sharedTokens.some(
+    (t) => compTokensA.has(t) || compTokensB.has(t),
+  );
+
+  if (!anyCompanyMatch) {
+    return highConfidence ? { reasons, confidence: 'high' } : null;
+  }
+
+  // Both conditions met — medium confidence is justified.
+  if (!highConfidence) {
+    reasons.push(`Shared identifier: ${sharedTokens.slice(0, 3).join(', ')}`);
   }
 
   return {
