@@ -169,16 +169,6 @@ export async function deleteCategory(
   });
 }
 
-/**
- * Set `category = NULL` on every lead whose category isn't in the managed
- * list. Cleans up the junk categories CSV/Apify imports inject into the
- * lead.category field. Returns the count cleaned.
- */
-export async function sanitizeCategories(): Promise<{ cleaned: number }> {
-  return request<{ cleaned: number }>('/leads/sanitize-categories', {
-    method: 'POST',
-  });
-}
 
 // ── Duplicate flagging (inline pills on Leads page) ───────────────
 
@@ -193,15 +183,6 @@ export interface DuplicateFlag {
     id: number; name: string; company: string | null; phone: string;
     email: string | null; website: string | null;
   };
-}
-
-/** Walks every lead, builds match candidates, upserts active flags. */
-export async function scanDuplicates(): Promise<{
-  flagged: number;
-  dismissedSkipped: number;
-  twoTouchedSkipped: number;
-}> {
-  return request('/leads/scan-duplicates', { method: 'POST' });
 }
 
 /** Active (non-dismissed) flags. The Leads page uses these to render
@@ -464,9 +445,6 @@ export async function resetPipeline(
   );
 }
 
-export async function deleteAllLeads(): Promise<{ deleted: number }> {
-  return request<{ deleted: number }>('/leads/delete-all', { method: 'POST' });
-}
 
 export async function updateLead(
   id: number,

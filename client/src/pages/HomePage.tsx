@@ -518,27 +518,33 @@ export default function HomePage() {
                 <EyebrowLabel variant="bare" className="mb-2">
                   Category
                 </EyebrowLabel>
-                {/* Combo input: pick a managed category OR type a new one.
-                    New names get auto-added to Settings > Categories on save
-                    so the managed list grows organically as Jordan expands. */}
-                <input
-                  type="text"
-                  list="lead-category-options"
+                {/* Strict select — only managed categories. To add a new
+                    one, the user goes to Settings > Categories. This keeps
+                    the managed list curated and stops scrape-junk strings
+                    from polluting the lead.category column. */}
+                <select
                   value={newLead.category}
                   onChange={(e) =>
                     setNewLead((prev) => ({ ...prev, category: e.target.value }))
                   }
-                  placeholder="Select or type a new category"
                   className={tempInputClass}
-                  disabled={loadingCategories}
-                />
-                <datalist id="lead-category-options">
+                  disabled={loadingCategories || categoryOptions.length === 0}
+                >
+                  <option value="">Select a category…</option>
                   {categoryOptions.map((cat) => (
-                    <option key={cat} value={cat} />
+                    <option key={cat} value={cat}>{cat}</option>
                   ))}
-                </datalist>
+                </select>
                 <p className="text-ink-dim text-xs mt-1.5">
-                  Pick an existing one or type a new name — new categories auto-save to Settings.
+                  Need a new category?{' '}
+                  <button
+                    type="button"
+                    onClick={() => navigate('/settings')}
+                    className="text-sky-ink hover:underline"
+                  >
+                    Add it in Settings → Categories
+                  </button>
+                  {' '}first.
                 </p>
               </div>
             </div>
@@ -567,25 +573,31 @@ export default function HomePage() {
               <EyebrowLabel variant="bare" className="mb-2">
                 Category
               </EyebrowLabel>
-              {/* Required. Applied to every lead in this batch regardless of
-                  what the CSV's own category column says. If the typed value
-                  isn't in the managed list yet, the server auto-creates it
-                  so it appears in Settings > Categories straight after. */}
-              <input
-                type="text"
-                list="import-category-options"
+              {/* Strict select. Applied to every lead in this CSV
+                  regardless of what the CSV's own category column says.
+                  Categories must already exist in Settings > Categories —
+                  no inline creation. Keeps the managed list curated. */}
+              <select
                 value={importCategory}
                 onChange={(e) => setImportCategory(e.target.value)}
-                placeholder="Select or type a new category"
                 className={tempInputClass}
-              />
-              <datalist id="import-category-options">
+                disabled={categoryOptions.length === 0}
+              >
+                <option value="">Select a category…</option>
                 {categoryOptions.map((cat) => (
-                  <option key={cat} value={cat} />
+                  <option key={cat} value={cat}>{cat}</option>
                 ))}
-              </datalist>
+              </select>
               <p className="text-ink-dim text-xs mt-1.5">
-                Required. Applied to every lead in this CSV. New names auto-save to your managed Categories.
+                Required. Applied to every lead in this CSV. Need a new one?{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/settings')}
+                  className="text-sky-ink hover:underline"
+                >
+                  Add it in Settings → Categories
+                </button>
+                {' '}first.
               </p>
             </div>
 

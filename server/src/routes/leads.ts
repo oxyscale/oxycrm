@@ -693,23 +693,9 @@ router.post('/sanitize-categories', (_req, res, next) => {
   }
 });
 
-/**
- * POST /api/leads/delete-all
- * Permanently deletes every lead and all associated data (call logs,
- * notes, tasks, activities, emails, projects). CASCADE FKs handle
- * the child rows automatically.
- */
-router.post('/delete-all', (req, res, next) => {
-  try {
-    const db = getDb();
-    const countRow = db.prepare('SELECT COUNT(*) AS n FROM leads').get() as { n: number };
-    db.prepare('DELETE FROM leads').run();
-    logger.info({ deleted: countRow.n }, 'All leads deleted (bulk wipe)');
-    res.json({ deleted: countRow.n });
-  } catch (err) {
-    next(err);
-  }
-});
+// POST /api/leads/delete-all — REMOVED.
+// Wiping every lead at once is pure footgun, no realistic use case on a
+// production CRM with real contacts. Removed at Jordan's request.
 
 /**
  * POST /api/leads/dedupe
@@ -1163,16 +1149,26 @@ router.post('/', (req, res, next) => {
     const payload = createLeadSchema.parse(req.body);
     const now = new Date().toISOString();
 
-    const createLead = db.transaction(() => {
-      // Auto-add this category to the managed list if the user typed a new
-      // name. Case-insensitive uniqueness is enforced by the categories
-      // table's COLLATE NOCASE on `name`, so INSERT OR IGNORE handles
-      // duplicates without throwing.
-      if (payload.category && payload.category.trim()) {
-        db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)')
-          .run(payload.category.trim());
-      }
+    // Category required and must already exist in the managed list. No
+    // more inline category creation — keeps the managed list curated.
+    if (!payload.category || !payload.category.trim()) {
+      throw new ApiError(400, 'Category is required. Pick one from Settings > Categories.');
+    }
+    const categoryRow = db.prepare(
+      'SELECT name FROM categories WHERE LOWER(name) = LOWER(?)',
+    ).get(payload.category.trim()) as { name: string } | undefined;
+    if (!categoryRow) {
+      throw new ApiError(
+        400,
+        `Category "${payload.category}" doesn't exist. Add it in Settings > Categories first.`,
+      );
+    }
+    // Normalise to the canonical capitalisation from the managed list
+    // (case-insensitive match means user could type "recruitment" and we
+    // want it stored as "Recruitment").
+    const canonicalCategory = categoryRow.name;
 
+    const createLead = db.transaction(() => {
       // Get next queue position
       const maxPosRow = db.prepare(
         'SELECT COALESCE(MAX(queue_position), 0) as max_pos FROM leads'
@@ -1187,7 +1183,7 @@ router.post('/', (req, res, next) => {
         company: payload.company ?? null,
         email: payload.email ?? null,
         website: payload.website ?? null,
-        category: payload.category ?? null,
+        category: canonicalCategory,
         // null = no tier yet. Jordan places leads into a tier manually
         // from the lead profile dropdown.
         pipelineStage: payload.pipelineStage ?? null,
@@ -1197,6 +1193,48 @@ router.post('/', (req, res, next) => {
       });
 
       const leadId = result.lastInsertRowid as number;
+
+      // Run dup detection against the rest of the lead book — same logic
+      // as the CSV importer, applied per-row to manually-created leads.
+      // Any match shows up as a pill on /leads.
+      const existingForDup = db.prepare(`
+        SELECT l.id, l.name, COALESCE(l.company, '') AS company,
+               COALESCE(l.phone, '') AS phone, l.email, l.website,
+               l.pipeline_stage, l.manually_contacted,
+               l.consolidated_summary, l.deal_value,
+               0 AS notes_count, 0 AS tasks_count, 0 AS calls_count,
+               0 AS emails_count, 0 AS activities_count
+        FROM leads l
+        WHERE l.id != ?
+      `).all(leadId) as ScanLead[];
+
+      const newLead: ScanLead = {
+        id: leadId,
+        name: payload.name,
+        company: payload.company ?? '',
+        phone: payload.phone || '',
+        email: payload.email ?? null,
+        website: payload.website ?? null,
+        pipeline_stage: payload.pipelineStage ?? null,
+        manually_contacted: 0,
+        consolidated_summary: null,
+        deal_value: 0,
+        notes_count: 0, tasks_count: 0, calls_count: 0,
+        emails_count: 0, activities_count: 0,
+      };
+
+      const insertFlag = db.prepare(`
+        INSERT INTO duplicate_flags
+          (suspect_lead_id, target_lead_id, confidence, reasons, detected_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT (suspect_lead_id, target_lead_id) DO NOTHING
+      `);
+
+      for (const existing of existingForDup) {
+        const match = matchPair(newLead, existing);
+        if (!match) continue;
+        insertFlag.run(leadId, existing.id, match.confidence, JSON.stringify(match.reasons));
+      }
 
       // Create activity record. Attribution captured so the activity
       // feed can show who added the lead.
@@ -1240,15 +1278,22 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       throw new ApiError(400, 'leadType must be "new" or "callback"');
     }
 
-    // Optional category override — applies to all leads in this batch.
-    // If the user typed a new category name in the import form, auto-add
-    // it to the managed `categories` table so it appears in dropdowns
-    // straight away. INSERT OR IGNORE is idempotent against the
-    // case-insensitive UNIQUE index.
+    // Category is REQUIRED on every import and must already exist in the
+    // managed categories list. No more inline category creation — Jordan
+    // wants categories created up-front in Settings > Categories, so the
+    // managed list stays curated and the dropdown stays clean.
     const categoryOverride = (req.body.category as string)?.trim() || null;
-    if (categoryOverride) {
-      db.prepare('INSERT OR IGNORE INTO categories (name) VALUES (?)')
-        .run(categoryOverride);
+    if (!categoryOverride) {
+      throw new ApiError(400, 'Category is required. Pick one from Settings > Categories.');
+    }
+    const categoryExists = db.prepare(
+      'SELECT 1 FROM categories WHERE LOWER(name) = LOWER(?)',
+    ).get(categoryOverride) as { 1: number } | undefined;
+    if (!categoryExists) {
+      throw new ApiError(
+        400,
+        `Category "${categoryOverride}" doesn't exist. Add it in Settings > Categories first, then re-upload.`,
+      );
     }
 
     // Parse the CSV from the uploaded buffer, stripping BOM if present
@@ -1305,6 +1350,32 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       GROUP BY l.id
       LIMIT 1
     `);
+
+    // Pre-build a snapshot of every existing lead BEFORE the import
+    // transaction starts. This is the dup-detection corpus: any newly-
+    // inserted row gets checked against this snapshot, and if a match
+    // fires a flag pill appears on the Leads page. The new rows
+    // themselves are NOT checked against each other — within-CSV dups
+    // are a separate concern (use Undo to remove the whole batch if
+    // the scrape was bad).
+    const existingLeadsForDup = db.prepare(`
+      SELECT l.id, l.name, COALESCE(l.company, '') AS company,
+             COALESCE(l.phone, '') AS phone, l.email, l.website,
+             l.pipeline_stage, l.manually_contacted,
+             l.consolidated_summary, l.deal_value,
+             0 AS notes_count, 0 AS tasks_count, 0 AS calls_count,
+             0 AS emails_count, 0 AS activities_count
+      FROM leads l
+    `).all() as ScanLead[];
+
+    const insertFlagStmt = db.prepare(`
+      INSERT INTO duplicate_flags
+        (suspect_lead_id, target_lead_id, confidence, reasons, detected_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+      ON CONFLICT (suspect_lead_id, target_lead_id) DO NOTHING
+    `);
+
+    let flagsInserted = 0;
 
     // Use a transaction for bulk insert performance and position consistency
     const insertAll = db.transaction(() => {
@@ -1422,35 +1493,74 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         // Google Maps url, not the business website — only use as last resort.
         const fallbackUrl = (row.google_maps_url || row.maps_url || '').trim();
 
-        insertStmt.run({
+        // Resolve every per-row value once so we can also use them for
+        // the dup-detection check below without re-running the alias ladder.
+        const companyValue = (
+          row.company
+          || row.company_name
+          || row.organisation
+          || row.organization
+          || row.business
+          || row.business_name
+          || ''
+        ).trim() || null;
+        const phoneValue = phone || '';
+        const emailValue = email || null;
+        const websiteValue = website || fallbackUrl || null;
+        // Category is locked to the batch override (validated against
+        // managed categories at the top of this handler). The CSV's own
+        // category column is ignored — Jordan picked the category at
+        // upload time and that's the source of truth.
+        const categoryValue = categoryOverride;
+
+        const insertResult = insertStmt.run({
           name,
-          // 'business' could be the company name; for Apify rows we already
-          // captured the business in `title` which became `name`. Fall back
-          // to address fields if no company column exists so the lead card
-          // isn't blank.
-          company: (
-            row.company
-            || row.company_name
-            || row.organisation
-            || row.organization
-            || row.business
-            || row.business_name
-            || ''
-          ).trim() || null,
-          phone: phone || '',
-          email: email || null,
-          website: website || fallbackUrl || null,
+          company: companyValue,
+          phone: phoneValue,
+          email: emailValue,
+          website: websiteValue,
           leadType,
-          category: categoryOverride || (
-            row.category
-            || row.category_name        // Apify
-            || row.industry
-            || row.sector
-            || row.type
-            || ''
-          ).trim() || null,
+          category: categoryValue,
           queuePosition: currentPos,
         });
+
+        const insertedId = Number(insertResult.lastInsertRowid);
+
+        // Run dup detection against existing leads (snapshot pre-import).
+        // Any match becomes a flag pill on /leads. Never auto-merges —
+        // Jordan picks Fold / Dismiss / Open per row.
+        const newLead: ScanLead = {
+          id: insertedId,
+          name,
+          company: companyValue ?? '',
+          phone: phoneValue,
+          email: emailValue,
+          website: websiteValue,
+          pipeline_stage: null,
+          manually_contacted: 0,
+          consolidated_summary: null,
+          deal_value: 0,
+          notes_count: 0,
+          tasks_count: 0,
+          calls_count: 0,
+          emails_count: 0,
+          activities_count: 0,
+        };
+
+        for (const existing of existingLeadsForDup) {
+          const match = matchPair(newLead, existing);
+          if (!match) continue;
+          // New lead is always the suspect (zero activity), the existing
+          // lead is always the target. Fold on the pill collapses the
+          // suspect into the target with field-level safety.
+          insertFlagStmt.run(
+            insertedId,
+            existing.id,
+            match.confidence,
+            JSON.stringify(match.reasons),
+          );
+          flagsInserted++;
+        }
 
         result.imported++;
       }
@@ -1458,8 +1568,11 @@ router.post('/import', upload.single('file'), (req, res, next) => {
 
     insertAll();
 
-    logger.info({ imported: result.imported, skipped: result.skipped, duplicates: result.duplicates }, 'CSV import complete');
-    res.status(201).json({ ...result, duplicateLeads });
+    logger.info(
+      { imported: result.imported, skipped: result.skipped, duplicates: result.duplicates, flagsInserted },
+      'CSV import complete',
+    );
+    res.status(201).json({ ...result, duplicateLeads, flaggedAsDuplicate: flagsInserted });
   } catch (err) {
     const msg = (err as Error).message || 'Unknown error';
     logger.error({ err, message: msg, stack: (err as Error).stack }, 'CSV import failed');

@@ -839,33 +839,11 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
   const [renameResult, setRenameResult] = useState<string | null>(null);
   const [renameError, setRenameError] = useState<string | null>(null);
 
-  const [preview, setPreview] = useState<api.DedupeResult | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-  const [merging, setMerging] = useState(false);
-  const [dedupeResult, setDedupeResult] = useState<string | null>(null);
-  const [dedupeError, setDedupeError] = useState<string | null>(null);
-
   // Clear pipeline (set pipeline_stage = NULL so the kanban is empty)
   const [preserveWonLost, setPreserveWonLost] = useState(true);
   const [resetting, setResetting] = useState(false);
   const [resetResult, setResetResult] = useState<string | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
-
-  // Delete all leads
-  const [deleting, setDeleting] = useState(false);
-  const [deleteResult, setDeleteResult] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  // Sanitise unmanaged categories (null-out any lead.category that isn't
-  // in the managed Settings > Categories list).
-  const [sanitising, setSanitising] = useState(false);
-  const [sanitiseResult, setSanitiseResult] = useState<string | null>(null);
-  const [sanitiseError, setSanitiseError] = useState<string | null>(null);
-
-  // Scan for duplicate leads (populates inline pills on the Leads page).
-  const [scanning, setScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<string | null>(null);
-  const [scanError, setScanError] = useState<string | null>(null);
 
   // Undo-a-CSV-import — upload the original file, preview matching leads
   // by phone number, then confirm to delete the batch.
@@ -890,20 +868,6 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
       setRenameError(err instanceof Error ? err.message : 'Rename failed');
     } finally {
       setRenaming(false);
-    }
-  };
-
-  const handlePreview = async () => {
-    setPreviewing(true);
-    setDedupeError(null);
-    setDedupeResult(null);
-    try {
-      const r = await api.dedupeLeads(true);
-      setPreview(r);
-    } catch (err) {
-      setDedupeError(err instanceof Error ? err.message : 'Preview failed');
-    } finally {
-      setPreviewing(false);
     }
   };
 
@@ -983,126 +947,9 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
     }
   };
 
-  const handleScanDuplicates = async () => {
-    setScanning(true);
-    setScanError(null);
-    setScanResult(null);
-    try {
-      const r = await api.scanDuplicates();
-      const lines = [`Flagged ${r.flagged} duplicate pair${r.flagged === 1 ? '' : 's'}.`];
-      if (r.twoTouchedSkipped > 0) {
-        lines.push(`Skipped ${r.twoTouchedSkipped} pair${r.twoTouchedSkipped === 1 ? '' : 's'} where both leads have business activity (safety — won't merge two real contacts).`);
-      }
-      if (r.dismissedSkipped > 0) {
-        lines.push(`Skipped ${r.dismissedSkipped} previously-dismissed pair${r.dismissedSkipped === 1 ? '' : 's'}.`);
-      }
-      lines.push('Open the Leads page to work through the flagged pills.');
-      setScanResult(lines.join(' '));
-    } catch (err) {
-      setScanError(err instanceof Error ? err.message : 'Scan failed');
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  const handleSanitiseCategories = async () => {
-    if (!window.confirm(
-      'Clean up unmanaged categories?\n\n' +
-      'Any lead whose category is NOT in your Settings > Categories list will have its category set to "no category". The lead itself stays. This is what removes the junk strings the Apify scrapes injected (Employment agency, Roofing contractor, Nursing agency, etc.).\n\n' +
-      'Re-runnable any time, idempotent.',
-    )) return;
-    setSanitising(true);
-    setSanitiseError(null);
-    setSanitiseResult(null);
-    try {
-      const r = await api.sanitizeCategories();
-      setSanitiseResult(
-        r.cleaned === 0
-          ? 'Nothing to clean — every lead already has a managed category or no category at all.'
-          : `Cleaned ${r.cleaned} lead${r.cleaned === 1 ? '' : 's'}. Their category is now empty and you can re-tag them from the Leads page.`,
-      );
-      onChanged();
-    } catch (err) {
-      setSanitiseError(err instanceof Error ? err.message : 'Sanitise failed');
-    } finally {
-      setSanitising(false);
-    }
-  };
-
-  const handleDeleteAll = async () => {
-    const confirmed = window.confirm(
-      'PERMANENTLY delete every lead and all associated data?\n\n' +
-      'This removes all leads, call logs, transcripts, notes, tasks, emails, and activities. Nothing is recoverable.\n\n' +
-      'Type-to-confirm is not required — just click OK if you are sure.'
-    );
-    if (!confirmed) return;
-    setDeleting(true);
-    setDeleteError(null);
-    setDeleteResult(null);
-    try {
-      const r = await api.deleteAllLeads();
-      setDeleteResult(`Deleted ${r.deleted} lead${r.deleted === 1 ? '' : 's'} and all associated data.`);
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Delete failed');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const handleMerge = async () => {
-    if (!preview || !preview.totalDuplicatesToDelete) return;
-    const confirmed = window.confirm(
-      `Permanently delete ${preview.totalDuplicatesToDelete} duplicate lead${preview.totalDuplicatesToDelete === 1 ? '' : 's'}?\n\n` +
-      `Their call logs, notes, and emails will be reassigned to the survivor lead in each group.\n\n` +
-      `This cannot be undone.`
-    );
-    if (!confirmed) return;
-    setMerging(true);
-    setDedupeError(null);
-    try {
-      const r = await api.dedupeLeads(false);
-      setDedupeResult(`Deleted ${r.leadsDeleted ?? 0} duplicate leads. Reassigned ${r.rowsReassigned ?? 0} child rows to survivors.`);
-      setPreview(null);
-      onChanged();
-    } catch (err) {
-      setDedupeError(err instanceof Error ? err.message : 'Merge failed');
-    } finally {
-      setMerging(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
-      {/* Delete all leads */}
-      <div className="bg-paper border border-[rgba(239,68,68,0.25)] rounded-xl p-6">
-        <h3 className="text-risk font-medium text-base mb-1 flex items-center gap-2">
-          <AlertTriangle size={16} /> Delete all leads
-        </h3>
-        <p className="text-ink-muted text-sm mb-4">
-          Permanently delete every lead and all associated data — call logs, transcripts, notes, tasks, emails, activities. Use this to start completely fresh.
-        </p>
-
-        <button
-          onClick={handleDeleteAll}
-          disabled={deleting}
-          className="bg-risk text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-red-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-          {deleting ? 'Deleting...' : 'Delete all leads'}
-        </button>
-
-        {deleteResult && (
-          <div className="mt-4 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
-            <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />{deleteResult}</p>
-          </div>
-        )}
-        {deleteError && (
-          <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
-            <p className="text-risk text-sm">{deleteError}</p>
-          </div>
-        )}
-      </div>
-
       {/* Clear pipeline */}
       <div className="bg-paper border border-hair-soft rounded-xl p-6">
         <h3 className="text-ink font-medium text-base mb-1">Clear the pipeline</h3>
@@ -1139,37 +986,6 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
         {resetError && (
           <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
             <p className="text-risk text-sm">{resetError}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Scan for duplicate leads */}
-      <div className="bg-paper border border-hair-soft rounded-xl p-6">
-        <h3 className="text-ink font-medium text-base mb-1">Scan for duplicate leads</h3>
-        <p className="text-ink-muted text-sm mb-4">
-          Walks every lead and flags pairs that look like the same person or business. Matches on <span className="text-ink">phone</span>, <span className="text-ink">email</span>, <span className="text-ink">website domain</span>, and <span className="text-ink">name / company word overlap</span> (after stripping noise words like "recruitment", "agency", "Pty Ltd", state names). Two leads where both have business activity are never flagged against each other — only scrape clutter gets surfaced.
-        </p>
-        <p className="text-ink-muted text-sm mb-4">
-          Each flagged pair shows up as an inline pill on the Leads page with <span className="text-ink">Fold</span> (merge into the existing contact, fills blanks only — never overwrites), <span className="text-ink">Dismiss</span> (not a duplicate, hide forever), and <span className="text-ink">Open</span> (jump to the existing contact to sanity-check) buttons. Re-runnable any time.
-        </p>
-
-        <button
-          onClick={handleScanDuplicates}
-          disabled={scanning}
-          className="bg-ink text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          {scanning ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
-          {scanning ? 'Scanning...' : 'Scan for duplicates'}
-        </button>
-
-        {scanResult && (
-          <div className="mt-4 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
-            <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />{scanResult}</p>
-          </div>
-        )}
-        {scanError && (
-          <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
-            <p className="text-risk text-sm">{scanError}</p>
           </div>
         )}
       </div>
@@ -1305,34 +1121,6 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
         )}
       </div>
 
-      {/* Sanitise unmanaged categories */}
-      <div className="bg-paper border border-hair-soft rounded-xl p-6">
-        <h3 className="text-ink font-medium text-base mb-1">Clean up unmanaged categories</h3>
-        <p className="text-ink-muted text-sm mb-4">
-          Apify scrapes inject raw category strings into leads (e.g. <em>Employment agency, Roofing contractor, Nursing agency</em>). This clears any lead category that isn't in your managed <span className="text-ink font-medium">Categories</span> list — leads stay, just lose the rogue category. Re-runnable any time.
-        </p>
-
-        <button
-          onClick={handleSanitiseCategories}
-          disabled={sanitising}
-          className="bg-ink text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          {sanitising ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} />}
-          {sanitising ? 'Cleaning...' : 'Clean up unmanaged categories'}
-        </button>
-
-        {sanitiseResult && (
-          <div className="mt-4 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
-            <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />{sanitiseResult}</p>
-          </div>
-        )}
-        {sanitiseError && (
-          <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
-            <p className="text-risk text-sm">{sanitiseError}</p>
-          </div>
-        )}
-      </div>
-
       {/* Merge categories */}
       <div className="bg-paper border border-hair-soft rounded-xl p-6">
         <h3 className="text-ink font-medium text-base mb-1">Merge a category</h3>
@@ -1382,111 +1170,6 @@ function CleanupSection({ onChanged }: { onChanged: () => void }) {
         )}
       </div>
 
-      {/* Legacy bulk-merge dedupe (kept as a fallback for power users).
-          The "Scan for duplicates" card above is the primary path now —
-          it has fuzzy matching and per-row Fold/Dismiss. This bulk one
-          only catches exact phone / exact name+company matches and is
-          all-or-nothing. Hidden by default; toggleable in case Jordan
-          ever wants to nuke many at once. */}
-      <details className="bg-paper border border-hair-soft rounded-xl p-6">
-        <summary className="text-ink-dim text-sm cursor-pointer select-none hover:text-ink-muted">
-          Legacy bulk dedupe (exact-match only — use "Scan for duplicates" above instead)
-        </summary>
-        <div className="mt-4">
-        <h3 className="text-ink font-medium text-base mb-1">Find &amp; merge duplicate leads</h3>
-        <div className="text-ink-muted text-sm mb-4 space-y-2">
-          <p>
-            <span className="text-ink font-medium">How leads are grouped (3 passes):</span>
-          </p>
-          <ol className="list-decimal list-inside ml-2 space-y-1 text-ink-muted text-sm">
-            <li><span className="text-ink">Phone number</span> — last 9 digits only, so +61, 0 and no-prefix variants match.</li>
-            <li><span className="text-ink">Name + company</span> — for leads with no phone, exact match on both.</li>
-            <li><span className="text-ink">Business-name-as-name</span> — when a lead's <em>name</em> equals its <em>company</em> (typical of scrapes / CSV imports with no individual contact), it folds into the real-person lead at the same company. Different real people at the same company are NEVER merged.</li>
-          </ol>
-          <p>
-            <span className="text-ink font-medium">Which one is kept (the survivor):</span> the lead with the highest total activity — notes + tasks + sent emails + call logs + activity history + manual contact flag + pulse stage + deal value + AI summary. The richest record wins. Tie-breaker: oldest record.
-          </p>
-          <p>
-            <span className="text-ink font-medium">What happens to the others:</span> deleted. All their notes, tasks, emails, calls, and activity are reassigned to the survivor first — nothing is lost.
-          </p>
-          <p className="text-ink-dim text-xs">
-            Hit Preview to see exactly which lead survives in each group before you commit.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handlePreview}
-            disabled={previewing || merging}
-            className="border border-hair-strong text-ink text-sm font-medium rounded-full px-5 py-2 hover:bg-[rgba(11,13,14,0.03)] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {previewing ? <Loader2 size={14} className="animate-spin" /> : <Wrench size={14} />}
-            {previewing ? 'Scanning...' : 'Preview duplicates'}
-          </button>
-
-          {preview && (preview.totalDuplicatesToDelete ?? 0) > 0 && (
-            <button
-              onClick={handleMerge}
-              disabled={merging}
-              className="bg-ink text-white text-sm font-medium rounded-full px-5 py-2 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {merging ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              {merging ? 'Merging...' : `Merge ${preview.totalDuplicatesToDelete} duplicate${preview.totalDuplicatesToDelete === 1 ? '' : 's'}`}
-            </button>
-          )}
-        </div>
-
-        {preview && (
-          <div className="mt-4">
-            {(preview.totalDuplicatesToDelete ?? 0) === 0 ? (
-              <div className="bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
-                <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />No duplicates found.</p>
-              </div>
-            ) : (
-              <div className="bg-cream border border-hair-soft rounded-lg p-3">
-                <p className="text-ink-muted text-sm mb-2 flex items-center gap-2">
-                  <AlertTriangle size={14} className="text-warn" />
-                  Found {preview.groups} duplicate group{preview.groups === 1 ? '' : 's'} — {preview.totalDuplicatesToDelete} lead{preview.totalDuplicatesToDelete === 1 ? '' : 's'} would be deleted.
-                </p>
-                {preview.plans && preview.plans.length > 0 && (
-                  <div className="max-h-64 overflow-y-auto mt-2 space-y-1">
-                    {preview.plans.slice(0, 30).map((p) => (
-                      <div key={p.groupKey} className="text-ink-muted text-xs py-1.5 border-b border-hair-soft last:border-b-0">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="truncate">{p.sample.name}</span>
-                          <span className="text-ink-dim flex-shrink-0">
-                            {p.sample.phone || 'no phone'} · {p.duplicateIds.length + 1} copies
-                          </span>
-                        </div>
-                        <p className="text-ink-dim text-[11px] mt-0.5">
-                          Survivor: lead #{p.survivorId}
-                          {typeof p.survivorScore === 'number' ? ` (activity score ${p.survivorScore})` : ''}
-                          {p.duplicateIds.length > 0 && ` · deleting #${p.duplicateIds.join(', #')}`}
-                        </p>
-                      </div>
-                    ))}
-                    {preview.plans.length > 30 && (
-                      <p className="text-ink-dim text-xs italic pt-2">…and {preview.plans.length - 30} more groups</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {dedupeResult && (
-          <div className="mt-4 bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.25)] rounded-lg p-3">
-            <p className="text-ok text-sm flex items-center gap-2"><Check size={14} />{dedupeResult}</p>
-          </div>
-        )}
-        {dedupeError && (
-          <div className="mt-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] rounded-lg p-3">
-            <p className="text-risk text-sm">{dedupeError}</p>
-          </div>
-        )}
-        </div>
-      </details>
     </div>
   );
 }
