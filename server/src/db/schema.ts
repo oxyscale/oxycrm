@@ -230,6 +230,39 @@ export function initializeDatabase(db: Database.Database): void {
   `);
 
   // ─────────────────────────────────────────────────────────────────
+  // Migration (June 2026): rewrite the leads table CREATE statement to
+  // force pipeline_stage's column DEFAULT to NULL. Older prod DBs were
+  // created when DEFAULT 'new_lead' was in the ALTER TABLE call, so
+  // every fresh INSERT that didn't explicitly set pipeline_stage picked
+  // up 'new_lead' silently — breaking undo-import's protection logic
+  // (every newly-imported lead looked like Jordan had placed it in a
+  // tier). Same writable_schema technique used to drop NOT NULL above.
+  // ─────────────────────────────────────────────────────────────────
+  const leadsTableSqlRow = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'leads'"
+  ).get() as { sql: string } | undefined;
+
+  if (leadsTableSqlRow?.sql && /pipeline_stage\s+TEXT\s+DEFAULT\s+['"]new_lead['"]/i.test(leadsTableSqlRow.sql)) {
+    const fixedSql = leadsTableSqlRow.sql.replace(
+      /(pipeline_stage\s+TEXT)\s+DEFAULT\s+['"]new_lead['"]/i,
+      '$1 DEFAULT NULL',
+    );
+    db.unsafeMode(true);
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec('PRAGMA writable_schema = ON');
+    db.prepare(
+      "UPDATE sqlite_master SET sql = ? WHERE type = 'table' AND name = 'leads'"
+    ).run(fixedSql);
+    db.exec('PRAGMA writable_schema = OFF');
+    db.exec('PRAGMA foreign_keys = ON');
+    db.unsafeMode(false);
+    const sv = db.pragma('schema_version', { simple: true }) as number;
+    db.pragma(`schema_version = ${sv + 1}`);
+    // eslint-disable-next-line no-console
+    console.log("[schema] Changed pipeline_stage column DEFAULT from 'new_lead' to NULL");
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // One-time cleanup (May 2026): revert CSV-imported leads that were
   // incorrectly auto-tiered to tier_3. A lead is "uncontacted" if it
   // has no notes, emails, or call logs — those are the CSV imports.

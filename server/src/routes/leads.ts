@@ -529,9 +529,17 @@ router.post('/undo-import', upload.single('file'), (req, res, next) => {
       protectedReason: string | null;
     }
 
+    // Only the canonical active stages count as "Jordan placed this in
+    // a tier." Legacy values like 'new_lead' (column DEFAULT on old DBs)
+    // and 'follow_up' etc. are treated as equivalent to NULL — the
+    // schema migration converts them to NULL at boot, but new INSERTs
+    // can still pick up the column default before the explicit NULL
+    // assignment lands everywhere.
+    const REAL_TIER_STAGES = new Set(['tier_1', 'tier_2', 'tier_3', 'pulse', 'won', 'lost']);
+
     function protectionReason(lead: typeof allLeads[number]): string | null {
-      // Lead is in any pipeline tier = intentional placement by Jordan.
-      if (lead.pipeline_stage !== null) {
+      // Lead is in any REAL pipeline tier = intentional placement by Jordan.
+      if (lead.pipeline_stage && REAL_TIER_STAGES.has(lead.pipeline_stage)) {
         return `In ${lead.pipeline_stage.replace('_', ' ')}`;
       }
       if (lead.manually_contacted === 1) return 'Marked contacted';
@@ -1335,9 +1343,13 @@ router.post('/import', upload.single('file'), (req, res, next) => {
     const result: ImportResult = { imported: 0, skipped: 0, duplicates: 0, errors: [] };
     const duplicateLeads: DuplicateLead[] = [];
 
+    // pipeline_stage is explicitly NULL because the column DEFAULT on
+    // older production DBs is the legacy 'new_lead' value, and we don't
+    // want CSV imports to silently inherit that — new leads must start
+    // unplaced on the kanban.
     const insertStmt = db.prepare(`
-      INSERT INTO leads (name, company, phone, email, website, lead_type, category, status, queue_position)
-      VALUES (@name, @company, @phone, @email, @website, @leadType, @category, 'not_called', @queuePosition)
+      INSERT INTO leads (name, company, phone, email, website, lead_type, category, status, pipeline_stage, queue_position)
+      VALUES (@name, @company, @phone, @email, @website, @leadType, @category, 'not_called', NULL, @queuePosition)
     `);
 
     // Prepared statement for checking duplicates by phone number
@@ -2178,7 +2190,12 @@ interface ScanLead {
 /**
  * Activity score — higher = more "worked." Drives suspect vs target
  * assignment (target stays, suspect folds into it).
+ *
+ * Only counts REAL tier placements (tier_1/2/3, pulse, won, lost) as
+ * activity. Legacy 'new_lead' or 'follow_up' values are equivalent to
+ * NULL — they don't represent intentional placement.
  */
+const REAL_TIER_STAGES_SCORE = new Set(['tier_1', 'tier_2', 'tier_3', 'pulse', 'won', 'lost']);
 function activityScore(lead: ScanLead): number {
   return (
     lead.notes_count
@@ -2187,7 +2204,7 @@ function activityScore(lead: ScanLead): number {
     + lead.emails_count
     + lead.activities_count
     + (lead.manually_contacted === 1 ? 1 : 0)
-    + (lead.pipeline_stage ? 2 : 0)
+    + (lead.pipeline_stage && REAL_TIER_STAGES_SCORE.has(lead.pipeline_stage) ? 2 : 0)
     + (lead.deal_value > 0 ? 1 : 0)
     + (lead.consolidated_summary && lead.consolidated_summary.trim() ? 1 : 0)
   );
