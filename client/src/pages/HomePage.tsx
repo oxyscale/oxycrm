@@ -709,7 +709,7 @@ export default function HomePage() {
             }
             subTone={highPriorityCount > 0 ? 'sky' : 'neutral'}
             icon={<Users size={16} />}
-            onClick={() => navigate('/pipeline')}
+            onClick={() => navigate('/leads')}
             elevated
           />
         </div>
