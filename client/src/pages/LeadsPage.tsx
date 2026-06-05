@@ -248,7 +248,12 @@ export default function LeadsPage() {
     }
   };
 
-  if (loading) {
+  // Only blank the page when we have NOTHING yet (first ever load).
+  // Once leads are in memory, every subsequent refresh (filter toggle,
+  // tab focus, background refetch) happens silently — the UI never
+  // disappears mid-interaction. A subtle "Refreshing…" hint in the
+  // header is enough.
+  if (loading && leads.length === 0) {
     return (
       <div className="p-8 flex items-center justify-center h-full">
         <div className="text-ink-dim">Loading leads...</div>
@@ -275,6 +280,9 @@ export default function LeadsPage() {
               </>
             ) : (
               <>{leads.length} total</>
+            )}
+            {loading && leads.length > 0 && (
+              <span className="text-ink-dim ml-2 text-xs">· Refreshing…</span>
             )}
           </p>
         </div>
