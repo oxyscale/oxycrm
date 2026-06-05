@@ -184,6 +184,14 @@ const updateLeadSchema = z.object({
  */
 router.get('/', (req, res, next) => {
   try {
+    // Never let browsers cache the leads list — when Jordan edits a
+    // lead's name/company in the profile and comes back to /leads, the
+    // search should find the new values immediately. Without this,
+    // Chrome can serve an old cached response and the local filter
+    // runs against stale data.
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+
     const db = getDb();
     const { status, leadType, category, contacted } = req.query;
 

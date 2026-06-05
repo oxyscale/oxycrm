@@ -84,6 +84,26 @@ export default function LeadsPage() {
     api.getCategories().then(setCategories).catch(() => { /* non-critical */ });
   }, []);
 
+  // Auto-refresh leads when the tab regains focus (or comes back from
+  // background). Edits made on a lead profile, in another tab, or by
+  // George land here on the next focus event — no manual refresh needed.
+  useEffect(() => {
+    const onFocus = () => loadLeads();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadLeads();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+    // loadLeads closes over filterContacted but is stable enough — the
+    // dep array intentionally excludes it to avoid re-binding listeners
+    // on every filter change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Load duplicate flags so we can render the inline pills.
   useEffect(() => {
     api.getDuplicateFlags()
