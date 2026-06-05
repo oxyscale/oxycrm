@@ -74,9 +74,13 @@ export default function LeadsPage() {
     syncParams();
   }, [syncParams]);
 
+  // Load ALL leads once. The Contacted filter is applied CLIENT-SIDE
+  // below so it doesn't constrain what the search bar can find — search
+  // is global and ignores filter pills. Toggling Contacted is instant
+  // (no network round trip) and the search always sees every lead.
   useEffect(() => {
     loadLeads();
-  }, [filterContacted]);
+  }, []);
 
   // Pull managed categories once on mount so the filter dropdown stays in
   // sync with Settings without needing a page refresh after edits there.
@@ -175,10 +179,10 @@ export default function LeadsPage() {
   const loadLeads = async () => {
     try {
       setLoading(true);
-      const params: Parameters<typeof api.getLeads>[0] = {};
-      if (filterContacted === 'contacted') params.contacted = 'true';
-      else if (filterContacted === 'not_contacted') params.contacted = 'false';
-      const data = await api.getLeads(params);
+      // Always pull ALL leads (no server-side contacted filter). The
+      // Contacted toggle is applied client-side below so it doesn't
+      // constrain what the search bar can find.
+      const data = await api.getLeads();
       setLeads(data);
     } catch (err) {
       console.error('Failed to load leads:', err);
@@ -187,8 +191,20 @@ export default function LeadsPage() {
     }
   };
 
+  // Search is GLOBAL — when there's an active query, the Contacted
+  // toggle is bypassed entirely so Jordan can find any lead by name /
+  // company / phone / email regardless of which filter pill is on.
+  // When the search box is empty, the Contacted toggle applies normally.
+  const isSearching = search.trim().length > 0;
+
   const filtered = leads
     .filter((lead) => {
+      // Contacted filter — bypassed during a search so it doesn't hide
+      // matches that happen to be in the other filter bucket.
+      if (!isSearching) {
+        if (filterContacted === 'contacted' && !lead.contacted) return false;
+        if (filterContacted === 'not_contacted' && lead.contacted) return false;
+      }
       if (filterCategory === 'none' && lead.category) return false;
       if (filterCategory !== 'all' && filterCategory !== 'none' && lead.category !== filterCategory) return false;
       if (search) {
@@ -250,7 +266,16 @@ export default function LeadsPage() {
           </EyebrowLabel>
           <SectionHeading size="section">All leads.</SectionHeading>
           <p className="text-ink-muted text-sm mt-3">
-            {leads.length} total
+            {isSearching ? (
+              <>
+                {filtered.length} match{filtered.length === 1 ? '' : 'es'} for "{search}"
+                {filterContacted !== 'all' && (
+                  <span className="text-ink-dim"> · search ignores the {filterContacted === 'contacted' ? 'Contacted' : 'Not Contacted'} filter</span>
+                )}
+              </>
+            ) : (
+              <>{leads.length} total</>
+            )}
           </p>
         </div>
         <PillButton
