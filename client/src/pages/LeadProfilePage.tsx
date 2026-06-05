@@ -24,7 +24,7 @@ import {
   MicOff,
 } from 'lucide-react';
 import * as api from '../services/api';
-import { recordLeadVisit } from '../utils/recentLeads';
+import { recordLeadVisit, removeRecentLead } from '../utils/recentLeads';
 import { decodeHtmlEntities } from '../utils/text';
 import { todayInSydney, parseTimestamp } from '../utils/dates';
 import {
@@ -491,6 +491,10 @@ export default function LeadProfilePage() {
     setDeletingLead(true);
     try {
       await api.deleteLead(lead.id);
+      // Drop this lead from the local recently-visited list so it
+      // doesn't haunt the dropdown after deletion. (The dropdown also
+      // validates against the server on open, so this is belt-and-braces.)
+      removeRecentLead(lead.id);
       // Return to wherever the user came from (with their filter intact),
       // not bare /leads. If they were on /leads?status=not_contacted and
       // deleted a junk lead, they want to keep ploughing through the rest

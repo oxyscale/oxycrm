@@ -382,6 +382,40 @@ router.post('/reset-pipeline', (req, res, next) => {
 });
 
 /**
+ * POST /api/leads/validate-ids
+ *
+ * Takes a list of lead IDs (e.g. from the client's Recently Visited
+ * localStorage) and returns which still exist with their CURRENT name
+ * and company. The client uses this to:
+ *   - Filter out deleted leads from the Recently Visited dropdown
+ *   - Show the most recent name (e.g. after a rename, the dropdown
+ *     should say "Jennifer Tai · Transform IT", not the old name)
+ *
+ * Body: { ids: number[] }
+ * Returns: Array<{ id, name, company }> for IDs that still exist.
+ */
+const validateIdsSchema = z.object({
+  ids: z.array(z.number().int().positive()).max(100),
+});
+
+router.post('/validate-ids', (req, res, next) => {
+  try {
+    const db = getDb();
+    const { ids } = validateIdsSchema.parse(req.body);
+    if (ids.length === 0) {
+      res.json([]);
+      return;
+    }
+    const rows = db.prepare(
+      `SELECT id, name, company FROM leads WHERE id IN (SELECT value FROM json_each(?))`,
+    ).all(JSON.stringify(ids)) as { id: number; name: string; company: string | null }[];
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * POST /api/leads/undo-import
  *
  * Accepts the SAME CSV used in a previous import and deletes every

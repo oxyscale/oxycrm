@@ -8,7 +8,7 @@ import {
   Building2,
 } from 'lucide-react';
 import * as api from '../services/api';
-import { getRecentLeads, type RecentLead } from '../utils/recentLeads';
+import { getRecentLeads, refreshRecentLeads, type RecentLead } from '../utils/recentLeads';
 import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import type { Lead } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
@@ -276,7 +276,11 @@ export default function LeadsPage() {
             onChange={(e) => setSearch(e.target.value)}
             onFocus={() => {
               setSearchFocused(true);
+              // Show whatever's in localStorage immediately, then validate
+              // against the server in the background. Deleted leads vanish
+              // from the dropdown, renamed leads get their new name.
               setRecentLeads(getRecentLeads());
+              refreshRecentLeads().then(setRecentLeads).catch(() => { /* keep stale */ });
             }}
             className="w-full bg-paper border border-hair-soft rounded-lg pl-10 pr-4 py-2.5 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
           />

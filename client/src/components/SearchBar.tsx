@@ -7,7 +7,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, User, Building2, Phone, ArrowRight, Clock } from 'lucide-react';
 import { searchLeads } from '../services/api';
-import { getRecentLeads, type RecentLead } from '../utils/recentLeads';
+import { getRecentLeads, refreshRecentLeads, type RecentLead } from '../utils/recentLeads';
 import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import type { Lead, CallLog } from '../types';
 
@@ -36,7 +36,10 @@ export default function SearchBar() {
     setQuery('');
     setResults([]);
     setSelectedIndex(0);
+    // Cached recents show instantly; then validate against the server so
+    // deleted leads disappear and renames pick up the new name.
     setRecentLeads(getRecentLeads());
+    refreshRecentLeads().then(setRecentLeads).catch(() => { /* keep stale */ });
   }, []);
 
   const closeSearch = useCallback(() => {
