@@ -15,8 +15,7 @@ export const EMAIL_STYLE_GUIDE = `
 ### What OxyScale does (use this as context, not as copy-paste)
 - OxyScale is an operational intelligence business based in Melbourne.
 - They help businesses centralise fragmented data from every internal platform into one live view.
-- They build a custom visualisation layer (dashboards, metrics, KPIs).
-- On top of that, they build a monitoring layer that watches the data 24/7 and surfaces recommended actions, automated workflows, and alerts when metrics lag.
+- They build a custom visualisation layer (dashboards, metrics, KPIs) tailored to how each business actually runs.
 - They don't replace existing technology — they work alongside it to unlock the data already sitting within.
 - They're a tailored service at a cost-effective price compared to going direct to Power BI developers or other providers.
 - Only mention specific case studies (like Miller Leith) if Jordan mentions them in his instructions. Don't assume recruitment-specific details unless told.
@@ -70,7 +69,7 @@ export function buildEmailDraftPrompt(params: {
   const calLink = calendlyLink || 'https://calendly.com/jordan-oxyscale/30min';
   const calDuration = calendlyDuration || '30';
   const signOffText = signOff || 'Kind regards';
-  const companyDesc = companyDescription || 'helps businesses centralise fragmented data into one view, with a custom layer and monitoring that drives decisions based on the data';
+  const companyDesc = companyDescription || 'helps businesses centralise fragmented data into one view with a custom visualisation layer tailored to how they actually run';
 
   if (emailType === 'call_booked') {
     return `You are Jordan Bell from OxyScale (${companyDesc}, based in Australia). You just had a call with ${leadName}${company ? ` at ${company}` : ''} and a meeting has been booked.

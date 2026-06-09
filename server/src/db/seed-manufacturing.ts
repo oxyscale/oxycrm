@@ -18,16 +18,13 @@ const MANUFACTURING_PLAYBOOK = `You are writing to a mid-market Australian manuf
 
 # How OxyScale lands for manufacturers
 
-OxyScale is the operating system manufacturers were meant to run on. One live view of the business. A system that flags what matters before it costs them money.
+OxyScale gives manufacturers one live operating picture of their business — every system they already pay for, surfaced in a single visualisation layer built around how they actually run.
 
 The frame: most manufacturers aren't short on data. They're short on a system that uses it. Their ERP knows what's been ordered, accounting knows who hasn't paid, the shop floor data knows which line is dragging, the CRM knows which customers are slipping, and none of those systems know about each other. So decisions wait. The Monday meeting goes hunting for numbers. Issues that should be caught on Tuesday surface at month-end. Margins erode quietly. Customers drift. Cash sits longer than it should.
 
-We fix that with two layers:
+We fix that with one live dashboard pulling from every system they already pay for. Production, margin, inventory, customers, cash — all in one place, refreshes itself, built around how their operation actually runs.
 
-- Visualise. One live dashboard pulling from every system they already pay for. Production, margin, inventory, customers, cash, all in one place. Refreshes itself.
-- Act. Turns the dashboard from something they look at into something they work from. A 24/7 alerts engine watches the data and flags only what matters, with context and a recommended next action. A morning Command Centre ranks the three things that need handling today, per department.
-
-If they already have a dashboard their team trusts, the Act layer wires straight onto it. We don't force a rip-and-replace.
+We don't force a rip-and-replace. The dashboard sits on top of what they already have.
 
 # The pain points that land hardest
 
@@ -53,7 +50,7 @@ The close sets up the discovery call. The discovery is a 30-minute working conve
 
 # Phrases that work
 
-"One live operating picture." "What's actually making us money." "Caught the day it happens, not at month-end." "Something you work from, not just look at." "The system that knows your normal." "Quiet by default, when something matters, you hear about it."
+"One live operating picture." "What's actually making us money." "Caught the day it happens, not at month-end." "Something you work from, not just look at." "Built around how you actually run."
 
 # Phrases to avoid
 

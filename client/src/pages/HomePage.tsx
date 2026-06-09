@@ -352,7 +352,7 @@ export default function HomePage() {
           <div className="flex items-start justify-between gap-8">
             <div className="min-w-0">
               <EyebrowLabel variant="pill" className="mb-5">
-                SALES · COMMAND CENTRE
+                SALES · OVERVIEW
               </EyebrowLabel>
               <SectionHeading size="hero" accent="pipeline.">
                 Your

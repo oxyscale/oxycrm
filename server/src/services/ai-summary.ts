@@ -172,14 +172,14 @@ function getSettingsContext(): { calendlyLink: string; calendlyDuration: string;
     return {
       calendlyLink: map.calendly_link || 'https://calendly.com/jordan-oxyscale/30min',
       calendlyDuration: map.calendly_duration || '20',
-      companyDescription: map.company_description || 'We help businesses with their data and visualisation strategy. We centralise fragmented data into one view, build a custom layer on top, and then add a monitoring layer that actually drives business decisions based on the data.',
+      companyDescription: map.company_description || 'We help businesses with their data and visualisation strategy. We centralise fragmented data into one live view and build a custom visualisation layer tailored to how the business actually runs.',
       signOff: map.email_sign_off || 'Kind regards',
     };
   } catch {
     return {
       calendlyLink: 'https://calendly.com/jordan-oxyscale/30min',
       calendlyDuration: '30',
-      companyDescription: 'We help businesses with their data and visualisation strategy. We centralise fragmented data into one view, build a custom layer on top, and then add a monitoring layer that actually drives business decisions based on the data.',
+      companyDescription: 'We help businesses with their data and visualisation strategy. We centralise fragmented data into one live view and build a custom visualisation layer tailored to how the business actually runs.',
       signOff: 'Kind regards',
     };
   }
