@@ -177,16 +177,16 @@ function renderEditorialEntry(name: string, company: string | undefined): string
     : `To ${safeName}`;
 
   return `
-            <tr><td style="background-color: #ffffff; padding: 56px 64px 6px 64px;">
+            <tr><td class="ox-entry-pad" style="background-color: #ffffff; padding: 56px 64px 6px 64px;">
               <p style="margin: 0 0 18px 0; color: #0a9cd4; font-family: ${MONO_STACK}; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.24em; font-weight: 600;">
                 ${labelLine}
               </p>
-              <p style="margin: 0; color: #0b0d0e; font-family: ${SERIF_STACK}; font-style: italic; font-weight: 400; font-size: 36px; line-height: 1.18; letter-spacing: -0.025em;">
+              <p class="ox-hero" style="margin: 0; color: #0b0d0e; font-family: ${SERIF_STACK}; font-style: italic; font-weight: 400; font-size: 36px; line-height: 1.18; letter-spacing: -0.025em;">
                 A note after<br />our chat.
               </p>
             </td></tr>
 
-            <tr><td style="background-color: #ffffff; padding: 36px 64px 0 64px;">
+            <tr><td class="ox-card-pad-h" style="background-color: #ffffff; padding: 36px 64px 0 64px;">
               <table cellpadding="0" cellspacing="0" role="presentation"><tr>
                 <td style="width: 32px; height: 2px; background-color: #0b0d0e; font-size: 0; line-height: 2px;">&nbsp;</td>
               </tr></table>
@@ -196,7 +196,7 @@ function renderEditorialEntry(name: string, company: string | undefined): string
 function renderStandardGreeting(name: string): string {
   const first = escapeHtml(firstNameOf(name));
   return `
-            <tr><td style="background-color: #ffffff; padding: 44px 64px 0 64px;">
+            <tr><td class="ox-greeting-pad" style="background-color: #ffffff; padding: 44px 64px 0 64px;">
               <p style="margin: 0; color: #0b0d0e; font-size: 19px; line-height: 1.4; font-weight: 500; font-family: ${FONT_STACK}; letter-spacing: -0.015em;">
                 Hi ${first},
               </p>
@@ -218,7 +218,7 @@ function renderCapabilitiesRow(cta: CapabilitiesCta): string {
     : '';
 
   return `
-                <tr><td style="padding: 30px 32px 28px 32px;">
+                <tr><td class="ox-cta-row-pad" style="padding: 30px 32px 28px 32px;">
                   <p style="margin: 0 0 12px 0; color: #8a95a0; font-family: ${MONO_STACK}; font-size: 10px; text-transform: uppercase; letter-spacing: 0.24em; font-weight: 600;">
                     01 &nbsp;&middot;&nbsp; Capabilities document
                   </p>
@@ -226,7 +226,7 @@ function renderCapabilitiesRow(cta: CapabilitiesCta): string {
                   ${introHtml}
                   <table cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse;"><tr>
                     <td align="center" style="background-color: #0c8dbf; border-radius: 999px;">
-                      <a href="${safeUrl}" style="display: inline-block; padding: 14px 30px; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 500; letter-spacing: -0.005em; line-height: 1; border-radius: 999px; font-family: ${FONT_STACK};">${safeLabel} &nbsp;&rarr;</a>
+                      <a href="${safeUrl}" class="ox-cta-btn" style="display: inline-block; padding: 14px 30px; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 500; letter-spacing: -0.005em; line-height: 1; border-radius: 999px; font-family: ${FONT_STACK};">${safeLabel} &nbsp;&rarr;</a>
                     </td>
                   </tr></table>
                 </td></tr>`;
@@ -235,7 +235,7 @@ function renderCapabilitiesRow(cta: CapabilitiesCta): string {
 function renderBookACallRow(url: string): string {
   const safeUrl = safeHref(url);
   return `
-                <tr><td style="padding: 26px 32px 30px 32px;">
+                <tr><td class="ox-cta-row-pad" style="padding: 26px 32px 30px 32px;">
                   <p style="margin: 0 0 10px 0; color: #8a95a0; font-family: ${MONO_STACK}; font-size: 10px; text-transform: uppercase; letter-spacing: 0.24em; font-weight: 600;">
                     02 &nbsp;&middot;&nbsp; Book a call
                   </p>
@@ -244,7 +244,7 @@ function renderBookACallRow(url: string): string {
                   </p>
                   <table cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse;"><tr>
                     <td align="center" style="background-color: #0b0d0e; border-radius: 999px;">
-                      <a href="${safeUrl}" style="display: inline-block; padding: 11px 22px; color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 500; letter-spacing: -0.005em; line-height: 1; border-radius: 999px; font-family: ${FONT_STACK};">Book a call</a>
+                      <a href="${safeUrl}" class="ox-cta-btn" style="display: inline-block; padding: 14px 26px; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 500; letter-spacing: -0.005em; line-height: 1; border-radius: 999px; font-family: ${FONT_STACK};">Book a call</a>
                     </td>
                   </tr></table>
                 </td></tr>`;
@@ -266,7 +266,7 @@ function renderCtaCard(
   const bookACallRow = showBookACall ? renderBookACallRow(bookACallUrl!) : '';
 
   return `
-            <tr><td style="background-color: #ffffff; padding: 44px 64px 8px 64px;">
+            <tr><td class="ox-cta-outer-pad" style="background-color: #ffffff; padding: 44px 64px 8px 64px;">
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #faf9f5; border: 1px solid rgba(11,13,14,0.06); border-radius: 14px;">
                 <tr><td style="height: 2px; font-size: 0; line-height: 0; background-color: #0a9cd4; border-radius: 14px 14px 0 0;">&nbsp;</td></tr>
                 ${capabilitiesRow}
@@ -313,6 +313,37 @@ export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
   <meta name="color-scheme" content="light only" />
   <meta name="supported-color-schemes" content="light only" />
   <title>OxyScale</title>
+  <style>
+    /* Mobile overrides — clients that respect <style> in <head>
+       (iOS Mail, Apple Mail, Gmail iOS/Android, Outlook iOS, etc).
+       Outlook desktop ignores @media but keeps the 640px desktop layout
+       which is what we want. !important is required to beat the inline
+       styles further down. */
+    @media only screen and (max-width: 600px) {
+      .ox-outer-pad { padding: 28px 12px 32px 12px !important; }
+      .ox-card-pad-h { padding-left: 24px !important; padding-right: 24px !important; }
+      .ox-header-pad { padding: 28px 24px 20px 24px !important; }
+      .ox-entry-pad { padding: 36px 24px 6px 24px !important; }
+      .ox-greeting-pad { padding: 32px 24px 0 24px !important; }
+      .ox-body-pad { padding-left: 24px !important; padding-right: 24px !important; }
+      .ox-signoff-pad { padding: 32px 24px 36px 24px !important; }
+      .ox-footer-pad { padding: 28px 24px 32px 24px !important; }
+      .ox-cta-outer-pad { padding: 32px 24px 8px 24px !important; }
+      .ox-cta-row-pad { padding: 22px 22px 24px 22px !important; }
+      /* Hero italic headline shrinks so "A note after our chat." doesn't
+         break awkwardly or overflow on narrow screens. */
+      .ox-hero { font-size: 28px !important; line-height: 1.2 !important; }
+      /* Editorial date stamp on mobile — hide so the wordmark gets the
+         full row instead of squishing both. */
+      .ox-date-stamp { display: none !important; }
+      /* Footer: stack the two columns vertically. */
+      .ox-footer-stack { display: block !important; width: 100% !important; max-width: 100% !important; text-align: left !important; padding: 0 !important; }
+      .ox-footer-right { padding-top: 18px !important; }
+      /* CTA button — give it more breathing room so the tap target
+         comfortably clears 44px tall (Apple HIG) on small screens. */
+      .ox-cta-btn { display: block !important; width: 100% !important; box-sizing: border-box !important; text-align: center !important; }
+    }
+  </style>
 </head>
 <body style="margin: 0; padding: 0; background-color: #faf9f5; font-family: ${FONT_STACK}; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; color: #0b0d0e;">
 
@@ -322,7 +353,7 @@ export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
   </div>
 
   <!-- Outer frame: Cream page bg -->
-  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #faf9f5; padding: 72px 16px 56px 16px;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" class="ox-outer-pad" style="background-color: #faf9f5; padding: 72px 16px 56px 16px;">
     <tr>
       <td align="center">
 
@@ -335,14 +366,14 @@ export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #ffffff; border-radius: 17px; border: 1px solid rgba(11,13,14,0.05); box-shadow: 0 40px 100px -50px rgba(11,13,14,0.22);">
 
                 <!-- Header -->
-                <tr><td style="background-color: #ffffff; padding: 40px 64px 28px 64px; border-radius: 17px 17px 0 0;">
+                <tr><td class="ox-header-pad" style="background-color: #ffffff; padding: 40px 64px 28px 64px; border-radius: 17px 17px 0 0;">
                   <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
                     <td valign="middle">
                       <a href="https://oxyscale.ai" style="text-decoration: none; font-family: ${FONT_STACK}; font-weight: 600; font-size: 22px; letter-spacing: -0.035em; line-height: 1;">
                         <span style="color: #0b0d0e;">Oxy</span><span style="color: #0a9cd4;">Scale</span>
                       </a>
                     </td>
-                    <td align="right" valign="middle">
+                    <td align="right" valign="middle" class="ox-date-stamp">
                       <span style="color: #8a95a0; font-family: ${MONO_STACK}; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.24em; font-weight: 500;">${dateStamp}</span>
                     </td>
                   </tr></table>
@@ -359,14 +390,14 @@ export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
                 ${greetingBlock}
 
                 <!-- Body -->
-                <tr><td style="background-color: #ffffff; padding: ${bodyTopPadding} 64px 0 64px;">
+                <tr><td class="ox-body-pad" style="background-color: #ffffff; padding: ${bodyTopPadding} 64px 0 64px;">
                   ${bodyHtml}
                 </td></tr>
 
                 ${ctaCard}
 
                 <!-- Sign-off + signature -->
-                <tr><td style="background-color: #ffffff; padding: 44px 64px 48px 64px;">
+                <tr><td class="ox-signoff-pad" style="background-color: #ffffff; padding: 44px 64px 48px 64px;">
                   <p style="margin: 0 0 4px 0; color: #2a3138; font-size: 16px; line-height: 1.7; font-family: ${FONT_STACK};">
                     ${escapeHtml(signOff)},
                   </p>
@@ -374,20 +405,20 @@ export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
                 </td></tr>
 
                 <!-- Footer divider -->
-                <tr><td style="background-color: #ffffff; padding: 0 64px;">
+                <tr><td class="ox-card-pad-h" style="background-color: #ffffff; padding: 0 64px;">
                   <hr style="border: none; border-top: 1px solid rgba(11,13,14,0.08); margin: 0;" />
                 </td></tr>
 
                 <!-- Footer (colophon) -->
-                <tr><td style="background-color: #faf9f5; padding: 40px 64px 44px 64px; border-radius: 0 0 17px 17px;">
+                <tr><td class="ox-footer-pad" style="background-color: #faf9f5; padding: 40px 64px 44px 64px; border-radius: 0 0 17px 17px;">
                   <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
-                    <td valign="top" width="60%">
+                    <td valign="top" width="60%" class="ox-footer-stack">
                       <span style="font-family: ${FONT_STACK}; font-weight: 600; font-size: 14px; letter-spacing: -0.035em; line-height: 1;"><span style="color: #55606a;">Oxy</span><span style="color: #0a9cd4;">Scale</span></span>
                       <p style="margin: 14px 0 0 0; color: #55606a; font-family: ${SERIF_STACK}; font-style: italic; font-size: 15px; line-height: 1.45; font-weight: 400;">
                         Intelligence your team will&nbsp;<span style="color: #0a9cd4;">actually&nbsp;use.</span>
                       </p>
                     </td>
-                    <td valign="top" width="40%" align="right">
+                    <td valign="top" width="40%" align="right" class="ox-footer-stack ox-footer-right">
                       <p style="margin: 0 0 6px 0; color: #8a95a0; font-family: ${MONO_STACK}; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.24em; font-weight: 600;">
                         Web
                       </p>

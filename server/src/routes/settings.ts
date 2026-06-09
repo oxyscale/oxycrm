@@ -24,6 +24,11 @@ const DEFAULTS: Record<string, string> = {
   calendly_duration: '30',
   email_sign_off: 'Cheers',
   unanswered_call_threshold: '5',
+  // Universal "View our capabilities" CTA — used by the Email Bank
+  // capabilities button when no per-category CTA URL is configured.
+  capabilities_default_url: 'https://info.oxyscale.ai',
+  capabilities_default_label: 'View our capabilities',
+  capabilities_default_intro: '',
 };
 
 // ── GET / — Get all settings ────────────────────────────────

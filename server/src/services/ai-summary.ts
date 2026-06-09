@@ -111,26 +111,54 @@ interface CategoryCta {
 }
 
 /**
- * Returns CTA config for a category if cta_doc_url is populated, else null.
- * Used at draft creation to decide whether the capabilities toggle starts ON.
+ * Returns CTA config for a category if cta_doc_url is populated.
+ * Per-category override takes priority; if not configured, falls back
+ * to the universal capabilities CTA from settings (defaults to
+ * https://info.oxyscale.ai). Returns null only if BOTH are unset.
+ *
+ * Used at draft creation to decide whether the capabilities toggle
+ * starts ON, and at send time to render the actual button.
  */
 export function getCategoryCta(category: string | null): CategoryCta | null {
-  if (!category) return null;
+  // 1) Per-category override
+  if (category) {
+    try {
+      const db = getDb();
+      const row = db
+        .prepare('SELECT cta_doc_url, cta_doc_label, cta_intro FROM category_prompts WHERE category = ?')
+        .get(category) as { cta_doc_url: string | null; cta_doc_label: string | null; cta_intro: string | null } | undefined;
+      if (row?.cta_doc_url?.trim()) {
+        return {
+          url: row.cta_doc_url.trim(),
+          label: (row.cta_doc_label?.trim() || 'View our capabilities'),
+          intro: (row.cta_intro?.trim() || ''),
+        };
+      }
+    } catch (err) {
+      logger.warn({ err, category }, 'getCategoryCta lookup failed');
+      // fall through to universal default
+    }
+  }
+
+  // 2) Universal default from settings — applies to every lead when no
+  // per-category override is configured. Defaults to info.oxyscale.ai
+  // so the button works out of the box without any setup.
   try {
     const db = getDb();
-    const row = db
-      .prepare('SELECT cta_doc_url, cta_doc_label, cta_intro FROM category_prompts WHERE category = ?')
-      .get(category) as { cta_doc_url: string | null; cta_doc_label: string | null; cta_intro: string | null } | undefined;
-    if (!row?.cta_doc_url?.trim()) return null;
+    const rows = db
+      .prepare("SELECT key, value FROM settings WHERE key IN ('capabilities_default_url', 'capabilities_default_label', 'capabilities_default_intro')")
+      .all() as { key: string; value: string }[];
+    const map: Record<string, string> = {};
+    for (const r of rows) map[r.key] = r.value;
+    const url = (map.capabilities_default_url || 'https://info.oxyscale.ai').trim();
+    if (!url) return null;
     return {
-      url: row.cta_doc_url.trim(),
-      label: (row.cta_doc_label?.trim() || 'View capabilities document'),
-      intro: (row.cta_intro?.trim() || ''),
+      url,
+      label: (map.capabilities_default_label?.trim() || 'View our capabilities'),
+      intro: (map.capabilities_default_intro?.trim() || ''),
     };
   } catch (err) {
-    // Treat as "no CTA configured" to keep the email flow working,
-    // but log so a transient DB issue doesn't degrade silently.
-    logger.warn({ err, category }, 'getCategoryCta lookup failed');
+    logger.warn({ err }, 'Universal capabilities CTA lookup failed');
     return null;
   }
 }

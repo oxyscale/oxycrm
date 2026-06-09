@@ -629,6 +629,18 @@ export default function SettingsPage() {
               description="Campaign-wide Calendly link the black 'Book a call' button drops into emails. Same link goes out regardless of which user sends."
             />
             <SettingsField
+              label='"View our capabilities" button URL'
+              value={settings.capabilities_default_url || ''}
+              onChange={(v) => updateSetting('capabilities_default_url', v)}
+              description="Universal capabilities page (default: info.oxyscale.ai). Drops into the email when the capabilities toggle is on, unless a per-category override is configured."
+            />
+            <SettingsField
+              label='"View our capabilities" button label'
+              value={settings.capabilities_default_label || ''}
+              onChange={(v) => updateSetting('capabilities_default_label', v)}
+              description="Text on the blue button. Default: 'View our capabilities'."
+            />
+            <SettingsField
               label="Sign-off Style"
               value={settings.email_sign_off || ''}
               onChange={(v) => updateSetting('email_sign_off', v)}
