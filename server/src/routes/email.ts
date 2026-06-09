@@ -78,7 +78,8 @@ router.post('/send', async (req, res, next) => {
       body: payload.body,
       recipientName,
       senderName: user.name,
-      signOff: user.signOff,
+      // Settings value wins; falls back to per-user seed if not set.
+      signOff: settingsMap.email_sign_off?.trim() || user.signOff || 'Kind regards',
       signature,
     });
 

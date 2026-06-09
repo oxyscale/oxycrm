@@ -427,7 +427,10 @@ router.post('/:id/preview', (req, res, next) => {
       recipientName,
       recipientCompany,
       senderName: user.name,
-      signOff: user.signOff,
+      // Sign-off comes from Settings > Email Preferences first (the
+      // value Jordan can edit in the UI). Falls back to the per-user
+      // seed value if the global setting isn't configured.
+      signOff: settings.email_sign_off?.trim() || user.signOff || 'Kind regards',
       signature,
       mode: includeHeader ? 'post-call' : 'standard',
       capabilitiesCta,
@@ -504,7 +507,10 @@ router.post('/:id/send', async (req, res, next) => {
       recipientName,
       recipientCompany,
       senderName: user.name,
-      signOff: user.signOff,
+      // Sign-off comes from Settings > Email Preferences first (the
+      // value Jordan can edit in the UI). Falls back to the per-user
+      // seed value if the global setting isn't configured.
+      signOff: settings.email_sign_off?.trim() || user.signOff || 'Kind regards',
       signature,
       mode: draft.include_after_call_header ? 'post-call' : 'standard',
       capabilitiesCta,
