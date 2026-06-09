@@ -28,7 +28,7 @@ import * as api from '../services/api';
 import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import type { EmailDraftWithLead } from '../types';
 
-type StatusFilter = 'ready' | 'pending' | 'failed' | 'all';
+type StatusFilter = 'ready' | 'pending' | 'failed' | 'sent' | 'all';
 
 export default function EmailBankPage() {
   const navigate = useNavigate();
@@ -444,7 +444,7 @@ export default function EmailBankPage() {
 
       {/* Filter chips */}
       <div className="flex flex-wrap items-center gap-2 mb-5">
-        {(['ready', 'pending', 'failed', 'all'] as StatusFilter[]).map((f) => {
+        {(['ready', 'pending', 'failed', 'sent', 'all'] as StatusFilter[]).map((f) => {
           const active = filter === f;
           return (
             <button
