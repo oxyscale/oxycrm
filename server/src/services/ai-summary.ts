@@ -454,11 +454,10 @@ ${renderContext}
 2. Open with a one-line warm reference to the call. Pick up something specific they said, not generic ("Great chat just then..." style).
 3. Tie what they raised on the call directly to what OxyScale would deliver. This is the heart of the email, weave 2-3 specific things they discussed into how OxyScale would handle them. Frame OxyScale as additive to what they already have, not a replacement.
 4. Forward-looking close that sets up the next step (see the render-context constraints above for whether to paste the Calendly link).
-5. Sign off with "${ctx.signOff},"
 
 Total length 110-180 words. Concrete and specific to the call, not generic.
 NEVER use asterisks for emphasis. No *italic*, no **bold**, no markdown formatting. Plain text only.
-The signature block is added automatically, so do NOT include one.
+The sign-off ("${ctx.signOff},") AND signature block are appended automatically by the email template — do NOT include either. End the body on the forward-looking close line.
 
 ## Call transcript
 ${transcript}
@@ -548,11 +547,10 @@ ${renderContext}
 3. Very briefly introduce OxyScale, tailored to their industry if playbook context is available above.
 4. If playbook context is available, mention 1-2 specific outcomes that would matter for their business. Frame as "if any of this sounds useful" rather than assuming pain.
 5. Forward-looking close per the render-context constraints above.
-6. Sign off with "${ctx.signOff},"
 
 Total length under 110 words.
 NEVER use asterisks for emphasis. No *italic*, no **bold**, no markdown formatting. Plain text only.
-The signature block is added automatically, so do NOT include one.
+The sign-off ("${ctx.signOff},") AND signature block are appended automatically by the email template — do NOT include either. End the body on the forward-looking close line.
 
 ## Output format
 Return ONLY valid JSON in this exact format, no other text:
@@ -652,7 +650,7 @@ Kind regards,"
 - Don't mention Miller Leith, recruitment-specific details, or specific case studies unless Jordan explicitly mentions them in his instructions.
 - If the instructions mention booking a call or meeting, include this Calendly link: ${ctx.calendlyLink}
 - START the email body with a greeting like "Hi ${firstName}," on its own line.
-- Sign off with "${ctx.signOff}," — never include a name, title, or signature after the sign-off (it is added automatically).
+- The sign-off ("${ctx.signOff},") AND signature block are appended automatically by the email template — do NOT include either. End the body on your forward-looking close line.
 - Never use em dashes. Comma, full stop, or semicolon instead.
 - NEVER use asterisks for emphasis. No *italic*, no **bold**, no markdown formatting. Plain text only.
 
@@ -660,7 +658,7 @@ Kind regards,"
 Return ONLY valid JSON in this exact format, no other text:
 {
   "subject": "Short, casual subject line under 8 words. Never include 'OxyScale'. No em dashes.",
-  "body": "The email body starting with the greeting. Plain text only, no asterisks, no markdown. End with Kind regards, and nothing after."
+  "body": "The email body starting with the greeting. Plain text only, no asterisks, no markdown. End on your forward-looking close line — the template appends the sign-off and signature automatically, so don't include those."
 }`;
 
   try {
