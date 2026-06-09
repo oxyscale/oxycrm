@@ -59,6 +59,9 @@ export default function EmailBankPage() {
   const [attachments, setAttachments] = useState<api.DraftAttachment[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Ref on the body textarea so the "Insert CTA box here" button can
+  // drop the {{cta}} token at the current cursor position.
+  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [dirty, setDirty] = useState(false);
   const [savingExplicit, setSavingExplicit] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -702,10 +705,39 @@ export default function EmailBankPage() {
 
               {/* Body */}
               <div>
-                <EyebrowLabel variant="bare" className="mb-1.5">
-                  Body
-                </EyebrowLabel>
+                <div className="flex items-center justify-between mb-1.5">
+                  <EyebrowLabel variant="bare">Body</EyebrowLabel>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ta = bodyTextareaRef.current;
+                      if (!ta) return;
+                      const start = ta.selectionStart;
+                      const end = ta.selectionEnd;
+                      // Wrap the token in blank lines so it always lives
+                      // as its own paragraph regardless of where the
+                      // cursor was. The trim collapses redundant blanks.
+                      const before = editBody.slice(0, start).replace(/\s*$/, '');
+                      const after = editBody.slice(end).replace(/^\s*/, '');
+                      const insertion = `${before ? '\n\n' : ''}{{cta}}${after ? '\n\n' : ''}`;
+                      const next = before + insertion + after;
+                      setEditBody(next);
+                      setDirty(true);
+                      // Move cursor just after the inserted token so the
+                      // next thing Jordan types lands in the right place.
+                      requestAnimationFrame(() => {
+                        const pos = (before + insertion).length;
+                        ta.focus();
+                        ta.setSelectionRange(pos, pos);
+                      });
+                    }}
+                    className="text-sky-ink text-xs font-medium hover:underline inline-flex items-center gap-1"
+                  >
+                    + Insert CTA box here
+                  </button>
+                </div>
                 <textarea
+                  ref={bodyTextareaRef}
                   value={editBody}
                   onChange={(e) => {
                     setEditBody(e.target.value);
@@ -717,6 +749,8 @@ export default function EmailBankPage() {
                 />
                 <p className="text-ink-dim text-[11px] mt-1.5 leading-relaxed">
                   Wrap one outcome phrase in <code className="font-mono text-sky-ink">*asterisks*</code> to render it in italic sky-blue.
+                  {' '}
+                  Drop <code className="font-mono text-sky-ink">{'{{cta}}'}</code> on its own line to position the CTA box mid-email — otherwise it defaults to just above the sign-off.
                 </p>
               </div>
 

@@ -85,6 +85,13 @@ function firstNameOf(full: string): string {
 const ITALIC_ACCENT_PATTERN = /\*([^*\n]{5,80})\*/g;
 const ITALIC_ACCENT_STYLE = `font-family: ${SERIF_STACK}; font-style: italic; color: #0a9cd4; font-weight: 400;`;
 
+// Body token that lets Jordan position the CTA card mid-email. Put it
+// on its own line (blank line above + below) and at render time it gets
+// replaced with the bordered CTA box (capabilities + book-a-call). If
+// the token isn't present, the CTA card defaults to its usual position
+// just above the sign-off.
+const CTA_TOKEN = '{{cta}}';
+
 /**
  * Auto-link bare URLs in already-escaped HTML text. Matches http/https
  * URLs and wraps them in styled <a> tags. Trailing sentence punctuation
@@ -143,7 +150,7 @@ function autoLinkUrls(escapedHtml: string): string {
  *
  * Bare URLs (http/https) are auto-linked into clickable <a> tags.
  */
-function renderBodyParagraphs(body: string): string {
+function renderBodyParagraphs(body: string, ctaInlineHtml: string | null = null): string {
   const paragraphStyle =
     `margin: 0 0 22px 0; color: #2a3138; font-size: 16px; line-height: 1.8; font-weight: 400; font-family: ${FONT_STACK};`;
   const lastParagraphStyle =
@@ -159,11 +166,22 @@ function renderBodyParagraphs(body: string): string {
 
   return chunks
     .map((p, i) => {
+      const isLast = i === chunks.length - 1;
+      // A paragraph that's JUST the CTA token gets replaced with the
+      // bordered CTA box, inlined into the body flow. Spacing above and
+      // below mirrors the normal paragraph rhythm. If no CTA is
+      // configured for this email, the token paragraph is silently
+      // dropped so the body doesn't show a literal "{{cta}}".
+      if (p === CTA_TOKEN) {
+        if (!ctaInlineHtml) return '';
+        const margin = isLast ? '0 0 0 0' : '0 0 22px 0';
+        return `<div style="margin: ${margin};">${ctaInlineHtml}</div>`;
+      }
       const html = autoLinkUrls(
         escapeHtml(p)
           .replace(ITALIC_ACCENT_PATTERN, (_m, phrase: string) => `<em style="${ITALIC_ACCENT_STYLE}">${phrase}</em>`),
       ).replace(/\n/g, '<br />');
-      const style = i === chunks.length - 1 ? lastParagraphStyle : paragraphStyle;
+      const style = isLast ? lastParagraphStyle : paragraphStyle;
       return `<p style="${style}">${html}</p>`;
     })
     .join('\n');
@@ -250,7 +268,13 @@ function renderBookACallRow(url: string): string {
                 </td></tr>`;
 }
 
-function renderCtaCard(
+/**
+ * The bordered CTA box itself — capabilities row + book-a-call row.
+ * Used in two places: wrapped in its own table row at the default
+ * position (just above the sign-off), OR inlined into the body when
+ * Jordan drops the `{{cta}}` token mid-message.
+ */
+function renderCtaBoxInner(
   capabilitiesCta: CapabilitiesCta | null | undefined,
   bookACallUrl: string | null | undefined,
 ): string {
@@ -265,14 +289,23 @@ function renderCtaCard(
       : '';
   const bookACallRow = showBookACall ? renderBookACallRow(bookACallUrl!) : '';
 
-  return `
-            <tr><td class="ox-cta-outer-pad" style="background-color: #ffffff; padding: 44px 64px 8px 64px;">
-              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #faf9f5; border: 1px solid rgba(11,13,14,0.06); border-radius: 14px;">
+  return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #faf9f5; border: 1px solid rgba(11,13,14,0.06); border-radius: 14px;">
                 <tr><td style="height: 2px; font-size: 0; line-height: 0; background-color: #0a9cd4; border-radius: 14px 14px 0 0;">&nbsp;</td></tr>
                 ${capabilitiesRow}
                 ${dividerRow}
                 ${bookACallRow}
-              </table>
+              </table>`;
+}
+
+function renderCtaCard(
+  capabilitiesCta: CapabilitiesCta | null | undefined,
+  bookACallUrl: string | null | undefined,
+): string {
+  const inner = renderCtaBoxInner(capabilitiesCta, bookACallUrl);
+  if (!inner) return '';
+  return `
+            <tr><td class="ox-cta-outer-pad" style="background-color: #ffffff; padding: 44px 64px 8px 64px;">
+              ${inner}
             </td></tr>`;
 }
 
@@ -289,7 +322,15 @@ export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
   } = params;
 
   const dateStamp = formatStampDate(new Date());
-  const bodyHtml = renderBodyParagraphs(body);
+
+  // If the body contains the `{{cta}}` token, the CTA box renders
+  // inline at that spot (and the default position above the sign-off
+  // is skipped). Otherwise the CTA card stays in its default slot.
+  const bodyHasCtaToken = body.includes(CTA_TOKEN);
+  const inlineCtaHtml = bodyHasCtaToken
+    ? renderCtaBoxInner(capabilitiesCta, bookACallUrl)
+    : null;
+  const bodyHtml = renderBodyParagraphs(body, inlineCtaHtml);
 
   // In standard mode the greeting is now included in the body text
   // (either typed by the user or generated by the AI), so we skip the
@@ -303,7 +344,9 @@ export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
   // entry block has already drawn its own bottom rule and 36px padding.
   const bodyTopPadding = mode === 'post-call' ? '28px' : '20px';
 
-  const ctaCard = renderCtaCard(capabilitiesCta, bookACallUrl);
+  // Skip the default-position CTA card when the token already placed
+  // it inline in the body — otherwise it'd render twice.
+  const ctaCard = bodyHasCtaToken ? '' : renderCtaCard(capabilitiesCta, bookACallUrl);
 
   return `<!DOCTYPE html>
 <html>
