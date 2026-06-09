@@ -53,6 +53,7 @@ interface LeadRow {
   manually_contacted: number;
   queue_position: number;
   last_called_at: string | null;
+  last_viewed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -96,6 +97,7 @@ function mapLeadRow(row: LeadRow): Lead {
     manuallyContacted: row.manually_contacted === 1,
     queuePosition: row.queue_position,
     lastCalledAt: row.last_called_at,
+    lastViewedAt: row.last_viewed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -236,7 +238,11 @@ router.get('/', (req, res, next) => {
         AND NOT EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = leads.id)`;
     }
 
-    query += ' ORDER BY queue_position ASC';
+    // Default ordering: recently-touched leads first. Uses last_viewed_at
+    // if present, falls back to updated_at. Leads Jordan's never opened
+    // are ranked by their updated_at (which equals created_at for fresh
+    // imports). Client can override with column-header sorts.
+    query += " ORDER BY COALESCE(last_viewed_at, updated_at) DESC";
 
     const rows = db.prepare(query).all(params) as LeadRow[];
     const leads = rows.map(mapLeadRow);
@@ -1130,6 +1136,20 @@ router.get('/:id', (req, res, next) => {
     const leadRow = db.prepare('SELECT * FROM leads WHERE id = ?').get(id) as LeadRow | undefined;
     if (!leadRow) {
       throw new ApiError(404, 'Lead not found');
+    }
+
+    // Bump last_viewed_at so the Leads page default sort can surface
+    // this lead first next time. ISO with Z so the client parses it as
+    // UTC unambiguously. Best-effort — failure here must not break the
+    // profile load.
+    try {
+      const nowIso = new Date().toISOString();
+      db.prepare('UPDATE leads SET last_viewed_at = ? WHERE id = ?').run(nowIso, id);
+      // Reflect the bump in the response so the client's sort updates
+      // immediately on next list load without needing a refetch round-trip.
+      leadRow.last_viewed_at = nowIso;
+    } catch {
+      /* non-critical */
     }
 
     const callLogRows = db

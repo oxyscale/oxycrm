@@ -15,7 +15,10 @@ import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
 import PillButton from '../components/ui/PillButton';
 
-type SortField = 'name' | 'category' | 'queuePosition';
+// 'recent' is the default — sorts by max(lastViewedAt, updatedAt) DESC so
+// the leads Jordan's actually been working on bubble to the top of the list.
+// The other fields are still available via column-header clicks.
+type SortField = 'recent' | 'name' | 'category' | 'queuePosition';
 type SortDir = 'asc' | 'desc';
 
 export default function LeadsPage() {
@@ -43,7 +46,7 @@ export default function LeadsPage() {
     (searchParams.get('status') as 'all' | 'contacted' | 'not_contacted') || 'all'
   );
   const [sortField, setSortField] = useState<SortField>(
-    (searchParams.get('sort') as SortField) || 'queuePosition'
+    (searchParams.get('sort') as SortField) || 'recent'
   );
   const [sortDir, setSortDir] = useState<SortDir>(
     (searchParams.get('dir') as SortDir) || 'asc'
@@ -60,7 +63,7 @@ export default function LeadsPage() {
     if (search) params.set('q', search);
     if (filterCategory !== 'all') params.set('cat', filterCategory);
     if (filterContacted !== 'all') params.set('status', filterContacted);
-    if (sortField !== 'queuePosition') params.set('sort', sortField);
+    if (sortField !== 'recent') params.set('sort', sortField);
     if (sortDir !== 'asc') params.set('dir', sortDir);
     setSearchParams(params, { replace: true });
     // Remember this URL for "return to leads" after actions
@@ -219,6 +222,16 @@ export default function LeadsPage() {
       return true;
     })
     .sort((a, b) => {
+      // 'recent' is a virtual sort field — uses last_viewed_at (bumped
+      // when Jordan opens the lead profile) and falls back to updated_at.
+      // Always DESC: most recently touched first. The Recent default
+      // means the leads Jordan's been working on bubble to the top
+      // instead of always showing the same low-queue-position leads.
+      if (sortField === 'recent') {
+        const aRef = a.lastViewedAt || a.updatedAt || '';
+        const bRef = b.lastViewedAt || b.updatedAt || '';
+        return bRef.localeCompare(aRef);
+      }
       const aVal = a[sortField] ?? '';
       const bVal = b[sortField] ?? '';
       const cmp = typeof aVal === 'number' && typeof bVal === 'number'

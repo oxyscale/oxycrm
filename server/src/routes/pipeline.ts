@@ -41,6 +41,7 @@ interface LeadRow {
   deal_value: number;
   queue_position: number;
   last_called_at: string | null;
+  last_viewed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -69,6 +70,7 @@ function mapLeadRow(row: LeadRow): Lead {
     dealValue: row.deal_value ?? 0,
     queuePosition: row.queue_position,
     lastCalledAt: row.last_called_at,
+    lastViewedAt: row.last_viewed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

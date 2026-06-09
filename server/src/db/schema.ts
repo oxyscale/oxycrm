@@ -640,6 +640,13 @@ export function initializeDatabase(db: Database.Database): void {
   // needing a note/email/call row.
   addColumnIfMissing(db, 'leads', 'manually_contacted', 'INTEGER NOT NULL DEFAULT 0');
 
+  // Last viewed timestamp (June 2026). Bumped on every GET /api/leads/:id
+  // so the Leads page can default-sort by recent activity. Without this,
+  // the page would always show the same leads at the top (whatever was
+  // at queue_position = 1) regardless of where Jordan's actually been
+  // working in the CRM.
+  addColumnIfMissing(db, 'leads', 'last_viewed_at', 'TEXT DEFAULT NULL');
+
   // One-time (May 2026): set $10k default deal value for Pulse leads that
   // don't have one yet. Safe to re-run — only touches NULL/0 values.
   db.prepare(`

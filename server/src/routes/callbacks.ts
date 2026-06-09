@@ -111,6 +111,10 @@ function mapCallbackWithLeadRow(row: CallbackWithLeadRow): CallbackWithLead {
     dealValue: row.l_deal_value ?? 0,
     queuePosition: row.l_queue_position,
     lastCalledAt: row.l_last_called_at,
+    // Legacy callbacks route doesn't bother joining last_viewed_at —
+    // this branch is being phased out, and the field is optional in
+    // every consumer that matters.
+    lastViewedAt: null,
     createdAt: row.l_created_at,
     updatedAt: row.l_updated_at,
   };

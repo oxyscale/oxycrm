@@ -38,6 +38,9 @@ export interface Lead {
   dealValue: number;
   queuePosition: number;
   lastCalledAt: string | null;
+  /** Bumped every time the lead profile is opened. Drives the Leads
+   *  page default sort so recently-visited leads bubble to the top. */
+  lastViewedAt: string | null;
   createdAt: string;
   updatedAt: string;
   /** Manual override — when true, lead counts as "contacted" regardless
