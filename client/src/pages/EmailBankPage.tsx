@@ -56,6 +56,9 @@ export default function EmailBankPage() {
   const [editCc, setEditCc] = useState('');
   const [editIncludeHeader, setEditIncludeHeader] = useState(true);
   const [editIncludeCapabilities, setEditIncludeCapabilities] = useState(false);
+  // Plain-text mode strips the branded OxyScale shell — body + sig +
+  // optional CTA only. Reads as personal outreach, not marketing.
+  const [editPlainTextMode, setEditPlainTextMode] = useState(false);
   const [attachments, setAttachments] = useState<api.DraftAttachment[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -121,6 +124,7 @@ export default function EmailBankPage() {
       setEditCc(selected.ccEmail || '');
       setEditIncludeHeader(selected.includeAfterCallHeader);
       setEditIncludeCapabilities(selected.includeCapabilities);
+      setEditPlainTextMode(selected.plainTextMode);
       setAttachments([]);
       setDirty(false);
       setActionError(null);
@@ -162,6 +166,7 @@ export default function EmailBankPage() {
         includeAfterCallHeader: editIncludeHeader,
         includeCapabilities: editIncludeCapabilities,
         includeBookACall: false,
+        plainTextMode: editPlainTextMode,
       });
       setDirty(false);
       await load();
@@ -215,6 +220,7 @@ export default function EmailBankPage() {
           includeAfterCallHeader: editIncludeHeader,
           includeCapabilities: editIncludeCapabilities,
           includeBookACall: false,
+          plainTextMode: editPlainTextMode,
         });
         setPreviewHtml(res.html);
       } catch (err) {
@@ -250,6 +256,7 @@ export default function EmailBankPage() {
           includeAfterCallHeader: editIncludeHeader,
           includeCapabilities: editIncludeCapabilities,
           includeBookACall: false,
+          plainTextMode: editPlainTextMode,
         });
       }
       await api.sendEmailDraft(selected.id);
@@ -291,6 +298,7 @@ export default function EmailBankPage() {
         includeAfterCallHeader: editIncludeHeader,
         includeCapabilities: editIncludeCapabilities,
         includeBookACall: false,
+        plainTextMode: editPlainTextMode,
       });
       setDirty(false);
       setSavedFlash(true);
@@ -680,15 +688,27 @@ export default function EmailBankPage() {
               <div className="bg-tray border border-hair-soft rounded-xl p-3 space-y-2.5">
                 <EyebrowLabel variant="bare">Email blocks</EyebrowLabel>
                 <ToggleRow
-                  label='"A note after our chat" header'
-                  hint="Editorial italic display headline above the body. Untick for follow-ups after the first."
-                  checked={editIncludeHeader}
+                  label="Plain text style"
+                  hint="Strip the branded OxyScale shell — body text + signature only (capabilities button still works). Reads as personal outreach, not marketing."
+                  checked={editPlainTextMode}
                   onChange={(v) => {
-                    setEditIncludeHeader(v);
+                    setEditPlainTextMode(v);
                     setDirty(true);
                     saveEdits();
                   }}
                 />
+                {!editPlainTextMode && (
+                  <ToggleRow
+                    label='"A note after our chat" header'
+                    hint="Editorial italic display headline above the body. Untick for follow-ups after the first."
+                    checked={editIncludeHeader}
+                    onChange={(v) => {
+                      setEditIncludeHeader(v);
+                      setDirty(true);
+                      saveEdits();
+                    }}
+                  />
+                )}
                 {showCapabilitiesToggle && (
                   <ToggleRow
                     label="Capabilities document button"

@@ -357,6 +357,113 @@ function renderCtaCard(
             </td></tr>`;
 }
 
+/**
+ * Plain-text-style email renderer.
+ *
+ * Strips the OxyScale branded shell (header card, editorial entry,
+ * footer colophon, tray-and-card design) and produces an email that
+ * reads as a personal message — body text in standard inline styling
+ * with the user's HTML signature at the bottom, exactly like a Gmail
+ * message would look.
+ *
+ * Optional: the capabilities and book-a-call buttons can still be
+ * included via {{cta}} token or default position. They render as the
+ * same bordered card the branded mode uses (Jordan asked for the
+ * capabilities button to remain available in plain mode).
+ *
+ * The italic accent (asterisks → blue Fraunces in branded mode)
+ * downgrades to plain HTML <em> here — no colour or serif treatment,
+ * just standard italics, which read as natural emphasis.
+ */
+export function buildPlainEmailHtml(params: BuildBrandedEmailParams): string {
+  const {
+    body,
+    signOff,
+    signature,
+    capabilitiesCta = null,
+    bookACallUrl = null,
+  } = params;
+
+  const cleanBody = stripTrailingSignoff(body, signOff);
+  const bodyHasCtaToken = cleanBody.includes(CTA_TOKEN);
+  const inlineCtaHtml = bodyHasCtaToken
+    ? renderCtaBoxInner(capabilitiesCta, bookACallUrl)
+    : null;
+  const bodyHtml = renderPlainBodyParagraphs(cleanBody, inlineCtaHtml);
+  const ctaCard = bodyHasCtaToken
+    ? ''
+    : renderPlainCtaBlock(capabilitiesCta, bookACallUrl);
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light only" />
+  <title>OxyScale</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #ffffff; font-family: ${FONT_STACK}; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; color: #1a1a1a;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #ffffff; padding: 24px 16px;">
+    <tr><td align="left">
+      <table width="640" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 640px; width: 100%;">
+        <tr><td style="padding: 0;">
+          ${bodyHtml}
+          ${ctaCard}
+          <p style="margin: 26px 0 4px 0; color: #1a1a1a; font-size: 15px; line-height: 1.6; font-family: ${FONT_STACK};">
+            ${escapeHtml(signOff)},
+          </p>
+          ${signature}
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+// Body paragraphs for plain mode — same flow as the branded renderer
+// (split on blank lines, escape, auto-link URLs, support the {{cta}}
+// token) but using plain HTML <em> for italic accents instead of the
+// Fraunces sky-ink styling.
+function renderPlainBodyParagraphs(body: string, ctaInlineHtml: string | null): string {
+  const paragraphStyle =
+    `margin: 0 0 16px 0; color: #1a1a1a; font-size: 15px; line-height: 1.55; font-family: ${FONT_STACK};`;
+
+  const chunks = body
+    .replace(/\r\n/g, '\n')
+    .split(/\n\s*\n+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  if (chunks.length === 0) return '';
+
+  return chunks
+    .map((p) => {
+      if (p === CTA_TOKEN) {
+        if (!ctaInlineHtml) return '';
+        return `<div style="margin: 0 0 16px 0;">${ctaInlineHtml}</div>`;
+      }
+      const html = autoLinkUrls(
+        escapeHtml(p).replace(ITALIC_ACCENT_PATTERN, (_m, phrase: string) => `<em>${phrase}</em>`),
+      ).replace(/\n/g, '<br />');
+      return `<p style="${paragraphStyle}">${html}</p>`;
+    })
+    .join('\n');
+}
+
+// CTA card at the default position in plain mode. Same bordered box
+// renderer the branded template uses; just sits inline in the simple
+// HTML flow instead of wrapped in a table row.
+function renderPlainCtaBlock(
+  capabilitiesCta: CapabilitiesCta | null | undefined,
+  bookACallUrl: string | null | undefined,
+): string {
+  const inner = renderCtaBoxInner(capabilitiesCta, bookACallUrl);
+  if (!inner) return '';
+  return `<div style="margin: 22px 0 6px 0;">${inner}</div>`;
+}
+
 export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
   const {
     body,

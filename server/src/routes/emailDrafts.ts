@@ -9,7 +9,7 @@ import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { sendEmail } from '../services/email.js';
 import { buildEmailSignature } from '../services/emailSignature.js';
-import { buildBrandedEmailHtml } from '../services/emailTemplate.js';
+import { buildBrandedEmailHtml, buildPlainEmailHtml } from '../services/emailTemplate.js';
 import { insertIntoGmailSent } from '../services/gmail-insert.js';
 import {
   summariseAndPersistCall,
@@ -40,6 +40,7 @@ interface DraftRow {
   include_after_call_header: number;
   include_capabilities: number;
   include_book_a_call: number;
+  plain_text_mode: number;
   created_at: string;
   updated_at: string;
 }
@@ -69,6 +70,7 @@ function mapDraft(row: DraftRow) {
     includeAfterCallHeader: !!row.include_after_call_header,
     includeCapabilities: !!row.include_capabilities,
     includeBookACall: !!row.include_book_a_call,
+    plainTextMode: !!row.plain_text_mode,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -288,6 +290,7 @@ const patchSchema = z.object({
   includeAfterCallHeader: z.boolean().optional(),
   includeCapabilities: z.boolean().optional(),
   includeBookACall: z.boolean().optional(),
+  plainTextMode: z.boolean().optional(),
 });
 
 router.patch('/:id', (req, res, next) => {
@@ -341,6 +344,10 @@ router.patch('/:id', (req, res, next) => {
       setClauses.push('include_book_a_call = @includeBookACall');
       params.includeBookACall = updates.includeBookACall ? 1 : 0;
     }
+    if (updates.plainTextMode !== undefined) {
+      setClauses.push('plain_text_mode = @plainTextMode');
+      params.plainTextMode = updates.plainTextMode ? 1 : 0;
+    }
 
     if (setClauses.length === 0) {
       throw new ApiError(400, 'No fields provided');
@@ -374,6 +381,7 @@ const previewSchema = z.object({
   includeAfterCallHeader: z.boolean().optional(),
   includeCapabilities: z.boolean().optional(),
   includeBookACall: z.boolean().optional(),
+  plainTextMode: z.boolean().optional(),
 });
 
 router.post('/:id/preview', (req, res, next) => {
@@ -417,12 +425,13 @@ router.post('/:id/preview', (req, res, next) => {
     const includeHeader = overrides.includeAfterCallHeader ?? !!draft.include_after_call_header;
     const includeCaps = overrides.includeCapabilities ?? !!draft.include_capabilities;
     const includeBook = overrides.includeBookACall ?? !!draft.include_book_a_call;
+    const plainMode = overrides.plainTextMode ?? !!draft.plain_text_mode;
 
     const categoryCta = lead.category ? getCategoryCta(lead.category) : null;
     const capabilitiesCta = includeCaps && categoryCta
       ? { url: categoryCta.url, label: categoryCta.label, intro: categoryCta.intro }
       : null;
-    const html = buildBrandedEmailHtml({
+    const renderParams = {
       body,
       recipientName,
       recipientCompany,
@@ -432,12 +441,17 @@ router.post('/:id/preview', (req, res, next) => {
       // seed value if the global setting isn't configured.
       signOff: settings.email_sign_off?.trim() || user.signOff || 'Kind regards',
       signature,
-      mode: includeHeader ? 'post-call' : 'standard',
+      mode: (includeHeader ? 'post-call' : 'standard') as 'post-call' | 'standard',
       capabilitiesCta,
       // Book-a-call CTA block removed — the email signature already
       // contains a "Book a call" button linking to Calendly.
       bookACallUrl: null,
-    });
+    };
+    // Plain text mode strips the branded shell — just body + sig +
+    // optional CTA. Branded mode is the full OxyScale-styled template.
+    const html = plainMode
+      ? buildPlainEmailHtml(renderParams)
+      : buildBrandedEmailHtml(renderParams);
 
     res.json({ html });
   } catch (err) {
@@ -502,7 +516,7 @@ router.post('/:id/send', async (req, res, next) => {
           intro: categoryCta.intro,
         }
       : null;
-    const htmlBody = buildBrandedEmailHtml({
+    const sendParams = {
       body: draft.body,
       recipientName,
       recipientCompany,
@@ -512,12 +526,17 @@ router.post('/:id/send', async (req, res, next) => {
       // seed value if the global setting isn't configured.
       signOff: settings.email_sign_off?.trim() || user.signOff || 'Kind regards',
       signature,
-      mode: draft.include_after_call_header ? 'post-call' : 'standard',
+      mode: (draft.include_after_call_header ? 'post-call' : 'standard') as 'post-call' | 'standard',
       capabilitiesCta,
       // Book-a-call CTA block removed — the email signature already
       // contains a "Book a call" button linking to Calendly.
       bookACallUrl: null,
-    });
+    };
+    // Plain text mode strips the branded shell — just body + sig +
+    // optional CTA. Branded mode is the full OxyScale-styled template.
+    const htmlBody = draft.plain_text_mode
+      ? buildPlainEmailHtml(sendParams)
+      : buildBrandedEmailHtml(sendParams);
 
     // Load attachments for this draft (if any)
     const attachmentRows = db.prepare(

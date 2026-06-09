@@ -270,6 +270,11 @@ export interface EmailDraft {
   includeCapabilities: boolean;
   /** Black "Book a call" button to the campaign-wide Calendly. */
   includeBookACall: boolean;
+  /** When true, the email renders WITHOUT the branded OxyScale shell
+   *  (header card, editorial entry, footer colophon). Just the body
+   *  text + signature + optional CTA box. Reads as personal outreach
+   *  rather than a marketing template. */
+  plainTextMode: boolean;
   createdAt: string;
   updatedAt: string;
 }

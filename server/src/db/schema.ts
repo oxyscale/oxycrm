@@ -580,6 +580,11 @@ export function initializeDatabase(db: Database.Database): void {
   addColumnIfMissing(db, 'email_drafts', 'include_after_call_header', 'INTEGER NOT NULL DEFAULT 1');
   addColumnIfMissing(db, 'email_drafts', 'include_capabilities', 'INTEGER NOT NULL DEFAULT 0');
   addColumnIfMissing(db, 'email_drafts', 'include_book_a_call', 'INTEGER NOT NULL DEFAULT 1');
+  // Plain-text mode: when 1, render the email without the branded
+  // OxyScale shell (header, editorial card, footer colophon) — just
+  // the body text + signature + optionally the capabilities button.
+  // Designed for outreach that should read as personal, not marketing.
+  addColumnIfMissing(db, 'email_drafts', 'plain_text_mode', 'INTEGER NOT NULL DEFAULT 0');
 
   // ============================================================
   // Email engagement tracking — populated by Resend webhook events.
