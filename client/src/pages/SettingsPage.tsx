@@ -629,15 +629,27 @@ export default function SettingsPage() {
               description="Campaign-wide Calendly link the black 'Book a call' button drops into emails. Same link goes out regardless of which user sends."
             />
             <SettingsField
-              label='"View our capabilities" button URL'
+              label='Recruitment hook document URL'
               value={settings.capabilities_default_url || ''}
               onChange={(v) => updateSetting('capabilities_default_url', v)}
-              description="Universal capabilities page (default: info.oxyscale.ai). Drops into the email when the capabilities toggle is on, unless a per-category override is configured."
+              description="Recruitment-specific landing page (default: info.oxyscale.ai). Used by the 'Recruitment hook' toggle in the Email Bank. Per-category overrides take priority."
             />
             <SettingsField
-              label='"View our capabilities" button label'
+              label='Recruitment hook button label'
               value={settings.capabilities_default_label || ''}
               onChange={(v) => updateSetting('capabilities_default_label', v)}
+              description="Text on the blue button. Default: 'View our capabilities'."
+            />
+            <SettingsField
+              label='Capabilities document URL'
+              value={settings.capabilities_secondary_url || ''}
+              onChange={(v) => updateSetting('capabilities_secondary_url', v)}
+              description="Broad / non-recruitment capabilities page (default: details.oxyscale.ai). Used by the 'Capabilities document' toggle in the Email Bank."
+            />
+            <SettingsField
+              label='Capabilities document button label'
+              value={settings.capabilities_secondary_label || ''}
+              onChange={(v) => updateSetting('capabilities_secondary_label', v)}
               description="Text on the blue button. Default: 'View our capabilities'."
             />
             <SettingsField

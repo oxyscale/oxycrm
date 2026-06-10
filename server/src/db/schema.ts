@@ -580,6 +580,11 @@ export function initializeDatabase(db: Database.Database): void {
   addColumnIfMissing(db, 'email_drafts', 'include_after_call_header', 'INTEGER NOT NULL DEFAULT 1');
   addColumnIfMissing(db, 'email_drafts', 'include_capabilities', 'INTEGER NOT NULL DEFAULT 0');
   addColumnIfMissing(db, 'email_drafts', 'include_book_a_call', 'INTEGER NOT NULL DEFAULT 1');
+  // Second capabilities-style CTA. Jordan uses this to drop the broad
+  // "View our capabilities" button (details.oxyscale.ai) while the
+  // existing include_capabilities toggle drives the recruitment-specific
+  // hook (info.oxyscale.ai). Either, both or neither can be on.
+  addColumnIfMissing(db, 'email_drafts', 'include_secondary_doc', 'INTEGER NOT NULL DEFAULT 0');
   // Plain-text mode: when 1, render the email without the branded
   // OxyScale shell (header, editorial card, footer colophon) — just
   // the body text + signature + optionally the capabilities button.

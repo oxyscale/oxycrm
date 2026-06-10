@@ -999,7 +999,9 @@ export async function updateEmailDraft(
     suggestedStage?: 'follow_up' | 'call_booked';
     includeAfterCallHeader?: boolean;
     includeCapabilities?: boolean;
+    includeSecondaryDoc?: boolean;
     includeBookACall?: boolean;
+    plainTextMode?: boolean;
   },
 ): Promise<EmailDraft> {
   return request<EmailDraft>(`/email-drafts/${id}`, {
@@ -1015,7 +1017,9 @@ export async function previewEmailDraft(
     body?: string;
     includeAfterCallHeader?: boolean;
     includeCapabilities?: boolean;
+    includeSecondaryDoc?: boolean;
     includeBookACall?: boolean;
+    plainTextMode?: boolean;
   },
 ): Promise<{ html: string }> {
   return request<{ html: string }>(`/email-drafts/${id}/preview`, {

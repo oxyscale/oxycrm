@@ -15,6 +15,7 @@ import {
   summariseAndPersistCall,
   draftAndStoreEmailForCall,
   getCategoryCta,
+  getSecondaryCta,
 } from '../services/ai-summary.js';
 import pino from 'pino';
 
@@ -40,6 +41,7 @@ interface DraftRow {
   include_after_call_header: number;
   include_capabilities: number;
   include_book_a_call: number;
+  include_secondary_doc: number;
   plain_text_mode: number;
   created_at: string;
   updated_at: string;
@@ -69,6 +71,7 @@ function mapDraft(row: DraftRow) {
     errorMessage: row.error_message,
     includeAfterCallHeader: !!row.include_after_call_header,
     includeCapabilities: !!row.include_capabilities,
+    includeSecondaryDoc: !!row.include_secondary_doc,
     includeBookACall: !!row.include_book_a_call,
     plainTextMode: !!row.plain_text_mode,
     createdAt: row.created_at,
@@ -289,6 +292,7 @@ const patchSchema = z.object({
   suggestedStage: z.enum(['follow_up', 'call_booked']).optional(),
   includeAfterCallHeader: z.boolean().optional(),
   includeCapabilities: z.boolean().optional(),
+  includeSecondaryDoc: z.boolean().optional(),
   includeBookACall: z.boolean().optional(),
   plainTextMode: z.boolean().optional(),
 });
@@ -340,6 +344,10 @@ router.patch('/:id', (req, res, next) => {
       setClauses.push('include_capabilities = @includeCapabilities');
       params.includeCapabilities = updates.includeCapabilities ? 1 : 0;
     }
+    if (updates.includeSecondaryDoc !== undefined) {
+      setClauses.push('include_secondary_doc = @includeSecondaryDoc');
+      params.includeSecondaryDoc = updates.includeSecondaryDoc ? 1 : 0;
+    }
     if (updates.includeBookACall !== undefined) {
       setClauses.push('include_book_a_call = @includeBookACall');
       params.includeBookACall = updates.includeBookACall ? 1 : 0;
@@ -380,6 +388,7 @@ const previewSchema = z.object({
   body: z.string().optional(),
   includeAfterCallHeader: z.boolean().optional(),
   includeCapabilities: z.boolean().optional(),
+  includeSecondaryDoc: z.boolean().optional(),
   includeBookACall: z.boolean().optional(),
   plainTextMode: z.boolean().optional(),
 });
@@ -424,12 +433,33 @@ router.post('/:id/preview', (req, res, next) => {
     const body = overrides.body ?? draft.body ?? '';
     const includeHeader = overrides.includeAfterCallHeader ?? !!draft.include_after_call_header;
     const includeCaps = overrides.includeCapabilities ?? !!draft.include_capabilities;
+    const includeSecondary = overrides.includeSecondaryDoc ?? !!draft.include_secondary_doc;
     const includeBook = overrides.includeBookACall ?? !!draft.include_book_a_call;
     const plainMode = overrides.plainTextMode ?? !!draft.plain_text_mode;
 
+    // Primary slot — recruitment-specific hook (info.oxyscale.ai by
+    // default). Pulls per-category override if configured, otherwise
+    // the universal default from settings.
     const categoryCta = lead.category ? getCategoryCta(lead.category) : null;
     const capabilitiesCta = includeCaps && categoryCta
-      ? { url: categoryCta.url, label: categoryCta.label, intro: categoryCta.intro }
+      ? {
+          url: categoryCta.url,
+          label: categoryCta.label,
+          intro: categoryCta.intro,
+          kicker: 'Recruitment hook',
+        }
+      : null;
+    // Secondary slot — broad capabilities doc (details.oxyscale.ai by
+    // default). Independent of category — same URL for every lead unless
+    // Jordan changes the setting.
+    const secondaryCfg = includeSecondary ? getSecondaryCta() : null;
+    const secondaryCta = secondaryCfg
+      ? {
+          url: secondaryCfg.url,
+          label: secondaryCfg.label,
+          intro: secondaryCfg.intro,
+          kicker: 'Capabilities document',
+        }
       : null;
     const renderParams = {
       body,
@@ -443,6 +473,7 @@ router.post('/:id/preview', (req, res, next) => {
       signature,
       mode: (includeHeader ? 'post-call' : 'standard') as 'post-call' | 'standard',
       capabilitiesCta,
+      secondaryCta,
       // Book-a-call CTA block removed — the email signature already
       // contains a "Book a call" button linking to Calendly.
       bookACallUrl: null,
@@ -504,16 +535,27 @@ router.post('/:id/send', async (req, res, next) => {
       calendly_link: user.calendlyLink,
     });
 
-    // Resolve CTA context from toggles. Capabilities CTA only renders if
-    // the lead's category has a configured doc URL AND the toggle is on.
-    // Book-a-call URL is campaign-wide (settings table) with per-user
-    // calendly fallback.
+    // Resolve CTA context from toggles. Primary capabilities slot =
+    // recruitment hook (info.oxyscale.ai). Secondary slot = broad
+    // capabilities doc (details.oxyscale.ai). Both can be on
+    // independently. Book-a-call URL stays null — the email signature
+    // already contains a Book-a-call button linking to Calendly.
     const categoryCta = lead?.category ? getCategoryCta(lead.category) : null;
     const capabilitiesCta = draft.include_capabilities && categoryCta
       ? {
           url: categoryCta.url,
           label: categoryCta.label,
           intro: categoryCta.intro,
+          kicker: 'Recruitment hook',
+        }
+      : null;
+    const secondaryCfg = draft.include_secondary_doc ? getSecondaryCta() : null;
+    const secondaryCta = secondaryCfg
+      ? {
+          url: secondaryCfg.url,
+          label: secondaryCfg.label,
+          intro: secondaryCfg.intro,
+          kicker: 'Capabilities document',
         }
       : null;
     const sendParams = {
@@ -528,6 +570,7 @@ router.post('/:id/send', async (req, res, next) => {
       signature,
       mode: (draft.include_after_call_header ? 'post-call' : 'standard') as 'post-call' | 'standard',
       capabilitiesCta,
+      secondaryCta,
       // Book-a-call CTA block removed — the email signature already
       // contains a "Book a call" button linking to Calendly.
       bookACallUrl: null,

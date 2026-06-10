@@ -163,6 +163,34 @@ export function getCategoryCta(category: string | null): CategoryCta | null {
   }
 }
 
+/**
+ * Returns the SECONDARY capabilities CTA — the broad
+ * "View our capabilities" doc (defaults to details.oxyscale.ai).
+ * This is independent of category. It's a second button Jordan can
+ * include on any email, alongside or instead of the recruitment hook.
+ * Returns null only if the URL is explicitly blank in settings.
+ */
+export function getSecondaryCta(): CategoryCta | null {
+  try {
+    const db = getDb();
+    const rows = db
+      .prepare("SELECT key, value FROM settings WHERE key IN ('capabilities_secondary_url', 'capabilities_secondary_label', 'capabilities_secondary_intro')")
+      .all() as { key: string; value: string }[];
+    const map: Record<string, string> = {};
+    for (const r of rows) map[r.key] = r.value;
+    const url = (map.capabilities_secondary_url || 'https://details.oxyscale.ai').trim();
+    if (!url) return null;
+    return {
+      url,
+      label: (map.capabilities_secondary_label?.trim() || 'View our capabilities'),
+      intro: (map.capabilities_secondary_intro?.trim() || ''),
+    };
+  } catch (err) {
+    logger.warn({ err }, 'Secondary capabilities CTA lookup failed');
+    return null;
+  }
+}
+
 function getSettingsContext(): { calendlyLink: string; calendlyDuration: string; companyDescription: string; signOff: string } {
   try {
     const db = getDb();

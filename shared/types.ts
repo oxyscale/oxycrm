@@ -271,6 +271,10 @@ export interface EmailDraft {
   /** Capabilities-document blue button. Only effective if the lead's
    *  category has a configured CTA URL in category_prompts. */
   includeCapabilities: boolean;
+  /** Second capabilities-style button. Drives the broad
+   *  "View our capabilities" doc (details.oxyscale.ai by default)
+   *  while includeCapabilities drives the recruitment-specific hook. */
+  includeSecondaryDoc: boolean;
   /** Black "Book a call" button to the campaign-wide Calendly. */
   includeBookACall: boolean;
   /** When true, the email renders WITHOUT the branded OxyScale shell

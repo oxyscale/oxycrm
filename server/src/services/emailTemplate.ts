@@ -22,6 +22,10 @@ interface CapabilitiesCta {
   intro: string;
   /** Optional headline shown above the intro line. */
   title?: string;
+  /** Mono-style overline above the button — e.g. "Recruitment hook".
+   *  Combined at render time with the auto-numbered sequence ("01", "02").
+   *  Defaults to "Capabilities document" when unset. */
+  kicker?: string;
 }
 
 interface BuildBrandedEmailParams {
@@ -34,8 +38,13 @@ interface BuildBrandedEmailParams {
   signature: string;
   /** Which top-of-letter block to render. Defaults to 'standard'. */
   mode?: 'post-call' | 'standard';
-  /** Capabilities button. Renders when present. */
+  /** Primary capabilities button. Jordan uses this slot for the
+   *  recruitment-specific hook (info.oxyscale.ai by default). */
   capabilitiesCta?: CapabilitiesCta | null;
+  /** Secondary capabilities button. Jordan uses this slot for the
+   *  broad capabilities doc (details.oxyscale.ai by default). Either
+   *  slot can be active independently. */
+  secondaryCta?: CapabilitiesCta | null;
   /** Calendly / book-a-call URL. Renders the black pill button when present. */
   bookACallUrl?: string | null;
 }
@@ -269,11 +278,16 @@ function renderStandardGreeting(name: string): string {
             </td></tr>`;
 }
 
-function renderCapabilitiesRow(cta: CapabilitiesCta): string {
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+function renderCapabilitiesRow(cta: CapabilitiesCta, sequence: number): string {
   const safeUrl = safeHref(cta.url);
   const safeLabel = escapeHtml(cta.label || 'View capabilities document');
   const safeTitle = cta.title ? escapeHtml(cta.title) : '';
   const safeIntro = escapeHtml(cta.intro || '');
+  const safeKicker = escapeHtml((cta.kicker || 'Capabilities document').toUpperCase());
 
   const titleHtml = safeTitle
     ? `<p style="margin: 0 0 6px 0; color: #0b0d0e; font-size: 17px; line-height: 1.4; font-weight: 500; font-family: ${FONT_STACK}; letter-spacing: -0.015em;">${safeTitle}</p>`
@@ -286,7 +300,7 @@ function renderCapabilitiesRow(cta: CapabilitiesCta): string {
   return `
                 <tr><td class="ox-cta-row-pad" style="padding: 30px 32px 28px 32px;">
                   <p style="margin: 0 0 12px 0; color: #8a95a0; font-family: ${MONO_STACK}; font-size: 10px; text-transform: uppercase; letter-spacing: 0.24em; font-weight: 600;">
-                    01 &nbsp;&middot;&nbsp; Capabilities document
+                    ${pad2(sequence)} &nbsp;&middot;&nbsp; ${safeKicker}
                   </p>
                   ${titleHtml}
                   ${introHtml}
@@ -298,12 +312,12 @@ function renderCapabilitiesRow(cta: CapabilitiesCta): string {
                 </td></tr>`;
 }
 
-function renderBookACallRow(url: string): string {
+function renderBookACallRow(url: string, sequence: number): string {
   const safeUrl = safeHref(url);
   return `
                 <tr><td class="ox-cta-row-pad" style="padding: 26px 32px 30px 32px;">
                   <p style="margin: 0 0 10px 0; color: #8a95a0; font-family: ${MONO_STACK}; font-size: 10px; text-transform: uppercase; letter-spacing: 0.24em; font-weight: 600;">
-                    02 &nbsp;&middot;&nbsp; Book a call
+                    ${pad2(sequence)} &nbsp;&middot;&nbsp; Book a call
                   </p>
                   <p style="margin: 0 0 18px 0; color: #55606a; font-size: 14px; line-height: 1.55; font-weight: 400; font-family: ${FONT_STACK};">
                     Thirty minutes, on us. We dig into how your operation actually runs, what systems you've got in place, and where OxyScale would slot in for your business. You leave the call with a clear picture of the fit, and exactly how we'd build it for you.
@@ -324,32 +338,47 @@ function renderBookACallRow(url: string): string {
  */
 function renderCtaBoxInner(
   capabilitiesCta: CapabilitiesCta | null | undefined,
+  secondaryCta: CapabilitiesCta | null | undefined,
   bookACallUrl: string | null | undefined,
 ): string {
-  const showCapabilities = !!(capabilitiesCta && capabilitiesCta.url);
-  const showBookACall = !!bookACallUrl;
-  if (!showCapabilities && !showBookACall) return '';
+  // Build a sequence of "rows" (HTML fragments) in the order they
+  // should render. Each row claims the next sequence number so the
+  // "01 ·" / "02 ·" overline labels stay correct regardless of which
+  // CTAs are turned on.
+  const rows: string[] = [];
+  const divider = `<tr><td style="padding: 0 32px;"><hr style="border: none; border-top: 1px solid rgba(11,13,14,0.08); margin: 0;" /></td></tr>`;
+  let seq = 1;
 
-  const capabilitiesRow = showCapabilities ? renderCapabilitiesRow(capabilitiesCta!) : '';
-  const dividerRow =
-    showCapabilities && showBookACall
-      ? `<tr><td style="padding: 0 32px;"><hr style="border: none; border-top: 1px solid rgba(11,13,14,0.08); margin: 0;" /></td></tr>`
-      : '';
-  const bookACallRow = showBookACall ? renderBookACallRow(bookACallUrl!) : '';
+  const pushDivider = () => {
+    if (rows.length > 0) rows.push(divider);
+  };
+
+  if (capabilitiesCta && capabilitiesCta.url) {
+    rows.push(renderCapabilitiesRow(capabilitiesCta, seq++));
+  }
+  if (secondaryCta && secondaryCta.url) {
+    pushDivider();
+    rows.push(renderCapabilitiesRow(secondaryCta, seq++));
+  }
+  if (bookACallUrl) {
+    pushDivider();
+    rows.push(renderBookACallRow(bookACallUrl, seq++));
+  }
+
+  if (rows.length === 0) return '';
 
   return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #faf9f5; border: 1px solid rgba(11,13,14,0.06); border-radius: 14px;">
                 <tr><td style="height: 2px; font-size: 0; line-height: 0; background-color: #0a9cd4; border-radius: 14px 14px 0 0;">&nbsp;</td></tr>
-                ${capabilitiesRow}
-                ${dividerRow}
-                ${bookACallRow}
+                ${rows.join('\n')}
               </table>`;
 }
 
 function renderCtaCard(
   capabilitiesCta: CapabilitiesCta | null | undefined,
+  secondaryCta: CapabilitiesCta | null | undefined,
   bookACallUrl: string | null | undefined,
 ): string {
-  const inner = renderCtaBoxInner(capabilitiesCta, bookACallUrl);
+  const inner = renderCtaBoxInner(capabilitiesCta, secondaryCta, bookACallUrl);
   if (!inner) return '';
   return `
             <tr><td class="ox-cta-outer-pad" style="background-color: #ffffff; padding: 44px 64px 8px 64px;">
@@ -381,18 +410,19 @@ export function buildPlainEmailHtml(params: BuildBrandedEmailParams): string {
     signOff,
     signature,
     capabilitiesCta = null,
+    secondaryCta = null,
     bookACallUrl = null,
   } = params;
 
   const cleanBody = stripTrailingSignoff(body, signOff);
   const bodyHasCtaToken = cleanBody.includes(CTA_TOKEN);
   const inlineCtaHtml = bodyHasCtaToken
-    ? renderCtaBoxInner(capabilitiesCta, bookACallUrl)
+    ? renderCtaBoxInner(capabilitiesCta, secondaryCta, bookACallUrl)
     : null;
   const bodyHtml = renderPlainBodyParagraphs(cleanBody, inlineCtaHtml);
   const ctaCard = bodyHasCtaToken
     ? ''
-    : renderPlainCtaBlock(capabilitiesCta, bookACallUrl);
+    : renderPlainCtaBlock(capabilitiesCta, secondaryCta, bookACallUrl);
 
   return `<!DOCTYPE html>
 <html>
@@ -457,9 +487,10 @@ function renderPlainBodyParagraphs(body: string, ctaInlineHtml: string | null): 
 // HTML flow instead of wrapped in a table row.
 function renderPlainCtaBlock(
   capabilitiesCta: CapabilitiesCta | null | undefined,
+  secondaryCta: CapabilitiesCta | null | undefined,
   bookACallUrl: string | null | undefined,
 ): string {
-  const inner = renderCtaBoxInner(capabilitiesCta, bookACallUrl);
+  const inner = renderCtaBoxInner(capabilitiesCta, secondaryCta, bookACallUrl);
   if (!inner) return '';
   return `<div style="margin: 22px 0 6px 0;">${inner}</div>`;
 }
@@ -473,6 +504,7 @@ export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
     signature,
     mode = 'standard',
     capabilitiesCta = null,
+    secondaryCta = null,
     bookACallUrl = null,
   } = params;
 
@@ -489,7 +521,7 @@ export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
   // is skipped). Otherwise the CTA card stays in its default slot.
   const bodyHasCtaToken = cleanBody.includes(CTA_TOKEN);
   const inlineCtaHtml = bodyHasCtaToken
-    ? renderCtaBoxInner(capabilitiesCta, bookACallUrl)
+    ? renderCtaBoxInner(capabilitiesCta, secondaryCta, bookACallUrl)
     : null;
   const bodyHtml = renderBodyParagraphs(cleanBody, inlineCtaHtml);
 
@@ -507,7 +539,7 @@ export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
 
   // Skip the default-position CTA card when the token already placed
   // it inline in the body — otherwise it'd render twice.
-  const ctaCard = bodyHasCtaToken ? '' : renderCtaCard(capabilitiesCta, bookACallUrl);
+  const ctaCard = bodyHasCtaToken ? '' : renderCtaCard(capabilitiesCta, secondaryCta, bookACallUrl);
 
   return `<!DOCTYPE html>
 <html>

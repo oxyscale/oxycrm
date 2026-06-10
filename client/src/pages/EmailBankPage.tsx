@@ -56,6 +56,9 @@ export default function EmailBankPage() {
   const [editCc, setEditCc] = useState('');
   const [editIncludeHeader, setEditIncludeHeader] = useState(true);
   const [editIncludeCapabilities, setEditIncludeCapabilities] = useState(false);
+  // Secondary CTA — broad capabilities doc (details.oxyscale.ai by
+  // default). Independent toggle from the recruitment-specific hook.
+  const [editIncludeSecondaryDoc, setEditIncludeSecondaryDoc] = useState(false);
   // Plain-text mode strips the branded OxyScale shell — body + sig +
   // optional CTA only. Reads as personal outreach, not marketing.
   const [editPlainTextMode, setEditPlainTextMode] = useState(false);
@@ -124,6 +127,7 @@ export default function EmailBankPage() {
       setEditCc(selected.ccEmail || '');
       setEditIncludeHeader(selected.includeAfterCallHeader);
       setEditIncludeCapabilities(selected.includeCapabilities);
+      setEditIncludeSecondaryDoc(selected.includeSecondaryDoc);
       setEditPlainTextMode(selected.plainTextMode);
       setAttachments([]);
       setDirty(false);
@@ -165,6 +169,7 @@ export default function EmailBankPage() {
         ccEmail: editCc || null,
         includeAfterCallHeader: editIncludeHeader,
         includeCapabilities: editIncludeCapabilities,
+        includeSecondaryDoc: editIncludeSecondaryDoc,
         includeBookACall: false,
         plainTextMode: editPlainTextMode,
       });
@@ -188,6 +193,7 @@ export default function EmailBankPage() {
     editCc,
     editIncludeHeader,
     editIncludeCapabilities,
+    editIncludeSecondaryDoc,
     load,
   ]);
 
@@ -240,6 +246,8 @@ export default function EmailBankPage() {
     editBody,
     editIncludeHeader,
     editIncludeCapabilities,
+    editIncludeSecondaryDoc,
+    editPlainTextMode,
   ]);
 
   const handleSend = async () => {
@@ -297,6 +305,7 @@ export default function EmailBankPage() {
         ccEmail: editCc || null,
         includeAfterCallHeader: editIncludeHeader,
         includeCapabilities: editIncludeCapabilities,
+        includeSecondaryDoc: editIncludeSecondaryDoc,
         includeBookACall: false,
         plainTextMode: editPlainTextMode,
       });
@@ -711,8 +720,8 @@ export default function EmailBankPage() {
                 )}
                 {showCapabilitiesToggle && (
                   <ToggleRow
-                    label="Capabilities document button"
-                    hint="Blue button below the body linking to the manufacturing capabilities site."
+                    label="Recruitment hook document"
+                    hint="Blue button linking to the recruitment-specific hook (info.oxyscale.ai by default). Best for staffing & recruitment leads."
                     checked={editIncludeCapabilities}
                     onChange={(v) => {
                       setEditIncludeCapabilities(v);
@@ -721,6 +730,19 @@ export default function EmailBankPage() {
                     }}
                   />
                 )}
+                {/* Secondary CTA — broad capabilities doc. Available on
+                    every email regardless of category. Jordan toggles
+                    this for non-recruitment leads or when both docs fit. */}
+                <ToggleRow
+                  label="Capabilities document"
+                  hint="Blue button linking to the broad capabilities doc (details.oxyscale.ai by default). Use for non-recruitment leads."
+                  checked={editIncludeSecondaryDoc}
+                  onChange={(v) => {
+                    setEditIncludeSecondaryDoc(v);
+                    setDirty(true);
+                    saveEdits();
+                  }}
+                />
               </div>
 
               {/* Body */}

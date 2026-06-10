@@ -26,9 +26,17 @@ const DEFAULTS: Record<string, string> = {
   unanswered_call_threshold: '5',
   // Universal "View our capabilities" CTA — used by the Email Bank
   // capabilities button when no per-category CTA URL is configured.
+  // This is the RECRUITMENT-SPECIFIC hook (info.oxyscale.ai).
   capabilities_default_url: 'https://info.oxyscale.ai',
   capabilities_default_label: 'View our capabilities',
   capabilities_default_intro: '',
+  // Secondary CTA — broader / non-recruitment capabilities doc
+  // (details.oxyscale.ai). Available in the Email Bank as a separate
+  // toggle so Jordan can pick the recruitment hook, the broad doc,
+  // both, or neither per email.
+  capabilities_secondary_url: 'https://details.oxyscale.ai',
+  capabilities_secondary_label: 'View our capabilities',
+  capabilities_secondary_intro: '',
 };
 
 // ── GET / — Get all settings ────────────────────────────────
