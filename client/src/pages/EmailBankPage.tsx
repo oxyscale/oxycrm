@@ -720,8 +720,8 @@ export default function EmailBankPage() {
                 )}
                 {showCapabilitiesToggle && (
                   <ToggleRow
-                    label="Recruitment hook document"
-                    hint="Blue button linking to the recruitment-specific hook (info.oxyscale.ai by default). Best for staffing & recruitment leads."
+                    label="Recruitment Capabilities"
+                    hint="Blue button linking to our recruitment-industry capabilities page (info.oxyscale.ai by default). Best for staffing & recruitment leads."
                     checked={editIncludeCapabilities}
                     onChange={(v) => {
                       setEditIncludeCapabilities(v);
@@ -734,8 +734,8 @@ export default function EmailBankPage() {
                     every email regardless of category. Jordan toggles
                     this for non-recruitment leads or when both docs fit. */}
                 <ToggleRow
-                  label="Capabilities document"
-                  hint="Blue button linking to the broad capabilities doc (details.oxyscale.ai by default). Use for non-recruitment leads."
+                  label="Capabilities Document"
+                  hint="Blue button linking to our broad capabilities doc (details.oxyscale.ai by default). Use for non-recruitment leads."
                   checked={editIncludeSecondaryDoc}
                   onChange={(v) => {
                     setEditIncludeSecondaryDoc(v);

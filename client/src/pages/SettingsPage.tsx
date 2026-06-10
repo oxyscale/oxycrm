@@ -629,25 +629,25 @@ export default function SettingsPage() {
               description="Campaign-wide Calendly link the black 'Book a call' button drops into emails. Same link goes out regardless of which user sends."
             />
             <SettingsField
-              label='Recruitment hook document URL'
+              label='Recruitment Capabilities URL'
               value={settings.capabilities_default_url || ''}
               onChange={(v) => updateSetting('capabilities_default_url', v)}
-              description="Recruitment-specific landing page (default: info.oxyscale.ai). Used by the 'Recruitment hook' toggle in the Email Bank. Per-category overrides take priority."
+              description="Recruitment-industry landing page (default: info.oxyscale.ai). Used by the 'Recruitment Capabilities' toggle in the Email Bank. Per-category overrides take priority."
             />
             <SettingsField
-              label='Recruitment hook button label'
+              label='Recruitment Capabilities button label'
               value={settings.capabilities_default_label || ''}
               onChange={(v) => updateSetting('capabilities_default_label', v)}
               description="Text on the blue button. Default: 'View our capabilities'."
             />
             <SettingsField
-              label='Capabilities document URL'
+              label='Capabilities Document URL'
               value={settings.capabilities_secondary_url || ''}
               onChange={(v) => updateSetting('capabilities_secondary_url', v)}
-              description="Broad / non-recruitment capabilities page (default: details.oxyscale.ai). Used by the 'Capabilities document' toggle in the Email Bank."
+              description="Broad / non-recruitment capabilities page (default: details.oxyscale.ai). Used by the 'Capabilities Document' toggle in the Email Bank."
             />
             <SettingsField
-              label='Capabilities document button label'
+              label='Capabilities Document button label'
               value={settings.capabilities_secondary_label || ''}
               onChange={(v) => updateSetting('capabilities_secondary_label', v)}
               description="Text on the blue button. Default: 'View our capabilities'."

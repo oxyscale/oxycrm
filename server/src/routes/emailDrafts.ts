@@ -446,7 +446,7 @@ router.post('/:id/preview', (req, res, next) => {
           url: categoryCta.url,
           label: categoryCta.label,
           intro: categoryCta.intro,
-          kicker: 'Recruitment hook',
+          kicker: 'Recruitment Capabilities',
         }
       : null;
     // Secondary slot — broad capabilities doc (details.oxyscale.ai by
@@ -458,7 +458,7 @@ router.post('/:id/preview', (req, res, next) => {
           url: secondaryCfg.url,
           label: secondaryCfg.label,
           intro: secondaryCfg.intro,
-          kicker: 'Capabilities document',
+          kicker: 'Capabilities Document',
         }
       : null;
     const renderParams = {
@@ -546,7 +546,7 @@ router.post('/:id/send', async (req, res, next) => {
           url: categoryCta.url,
           label: categoryCta.label,
           intro: categoryCta.intro,
-          kicker: 'Recruitment hook',
+          kicker: 'Recruitment Capabilities',
         }
       : null;
     const secondaryCfg = draft.include_secondary_doc ? getSecondaryCta() : null;
@@ -555,7 +555,7 @@ router.post('/:id/send', async (req, res, next) => {
           url: secondaryCfg.url,
           label: secondaryCfg.label,
           intro: secondaryCfg.intro,
-          kicker: 'Capabilities document',
+          kicker: 'Capabilities Document',
         }
       : null;
     const sendParams = {
