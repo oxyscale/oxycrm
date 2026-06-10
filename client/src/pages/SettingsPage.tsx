@@ -13,7 +13,6 @@ import {
   Wrench,
   AlertTriangle,
   Tag,
-  Copy,
 } from 'lucide-react';
 import * as api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -653,33 +652,6 @@ export default function SettingsPage() {
               onChange={(v) => updateSetting('capabilities_secondary_label', v)}
               description="Text on the blue button. Default: 'View our capabilities'."
             />
-
-            {/* Quick Gmail snippets — copy a fully-styled OxyScale pill
-                button to the clipboard for ad-hoc Gmail composes
-                (outside the Email Bank flow). Same blue button the
-                Email Bank uses; just standalone HTML so Gmail's
-                paste-as-rich-text picks up the styling. */}
-            <div className="bg-tray border border-hair-soft rounded-xl p-4">
-              <EyebrowLabel variant="bare" className="mb-1">
-                Quick Gmail snippets
-              </EyebrowLabel>
-              <p className="text-ink-dim text-xs mb-4 leading-relaxed">
-                Pre-styled buttons you can paste straight into a Gmail compose. Click Copy, then paste into your draft — the blue pill comes with it.
-              </p>
-              <div className="space-y-3">
-                <GmailButtonSnippet
-                  caption="Recruitment hook"
-                  label={settings.capabilities_default_label || 'View our capabilities'}
-                  url={settings.capabilities_default_url || 'https://info.oxyscale.ai'}
-                />
-                <GmailButtonSnippet
-                  caption="Capabilities document"
-                  label={settings.capabilities_secondary_label || 'View our capabilities'}
-                  url={settings.capabilities_secondary_url || 'https://details.oxyscale.ai'}
-                />
-              </div>
-            </div>
-
             <SettingsField
               label="Sign-off Style"
               value={settings.email_sign_off || ''}
@@ -1430,118 +1402,6 @@ function SettingsField({
         onChange={(e) => onChange(e.target.value)}
         className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
       />
-    </div>
-  );
-}
-
-// ── Gmail button snippet ────────────────────────────────────
-//
-// Renders a small preview of the OxyScale blue pill button + a
-// "Copy" affordance. Click writes a table-wrapped <a> button to the
-// clipboard as both rich HTML and a plain-text fallback URL. Gmail's
-// compose treats the paste as rich text and keeps the styling.
-
-function GmailButtonSnippet({
-  caption,
-  label,
-  url,
-}: {
-  caption: string;
-  label: string;
-  url: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const buildSnippetHtml = () => {
-    // Table-wrapped <a> so email clients (and rich-text paste targets
-    // like Gmail) keep the pill shape. Inline styles only — no CSS
-    // classes survive the clipboard.
-    const safeUrl = url.replace(/"/g, '&quot;');
-    const safeLabel = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return `<table cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;display:inline-table;"><tr><td align="center" style="background-color:#0c8dbf;border-radius:999px;"><a href="${safeUrl}" style="display:inline-block;padding:14px 30px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:500;letter-spacing:-0.005em;line-height:1;border-radius:999px;font-family:'Geist','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">${safeLabel} &nbsp;&rarr;</a></td></tr></table>`;
-  };
-
-  const handleCopy = async () => {
-    const html = buildSnippetHtml();
-    const text = `${label}: ${url}`;
-    try {
-      // Modern path — rich HTML + plain-text fallback so Gmail picks
-      // up the styled button while other paste targets get the URL.
-      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
-        const item = new ClipboardItem({
-          'text/html': new Blob([html], { type: 'text/html' }),
-          'text/plain': new Blob([text], { type: 'text/plain' }),
-        });
-        await navigator.clipboard.write([item]);
-      } else {
-        // Fallback for older browsers — plain text only.
-        await navigator.clipboard.writeText(text);
-      }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch (err) {
-      console.error('Clipboard copy failed:', err);
-      // Last-resort fallback — execCommand on a hidden contentEditable.
-      try {
-        const wrap = document.createElement('div');
-        wrap.contentEditable = 'true';
-        wrap.innerHTML = html;
-        wrap.style.position = 'fixed';
-        wrap.style.left = '-9999px';
-        document.body.appendChild(wrap);
-        const range = document.createRange();
-        range.selectNodeContents(wrap);
-        const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-        document.execCommand('copy');
-        sel?.removeAllRanges();
-        document.body.removeChild(wrap);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1800);
-      } catch (fallbackErr) {
-        console.error('Fallback clipboard copy also failed:', fallbackErr);
-      }
-    }
-  };
-
-  return (
-    <div className="bg-paper border border-hair-soft rounded-lg p-3 flex items-center justify-between gap-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-ink-dim text-[10px] font-mono uppercase tracking-[0.18em] mb-2">
-          {caption}
-        </p>
-        {/* Live preview of the actual pill button. Inline styles so it
-            renders the same here as it will in a Gmail compose. */}
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer noopener"
-          style={{
-            display: 'inline-block',
-            padding: '12px 24px',
-            backgroundColor: '#0c8dbf',
-            color: '#ffffff',
-            textDecoration: 'none',
-            fontSize: '13px',
-            fontWeight: 500,
-            lineHeight: 1,
-            borderRadius: '999px',
-            fontFamily: "'Geist', 'Inter', sans-serif",
-          }}
-        >
-          {label} &nbsp;&rarr;
-        </a>
-        <p className="text-ink-dim text-xs mt-2 truncate">{url}</p>
-      </div>
-      <button
-        type="button"
-        onClick={handleCopy}
-        className="shrink-0 inline-flex items-center gap-1.5 bg-ink text-white text-xs font-medium px-3 py-2 rounded-lg hover:bg-ink/90 transition-colors"
-      >
-        {copied ? <Check size={13} /> : <Copy size={13} />}
-        {copied ? 'Copied' : 'Copy for Gmail'}
-      </button>
     </div>
   );
 }
