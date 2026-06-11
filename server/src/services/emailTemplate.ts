@@ -19,13 +19,12 @@
 interface CapabilitiesCta {
   url: string;
   label: string;
+  /** Kept on the type for backwards-compat with old callers — the
+   *  simplified button renderer no longer displays intro text. */
   intro: string;
-  /** Optional headline shown above the intro line. */
+  /** Kept for backwards-compat. Not rendered by the simplified
+   *  standalone-button design. */
   title?: string;
-  /** Mono-style overline above the button — e.g. "Recruitment hook".
-   *  Combined at render time with the auto-numbered sequence ("01", "02").
-   *  Defaults to "Capabilities document" when unset. */
-  kicker?: string;
 }
 
 interface BuildBrandedEmailParams {
@@ -278,99 +277,56 @@ function renderStandardGreeting(name: string): string {
             </td></tr>`;
 }
 
-function pad2(n: number): string {
-  return n < 10 ? `0${n}` : String(n);
-}
-
-function renderCapabilitiesRow(cta: CapabilitiesCta, sequence: number): string {
+// Standalone blue pill button. Used for both Recruitment Capabilities
+// and the broad Capabilities Document. No bordered card around it, no
+// mono overline, no trailing arrow — just a clean inline button.
+function renderStandaloneCapabilitiesButton(cta: CapabilitiesCta): string {
   const safeUrl = safeHref(cta.url);
-  const safeLabel = escapeHtml(cta.label || 'View capabilities document');
-  const safeTitle = cta.title ? escapeHtml(cta.title) : '';
-  const safeIntro = escapeHtml(cta.intro || '');
-  const safeKicker = escapeHtml((cta.kicker || 'Capabilities document').toUpperCase());
-
-  const titleHtml = safeTitle
-    ? `<p style="margin: 0 0 6px 0; color: #0b0d0e; font-size: 17px; line-height: 1.4; font-weight: 500; font-family: ${FONT_STACK}; letter-spacing: -0.015em;">${safeTitle}</p>`
-    : '';
-
-  const introHtml = safeIntro
-    ? `<p style="margin: 0 0 22px 0; color: #55606a; font-size: 14px; line-height: 1.6; font-weight: 400; font-family: ${FONT_STACK};">${safeIntro}</p>`
-    : '';
-
-  return `
-                <tr><td class="ox-cta-row-pad" style="padding: 30px 32px 28px 32px;">
-                  <p style="margin: 0 0 12px 0; color: #8a95a0; font-family: ${MONO_STACK}; font-size: 10px; text-transform: uppercase; letter-spacing: 0.24em; font-weight: 600;">
-                    ${pad2(sequence)} &nbsp;&middot;&nbsp; ${safeKicker}
-                  </p>
-                  ${titleHtml}
-                  ${introHtml}
-                  <table cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse;"><tr>
-                    <td align="center" style="background-color: #0c8dbf; border-radius: 999px;">
-                      <a href="${safeUrl}" class="ox-cta-btn" style="display: inline-block; padding: 14px 30px; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 500; letter-spacing: -0.005em; line-height: 1; border-radius: 999px; font-family: ${FONT_STACK};">${safeLabel} &nbsp;&rarr;</a>
-                    </td>
-                  </tr></table>
-                </td></tr>`;
+  const safeLabel = escapeHtml(cta.label || 'View our capabilities');
+  return `<table cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse;"><tr>
+    <td style="background-color: #0c8dbf; border-radius: 999px;">
+      <a href="${safeUrl}" class="ox-cta-btn" style="display: inline-block; padding: 14px 32px; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 500; letter-spacing: -0.005em; line-height: 1; border-radius: 999px; font-family: ${FONT_STACK};">${safeLabel}</a>
+    </td>
+  </tr></table>`;
 }
 
-function renderBookACallRow(url: string, sequence: number): string {
+// Standalone "Book a call" pill — kept symmetric with the capabilities
+// button. Currently unused in production (the email signature already
+// has a Book-a-call button) but the renderer still supports it if a
+// caller passes bookACallUrl.
+function renderStandaloneBookACallButton(url: string): string {
   const safeUrl = safeHref(url);
-  return `
-                <tr><td class="ox-cta-row-pad" style="padding: 26px 32px 30px 32px;">
-                  <p style="margin: 0 0 10px 0; color: #8a95a0; font-family: ${MONO_STACK}; font-size: 10px; text-transform: uppercase; letter-spacing: 0.24em; font-weight: 600;">
-                    ${pad2(sequence)} &nbsp;&middot;&nbsp; Book a call
-                  </p>
-                  <p style="margin: 0 0 18px 0; color: #55606a; font-size: 14px; line-height: 1.55; font-weight: 400; font-family: ${FONT_STACK};">
-                    Thirty minutes, on us. We dig into how your operation actually runs, what systems you've got in place, and where OxyScale would slot in for your business. You leave the call with a clear picture of the fit, and exactly how we'd build it for you.
-                  </p>
-                  <table cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse;"><tr>
-                    <td align="center" style="background-color: #0b0d0e; border-radius: 999px;">
-                      <a href="${safeUrl}" class="ox-cta-btn" style="display: inline-block; padding: 14px 26px; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 500; letter-spacing: -0.005em; line-height: 1; border-radius: 999px; font-family: ${FONT_STACK};">Book a call</a>
-                    </td>
-                  </tr></table>
-                </td></tr>`;
+  return `<table cellpadding="0" cellspacing="0" role="presentation" style="border-collapse: collapse;"><tr>
+    <td style="background-color: #0b0d0e; border-radius: 999px;">
+      <a href="${safeUrl}" class="ox-cta-btn" style="display: inline-block; padding: 14px 30px; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 500; letter-spacing: -0.005em; line-height: 1; border-radius: 999px; font-family: ${FONT_STACK};">Book a call</a>
+    </td>
+  </tr></table>`;
 }
 
 /**
- * The bordered CTA box itself — capabilities row + book-a-call row.
- * Used in two places: wrapped in its own table row at the default
- * position (just above the sign-off), OR inlined into the body when
- * Jordan drops the `{{cta}}` token mid-message.
+ * The CTA block — just a vertical stack of standalone pill buttons.
+ * No card border, no overline labels, no intro text. Used in two
+ * places: wrapped in its own table row at the default position (just
+ * above the sign-off), OR inlined into the body when Jordan drops the
+ * `{{cta}}` token mid-message.
  */
 function renderCtaBoxInner(
   capabilitiesCta: CapabilitiesCta | null | undefined,
   secondaryCta: CapabilitiesCta | null | undefined,
   bookACallUrl: string | null | undefined,
 ): string {
-  // Build a sequence of "rows" (HTML fragments) in the order they
-  // should render. Each row claims the next sequence number so the
-  // "01 ·" / "02 ·" overline labels stay correct regardless of which
-  // CTAs are turned on.
-  const rows: string[] = [];
-  const divider = `<tr><td style="padding: 0 32px;"><hr style="border: none; border-top: 1px solid rgba(11,13,14,0.08); margin: 0;" /></td></tr>`;
-  let seq = 1;
+  const buttons: string[] = [];
+  if (capabilitiesCta?.url) buttons.push(renderStandaloneCapabilitiesButton(capabilitiesCta));
+  if (secondaryCta?.url) buttons.push(renderStandaloneCapabilitiesButton(secondaryCta));
+  if (bookACallUrl) buttons.push(renderStandaloneBookACallButton(bookACallUrl));
 
-  const pushDivider = () => {
-    if (rows.length > 0) rows.push(divider);
-  };
+  if (buttons.length === 0) return '';
 
-  if (capabilitiesCta && capabilitiesCta.url) {
-    rows.push(renderCapabilitiesRow(capabilitiesCta, seq++));
-  }
-  if (secondaryCta && secondaryCta.url) {
-    pushDivider();
-    rows.push(renderCapabilitiesRow(secondaryCta, seq++));
-  }
-  if (bookACallUrl) {
-    pushDivider();
-    rows.push(renderBookACallRow(bookACallUrl, seq++));
-  }
-
-  if (rows.length === 0) return '';
-
-  return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #faf9f5; border: 1px solid rgba(11,13,14,0.06); border-radius: 14px;">
-                <tr><td style="height: 2px; font-size: 0; line-height: 0; background-color: #0a9cd4; border-radius: 14px 14px 0 0;">&nbsp;</td></tr>
-                ${rows.join('\n')}
-              </table>`;
+  // Stack vertically with 12px spacing between buttons. First button
+  // sits flush; subsequent buttons get a top margin via a wrapper div.
+  return buttons
+    .map((btn, i) => (i === 0 ? btn : `<div style="margin-top: 12px;">${btn}</div>`))
+    .join('');
 }
 
 function renderCtaCard(
@@ -381,7 +337,7 @@ function renderCtaCard(
   const inner = renderCtaBoxInner(capabilitiesCta, secondaryCta, bookACallUrl);
   if (!inner) return '';
   return `
-            <tr><td class="ox-cta-outer-pad" style="background-color: #ffffff; padding: 44px 64px 8px 64px;">
+            <tr><td class="ox-cta-outer-pad" style="background-color: #ffffff; padding: 12px 64px 12px 64px;">
               ${inner}
             </td></tr>`;
 }
@@ -564,7 +520,7 @@ export function buildBrandedEmailHtml(params: BuildBrandedEmailParams): string {
       .ox-body-pad { padding-left: 24px !important; padding-right: 24px !important; }
       .ox-signoff-pad { padding: 32px 24px 36px 24px !important; }
       .ox-footer-pad { padding: 28px 24px 32px 24px !important; }
-      .ox-cta-outer-pad { padding: 32px 24px 8px 24px !important; }
+      .ox-cta-outer-pad { padding: 8px 24px 12px 24px !important; }
       .ox-cta-row-pad { padding: 22px 22px 24px 22px !important; }
       /* Hero italic headline shrinks so "A note after our chat." doesn't
          break awkwardly or overflow on narrow screens. */
