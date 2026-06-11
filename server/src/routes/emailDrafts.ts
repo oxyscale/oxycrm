@@ -591,9 +591,21 @@ router.post('/:id/send', async (req, res, next) => {
       content: Buffer.from(a.content_base64, 'base64'),
     }));
 
+    // Sanitize CC — trim whitespace, drop empties, and validate the
+    // basic shape so we surface a clear error here instead of bouncing
+    // off Resend's "Invalid `cc` field" message.
+    const ccTrimmed = draft.cc_email?.trim() || '';
+    if (ccTrimmed && !ccTrimmed.includes('@')) {
+      throw new ApiError(
+        400,
+        `CC field looks malformed ("${ccTrimmed}"). Clear it or fix to email@example.com format and try again.`,
+      );
+    }
+    const ccForSend = ccTrimmed || undefined;
+
     const result = await sendEmail({
       to: draft.to_email,
-      cc: draft.cc_email || undefined,
+      cc: ccForSend,
       subject: draft.subject,
       textBody: draft.body,
       htmlBody,
@@ -631,7 +643,7 @@ router.post('/:id/send', async (req, res, next) => {
     insertIntoGmailSent({
       from: `${user.name} <${user.senderEmail}>`,
       to: draft.to_email,
-      cc: draft.cc_email || undefined,
+      cc: ccForSend,
       subject: draft.subject,
       textBody: draft.body,
       htmlBody,
