@@ -651,7 +651,15 @@ router.post('/:id/send', async (req, res, next) => {
     res.json({ success: true, messageId: result.messageId });
   } catch (err) {
     logger.error({ err }, 'Send from email bank failed');
-    next(err);
+    // Surface the real error message to the UI so Jordan can diagnose
+    // without needing Railway log access. Stays as a 500 so the
+    // existing client-side error handling still fires.
+    const message = err instanceof Error ? err.message : 'Send failed';
+    if (err instanceof ApiError) {
+      res.status(err.statusCode).json({ error: err.message });
+    } else {
+      res.status(500).json({ error: message });
+    }
   }
 });
 
