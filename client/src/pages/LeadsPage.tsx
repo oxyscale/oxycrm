@@ -200,6 +200,23 @@ export default function LeadsPage() {
   // When the search box is empty, the Contacted toggle applies normally.
   const isSearching = search.trim().length > 0;
 
+  // Running totals for the Contacted / Not Contacted / All filter
+  // pills. Counts respect the active category filter (so toggling
+  // category updates the numbers) but IGNORE the current contacted
+  // pill (otherwise the inactive pills would always show 0) and the
+  // search box (numbers shouldn't jump while typing).
+  const counts = leads.reduce(
+    (acc, lead) => {
+      if (filterCategory === 'none' && lead.category) return acc;
+      if (filterCategory !== 'all' && filterCategory !== 'none' && lead.category !== filterCategory) return acc;
+      acc.all += 1;
+      if (lead.contacted) acc.contacted += 1;
+      else acc.notContacted += 1;
+      return acc;
+    },
+    { all: 0, contacted: 0, notContacted: 0 },
+  );
+
   const filtered = leads
     .filter((lead) => {
       // Contacted filter — bypassed during a search so it doesn't hide
@@ -381,28 +398,46 @@ export default function LeadsPage() {
           ))}
         </select>
 
-        {/* Contacted toggle — cycles: all → contacted → not_contacted → all */}
-        <button
-          type="button"
-          onClick={() =>
-            setFilterContacted((prev) =>
-              prev === 'all' ? 'contacted' : prev === 'contacted' ? 'not_contacted' : 'all'
-            )
-          }
-          className={`rounded-full px-4 py-2 text-sm font-medium border transition-all select-none ${
-            filterContacted === 'contacted'
-              ? 'bg-[rgba(16,185,129,0.1)] border-[rgba(16,185,129,0.3)] text-[#10b981]'
-              : filterContacted === 'not_contacted'
-                ? 'bg-[rgba(239,68,68,0.08)] border-[rgba(239,68,68,0.25)] text-[#ef4444]'
+        {/* Contacted filter — three independent pills, each showing
+            its running count so Jordan can see all three totals at
+            once instead of cycling through them. Counts ignore the
+            search box and the active pill, so the inactive pills
+            still show their bucket size. */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setFilterContacted('all')}
+            className={`rounded-full px-3.5 py-2 text-sm font-medium border transition-all select-none ${
+              filterContacted === 'all'
+                ? 'bg-ink border-ink text-white'
                 : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)]'
-          }`}
-        >
-          {filterContacted === 'contacted'
-            ? 'Contacted'
-            : filterContacted === 'not_contacted'
-              ? 'Not Contacted'
-              : 'All Status'}
-        </button>
+            }`}
+          >
+            All <span className={filterContacted === 'all' ? 'text-white/70 ml-1' : 'text-ink-dim ml-1'}>{counts.all.toLocaleString()}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterContacted('contacted')}
+            className={`rounded-full px-3.5 py-2 text-sm font-medium border transition-all select-none ${
+              filterContacted === 'contacted'
+                ? 'bg-[rgba(16,185,129,0.12)] border-[rgba(16,185,129,0.35)] text-[#0f9d70]'
+                : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)]'
+            }`}
+          >
+            Contacted <span className={filterContacted === 'contacted' ? 'text-[#0f9d70]/70 ml-1' : 'text-ink-dim ml-1'}>{counts.contacted.toLocaleString()}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterContacted('not_contacted')}
+            className={`rounded-full px-3.5 py-2 text-sm font-medium border transition-all select-none ${
+              filterContacted === 'not_contacted'
+                ? 'bg-[rgba(239,68,68,0.1)] border-[rgba(239,68,68,0.3)] text-[#dc2626]'
+                : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)]'
+            }`}
+          >
+            Not Contacted <span className={filterContacted === 'not_contacted' ? 'text-[#dc2626]/70 ml-1' : 'text-ink-dim ml-1'}>{counts.notContacted.toLocaleString()}</span>
+          </button>
+        </div>
       </div>
 
       {/* Table */}
