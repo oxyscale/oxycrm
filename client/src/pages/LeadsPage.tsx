@@ -6,6 +6,8 @@ import {
   UserPlus,
   Clock,
   Building2,
+  Check,
+  X,
 } from 'lucide-react';
 import * as api from '../services/api';
 import { getRecentLeads, refreshRecentLeads, type RecentLead } from '../utils/recentLeads';
@@ -457,6 +459,7 @@ export default function LeadsPage() {
                   {sortField === 'category' && <ArrowUpDown size={12} className="text-sky-ink" />}
                 </span>
               </th>
+              <th className="w-[110px] text-center text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Task</th>
               <th className="w-[130px] text-right text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Status</th>
             </tr>
           </thead>
@@ -552,6 +555,25 @@ export default function LeadsPage() {
                   {lead.category && (
                     <span className="bg-[rgba(10,156,212,0.15)] text-sky-ink text-xs px-2.5 py-1 rounded-full inline-block max-w-full truncate align-middle">
                       {lead.category}
+                    </span>
+                  )}
+                </td>
+                {/* Task column — green check pill when the lead has any
+                    open task, hairline outline pill with em-dash when it
+                    doesn't. Lets Jordan scan the column for "no task"
+                    rows without opening every profile. Click the pill
+                    to jump straight into the profile (the row click
+                    already does that — stopPropagation NOT needed). */}
+                <td className="px-3 py-3 text-center">
+                  {(lead.openTaskCount ?? 0) > 0 ? (
+                    <span className="inline-flex items-center gap-1 bg-[rgba(16,185,129,0.1)] text-[#0f9d70] text-xs px-2.5 py-1 rounded-full whitespace-nowrap">
+                      <Check size={12} strokeWidth={2.5} />
+                      {(lead.openTaskCount ?? 0) > 1 ? `${lead.openTaskCount} tasks` : 'Task set'}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 border border-hair-soft text-ink-dim text-xs px-2.5 py-1 rounded-full whitespace-nowrap">
+                      <X size={12} strokeWidth={2.5} />
+                      No task
                     </span>
                   )}
                 </td>

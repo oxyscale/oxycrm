@@ -268,6 +268,19 @@ router.get('/', (req, res, next) => {
       lead.contacted = result.contacted === 1;
     }
 
+    // Open-task counts per lead — single grouped query, then merged
+    // back onto the in-memory lead list. Lets the Leads table show a
+    // "Task set / No task" pill so Jordan can spot leads with no
+    // future follow-up scheduled without opening each profile.
+    const taskRows = db
+      .prepare("SELECT lead_id, COUNT(*) AS open_tasks FROM tasks WHERE completed = 0 GROUP BY lead_id")
+      .all() as { lead_id: number; open_tasks: number }[];
+    const taskMap = new Map<number, number>();
+    for (const r of taskRows) taskMap.set(r.lead_id, r.open_tasks);
+    for (const lead of leads) {
+      lead.openTaskCount = taskMap.get(lead.id) ?? 0;
+    }
+
     logger.info({ count: leads.length, filters: { status, leadType, category } }, 'Fetched leads');
     res.json(leads);
   } catch (err) {

@@ -49,6 +49,10 @@ export interface Lead {
   /** Computed — true if the lead has any notes, emails, or call logs
    *  OR manuallyContacted is set. */
   contacted?: boolean;
+  /** Count of open (completed=0) tasks attached to this lead. Computed
+   *  at list time so the Leads page can show a "Task set / No task"
+   *  pill without a per-row fetch. */
+  openTaskCount?: number;
 }
 
 export interface CallLog {
