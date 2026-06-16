@@ -8,6 +8,7 @@ import {
   Building2,
   Check,
   X,
+  Copy,
 } from 'lucide-react';
 import * as api from '../services/api';
 import { getRecentLeads, refreshRecentLeads, type RecentLead } from '../utils/recentLeads';
@@ -439,6 +440,11 @@ export default function LeadsPage() {
           >
             Not Contacted <span className={filterContacted === 'not_contacted' ? 'text-[#dc2626]/70 ml-1' : 'text-ink-dim ml-1'}>{counts.notContacted.toLocaleString()}</span>
           </button>
+          {/* Copy list — exports the currently-visible (filtered+sorted)
+              leads as TSV to the clipboard. TSV pastes cleanly into
+              Sheets/Excel with columns intact. Header row + Name,
+              Company, Phone, Email, Category, Stage. */}
+          <CopyListButton leads={filtered} />
         </div>
       </div>
 
@@ -609,5 +615,85 @@ export default function LeadsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// Copy the currently-visible leads as TSV to the clipboard.
+// TSV pastes cleanly into Google Sheets / Excel with columns intact.
+// Writes both text/plain (TSV) and text/html (a real table) so smart
+// paste targets keep the structure either way.
+function CopyListButton({ leads }: { leads: Lead[] }) {
+  const [copied, setCopied] = useState(false);
+
+  const buildTsv = (): string => {
+    const header = ['Name', 'Company', 'Phone', 'Email', 'Category', 'Stage'];
+    const lines = [header.join('\t')];
+    for (const l of leads) {
+      const row = [
+        l.name,
+        l.company || '',
+        l.phone || '',
+        l.email || '',
+        l.category || '',
+        l.pipelineStage || '',
+      ].map((v) => String(v).replace(/\t|\n|\r/g, ' ').trim());
+      lines.push(row.join('\t'));
+    }
+    return lines.join('\n');
+  };
+
+  const buildHtml = (): string => {
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const header = ['Name', 'Company', 'Phone', 'Email', 'Category', 'Stage'];
+    const headerRow = `<tr>${header.map((h) => `<th>${esc(h)}</th>`).join('')}</tr>`;
+    const bodyRows = leads
+      .map((l) => {
+        const cells = [
+          l.name,
+          l.company || '',
+          l.phone || '',
+          l.email || '',
+          l.category || '',
+          l.pipelineStage || '',
+        ];
+        return `<tr>${cells.map((c) => `<td>${esc(String(c))}</td>`).join('')}</tr>`;
+      })
+      .join('');
+    return `<table>${headerRow}${bodyRows}</table>`;
+  };
+
+  const handleCopy = async () => {
+    if (leads.length === 0) return;
+    const tsv = buildTsv();
+    const html = buildHtml();
+    try {
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        const item = new ClipboardItem({
+          'text/plain': new Blob([tsv], { type: 'text/plain' }),
+          'text/html': new Blob([html], { type: 'text/html' }),
+        });
+        await navigator.clipboard.write([item]);
+      } else {
+        await navigator.clipboard.writeText(tsv);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      disabled={leads.length === 0}
+      className="rounded-full px-3.5 py-2 text-sm font-medium border transition-all select-none bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)] disabled:opacity-40 inline-flex items-center gap-1.5"
+      title="Copy the currently filtered leads as TSV (paste into Sheets/Excel)"
+    >
+      {copied ? <Check size={13} /> : <Copy size={13} />}
+      {copied ? `Copied ${leads.length}` : `Copy list (${leads.length})`}
+    </button>
   );
 }
