@@ -246,7 +246,19 @@ app.use('/api/intelligence', expensiveLimiter, intelligenceRouter);
 app.use('/api/email', expensiveLimiter, emailRouter);
 app.use('/api/email-drafts', emailDraftsLimiter, emailDraftsRouter);
 app.use('/api/google', googleRouter);
-app.use('/api', expensiveLimiter, transcribeRouter);
+// transcribeRouter has to mount at /api because its own paths are
+// absolute (/transcribe, /ai/summarise, ...). Attaching expensiveLimiter
+// to that same '/api' mount was a real bug: Express runs path-prefix
+// middleware for EVERY request under the prefix, so the 30/min AI cap
+// was silently metering every route mounted below this line — tasks,
+// notes, activities, pipeline, settings, categories, lead-sources. A
+// few minutes of ordinary clicking exhausted it and the UI started
+// showing "Rate limit hit — slow down." on things like saving a task.
+//
+// Scope the limiter to the paths this router actually serves instead.
+app.use('/api/transcribe', expensiveLimiter);
+app.use('/api/ai', expensiveLimiter);
+app.use('/api', transcribeRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/activities', activitiesRouter);
