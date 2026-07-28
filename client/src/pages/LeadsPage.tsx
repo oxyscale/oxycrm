@@ -9,6 +9,7 @@ import {
   Check,
   X,
   Copy,
+  MailOpen,
 } from 'lucide-react';
 import * as api from '../services/api';
 import { getRecentLeads, refreshRecentLeads, type RecentLead } from '../utils/recentLeads';
@@ -45,6 +46,13 @@ export default function LeadsPage() {
   const [foldingId, setFoldingId] = useState<number | null>(null);
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [filterCategory, setFilterCategory] = useState<string>(searchParams.get('cat') || 'all');
+  // Lead source filter — the channel the lead arrived through. Separate
+  // axis from category so "Meta ad + no task" style questions work.
+  const [filterSource, setFilterSource] = useState<string>(searchParams.get('src') || 'all');
+  const [sourceOptions, setSourceOptions] = useState<string[]>([]);
+  // "Engaged" = opened an email at least once. The high-signal view is
+  // engaged + not contacted: they're reading and nobody has followed up.
+  const [filterEngaged, setFilterEngaged] = useState(searchParams.get('engaged') === '1');
   const [filterContacted, setFilterContacted] = useState<'all' | 'contacted' | 'not_contacted'>(
     (searchParams.get('status') as 'all' | 'contacted' | 'not_contacted') || 'all'
   );
@@ -65,7 +73,9 @@ export default function LeadsPage() {
     const params = new URLSearchParams();
     if (search) params.set('q', search);
     if (filterCategory !== 'all') params.set('cat', filterCategory);
+    if (filterSource !== 'all') params.set('src', filterSource);
     if (filterContacted !== 'all') params.set('status', filterContacted);
+    if (filterEngaged) params.set('engaged', '1');
     if (sortField !== 'recent') params.set('sort', sortField);
     if (sortDir !== 'asc') params.set('dir', sortDir);
     setSearchParams(params, { replace: true });
@@ -74,7 +84,7 @@ export default function LeadsPage() {
     try {
       sessionStorage.setItem('leads-return-url', `/leads${qs ? `?${qs}` : ''}`);
     } catch { /* ignore */ }
-  }, [search, filterCategory, filterContacted, sortField, sortDir, setSearchParams]);
+  }, [search, filterCategory, filterSource, filterContacted, filterEngaged, sortField, sortDir, setSearchParams]);
 
   useEffect(() => {
     syncParams();
@@ -92,6 +102,9 @@ export default function LeadsPage() {
   // sync with Settings without needing a page refresh after edits there.
   useEffect(() => {
     api.getCategories().then(setCategories).catch(() => { /* non-critical */ });
+    api.getLeadSources()
+      .then((srcs) => setSourceOptions(srcs.map((s) => s.name)))
+      .catch(() => { /* non-critical */ });
   }, []);
 
   // Auto-refresh leads when the tab regains focus (or comes back from
@@ -212,6 +225,9 @@ export default function LeadsPage() {
     (acc, lead) => {
       if (filterCategory === 'none' && lead.category) return acc;
       if (filterCategory !== 'all' && filterCategory !== 'none' && lead.category !== filterCategory) return acc;
+      if (filterSource === 'none' && lead.leadSource) return acc;
+      if (filterSource !== 'all' && filterSource !== 'none' && lead.leadSource !== filterSource) return acc;
+      if (filterEngaged && !(lead.emailOpens ?? 0)) return acc;
       acc.all += 1;
       if (lead.contacted) acc.contacted += 1;
       else acc.notContacted += 1;
@@ -230,6 +246,12 @@ export default function LeadsPage() {
       }
       if (filterCategory === 'none' && lead.category) return false;
       if (filterCategory !== 'all' && filterCategory !== 'none' && lead.category !== filterCategory) return false;
+      if (filterSource === 'none' && lead.leadSource) return false;
+      if (filterSource !== 'all' && filterSource !== 'none' && lead.leadSource !== filterSource) return false;
+      // Engaged = has opened at least one email. Applies even during a
+      // search, unlike the contacted pill — it's a property of the lead,
+      // not a view toggle.
+      if (filterEngaged && !(lead.emailOpens ?? 0)) return false;
       if (search) {
         const q = search.toLowerCase();
         return (
@@ -401,6 +423,19 @@ export default function LeadsPage() {
           ))}
         </select>
 
+        {/* Lead source filter — the channel the lead arrived through */}
+        <select
+          value={filterSource}
+          onChange={(e) => setFilterSource(e.target.value)}
+          className="bg-paper border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink-muted focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
+        >
+          <option value="all">All Sources</option>
+          <option value="none">No Source</option>
+          {sourceOptions.map((src) => (
+            <option key={src} value={src}>{src}</option>
+          ))}
+        </select>
+
         {/* Contacted filter — three independent pills, each showing
             its running count so Jordan can see all three totals at
             once instead of cycling through them. Counts ignore the
@@ -444,6 +479,22 @@ export default function LeadsPage() {
               leads as TSV to the clipboard. TSV pastes cleanly into
               Sheets/Excel with columns intact. Header row + Name,
               Company, Phone, Email, Category, Stage. */}
+          {/* Engaged — has opened at least one email. Pair it with the
+              Not Contacted pill for the warmest view in the CRM: people
+              reading your emails who nobody has followed up. */}
+          <button
+            type="button"
+            onClick={() => setFilterEngaged((v) => !v)}
+            title="Leads who have opened at least one email"
+            className={`rounded-full px-3.5 py-2 text-sm font-medium border transition-all select-none inline-flex items-center gap-1.5 ${
+              filterEngaged
+                ? 'bg-sky-wash border-sky-hair text-sky-ink'
+                : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)]'
+            }`}
+          >
+            <MailOpen size={13} />
+            Engaged
+          </button>
           <CopyListButton leads={filtered} />
         </div>
       </div>
@@ -465,6 +516,8 @@ export default function LeadsPage() {
                   {sortField === 'category' && <ArrowUpDown size={12} className="text-sky-ink" />}
                 </span>
               </th>
+              <th className="w-[150px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Source</th>
+              <th className="w-[92px] text-center text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Email</th>
               <th className="w-[110px] text-center text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Task</th>
               <th className="w-[130px] text-right text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Status</th>
             </tr>
@@ -564,6 +617,51 @@ export default function LeadsPage() {
                     </span>
                   )}
                 </td>
+                {/* Source — the channel this lead arrived through. Plain
+                    text rather than a pill so it stays visually quieter
+                    than Category, which is the primary tag. */}
+                <td className="px-3 py-3 overflow-hidden">
+                  {lead.leadSource ? (
+                    <span className="text-ink-muted text-xs truncate block">{lead.leadSource}</span>
+                  ) : (
+                    <span className="text-ink-faint text-xs">&mdash;</span>
+                  )}
+                </td>
+                {/* Email engagement — opens are the signal worth scanning
+                    for; clicks and bounces are rarer so they only show
+                    when they happen. Hover gives the full breakdown. */}
+                <td className="px-3 py-3 text-center">
+                  {lead.emailBounced ? (
+                    <span
+                      className="inline-flex items-center gap-1 text-[#dc2626] text-xs"
+                      title="An email to this lead bounced"
+                    >
+                      <X size={12} strokeWidth={2.5} />
+                      Bounced
+                    </span>
+                  ) : (lead.emailOpens ?? 0) > 0 ? (
+                    <span
+                      className="inline-flex items-center gap-1 text-sky-ink text-xs font-medium"
+                      title={[
+                        `${lead.emailOpens} open${lead.emailOpens === 1 ? '' : 's'}`,
+                        (lead.emailClicks ?? 0) > 0
+                          ? `${lead.emailClicks} click${lead.emailClicks === 1 ? '' : 's'}`
+                          : null,
+                        lead.lastEmailOpenedAt
+                          ? `last opened ${new Date(lead.lastEmailOpenedAt).toLocaleDateString()}`
+                          : null,
+                      ].filter(Boolean).join(' · ')}
+                    >
+                      <MailOpen size={12} />
+                      {lead.emailOpens}
+                      {(lead.emailClicks ?? 0) > 0 && (
+                        <span className="text-ink-dim font-normal">/{lead.emailClicks}</span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-ink-faint text-xs">&mdash;</span>
+                  )}
+                </td>
                 {/* Task column — green check pill when the lead has any
                     open task, hairline outline pill with em-dash when it
                     doesn't. Lets Jordan scan the column for "no task"
@@ -608,7 +706,7 @@ export default function LeadsPage() {
 
         {filtered.length === 0 && (
           <div className="text-center py-12 text-ink-dim">
-            {search || filterCategory !== 'all' || filterContacted !== 'all'
+            {search || filterCategory !== 'all' || filterSource !== 'all' || filterEngaged || filterContacted !== 'all'
               ? 'No leads match your filters'
               : 'No leads imported yet'}
           </div>
@@ -626,7 +724,7 @@ function CopyListButton({ leads }: { leads: Lead[] }) {
   const [copied, setCopied] = useState(false);
 
   const buildTsv = (): string => {
-    const header = ['Name', 'Company', 'Phone', 'Email', 'Category', 'Stage'];
+    const header = ['Name', 'Company', 'Phone', 'Email', 'Category', 'Source', 'Stage'];
     const lines = [header.join('\t')];
     for (const l of leads) {
       const row = [
@@ -635,6 +733,7 @@ function CopyListButton({ leads }: { leads: Lead[] }) {
         l.phone || '',
         l.email || '',
         l.category || '',
+        l.leadSource || '',
         l.pipelineStage || '',
       ].map((v) => String(v).replace(/\t|\n|\r/g, ' ').trim());
       lines.push(row.join('\t'));
@@ -645,7 +744,7 @@ function CopyListButton({ leads }: { leads: Lead[] }) {
   const buildHtml = (): string => {
     const esc = (s: string) =>
       s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const header = ['Name', 'Company', 'Phone', 'Email', 'Category', 'Stage'];
+    const header = ['Name', 'Company', 'Phone', 'Email', 'Category', 'Source', 'Stage'];
     const headerRow = `<tr>${header.map((h) => `<th>${esc(h)}</th>`).join('')}</tr>`;
     const bodyRows = leads
       .map((l) => {

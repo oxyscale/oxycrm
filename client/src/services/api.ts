@@ -91,12 +91,14 @@ export async function getLeadById(id: number): Promise<Lead> {
 export async function importLeadsCSV(
   file: File,
   leadType: LeadType,
-  category?: string
+  category?: string,
+  leadSource?: string
 ): Promise<ImportResult> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('leadType', leadType);
   if (category) formData.append('category', category);
+  if (leadSource) formData.append('leadSource', leadSource);
 
   const res = await fetch(`${BASE_URL}/leads/import`, {
     method: 'POST',
@@ -165,6 +167,52 @@ export async function deleteCategory(
 ): Promise<{ name: string; leadsDeleted: number }> {
   const qs = options?.deleteLeads ? '?deleteLeads=true' : '';
   return request<{ name: string; leadsDeleted: number }>(`/categories/${id}${qs}`, {
+    method: 'DELETE',
+  });
+}
+
+// ── Lead sources (Settings) ──────────────────────────────────
+//
+// The CHANNEL a lead arrived through, kept separate from `category`
+// (the industry the business is in). Same managed-list pattern as
+// categories, but deleting a source never deletes leads — a channel
+// going away shouldn't take its leads with it.
+
+export interface LeadSource {
+  id: number;
+  name: string;
+  created_at: string;
+  /** Count of leads currently tagged with this source (case-insensitive). */
+  lead_count?: number;
+}
+
+export async function getLeadSources(): Promise<LeadSource[]> {
+  return request<LeadSource[]>('/lead-sources');
+}
+
+export async function createLeadSource(name: string): Promise<LeadSource> {
+  return request<LeadSource>('/lead-sources', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+}
+
+/** Renames the source AND re-stamps every lead carrying the old string,
+ *  so historical data never orphans out of the Reports breakdown. */
+export async function renameLeadSource(
+  id: number,
+  name: string,
+): Promise<{ id: number; name: string; leadsUpdated: number }> {
+  return request<{ id: number; name: string; leadsUpdated: number }>(`/lead-sources/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteLeadSource(
+  id: number,
+): Promise<{ name: string; leadsStillTagged: number }> {
+  return request<{ name: string; leadsStillTagged: number }>(`/lead-sources/${id}`, {
     method: 'DELETE',
   });
 }

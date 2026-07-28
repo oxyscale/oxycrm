@@ -97,6 +97,9 @@ function mapCallbackWithLeadRow(row: CallbackWithLeadRow): CallbackWithLead {
     website: row.l_website,
     leadType: row.l_lead_type as Lead['leadType'],
     category: row.l_category,
+    // Legacy callbacks route: lead_source isn't joined here. This branch
+    // is being phased out and no consumer reads the field.
+    leadSource: null,
     status: row.l_status as Lead['status'],
     unansweredCalls: row.l_unanswered_calls,
     voicemailLeft: row.l_voicemail_left === 1,

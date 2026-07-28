@@ -40,6 +40,7 @@ import settingsRouter from './routes/settings.js';
 import tasksRouter from './routes/tasks.js';
 import reportsRouter from './routes/reports.js';
 import categoriesRouter from './routes/categories.js';
+import leadSourcesRouter from './routes/leadSources.js';
 import { startGmailSync } from './services/gmail-sync.js';
 
 // Import error handling middleware
@@ -257,6 +258,7 @@ app.use('/api/webhooks', webhooksRouter);
 app.use('/api', tasksRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/categories', categoriesRouter);
+app.use('/api/lead-sources', leadSourcesRouter);
 
 // --- Serve React frontend in production ---
 if (process.env.NODE_ENV === 'production') {

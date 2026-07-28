@@ -76,6 +76,9 @@ export default function HomePage() {
   const [importError, setImportError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [importCategory, setImportCategory] = useState('');
+  // Lead source for the CSV batch — the channel it arrived through.
+  const [importSource, setImportSource] = useState('');
+  const [sourceOptions, setSourceOptions] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -170,6 +173,9 @@ export default function HomePage() {
   useEffect(() => {
     if (!showCreateLead && !showImport) return;
     reloadCategoryOptions();
+    api.getLeadSources()
+      .then((srcs) => setSourceOptions(srcs.map((s) => s.name)))
+      .catch(() => { /* non-critical */ });
   }, [showCreateLead, showImport, reloadCategoryOptions]);
 
   useEffect(() => {
@@ -226,7 +232,12 @@ export default function HomePage() {
     setImportError(null);
 
     try {
-      const result = await api.importLeadsCSV(selectedFile, 'new', importCategory || undefined);
+      const result = await api.importLeadsCSV(
+        selectedFile,
+        'new',
+        importCategory || undefined,
+        importSource || undefined,
+      );
       setImportResult(result);
 
       const freshLeads = await api.getLeads({ status: 'not_called' });
@@ -598,6 +609,30 @@ export default function HomePage() {
                   Add it in Settings → Categories
                 </button>
                 {' '}first.
+              </p>
+            </div>
+
+            {/* Lead source — the channel this whole batch came through.
+                Optional (older imports predate the field) but strongly
+                worth setting: it's what makes the Reports breakdown by
+                channel possible later. */}
+            <div className="mb-4 max-w-md">
+              <EyebrowLabel variant="bare" className="mb-2">
+                Lead source
+              </EyebrowLabel>
+              <select
+                value={importSource}
+                onChange={(e) => setImportSource(e.target.value)}
+                className={tempInputClass}
+                disabled={sourceOptions.length === 0}
+              >
+                <option value="">Select a source…</option>
+                {sourceOptions.map((src) => (
+                  <option key={src} value={src}>{src}</option>
+                ))}
+              </select>
+              <p className="text-ink-dim text-xs mt-1.5">
+                Where this batch came from. Applied to every lead in the CSV.
               </p>
             </div>
 

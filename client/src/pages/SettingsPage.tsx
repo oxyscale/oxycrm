@@ -13,6 +13,8 @@ import {
   Wrench,
   AlertTriangle,
   Tag,
+  Route,
+  X,
 } from 'lucide-react';
 import * as api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -21,7 +23,7 @@ import SectionHeading from '../components/ui/SectionHeading';
 
 // ── Types ───────────────────────────────────────────────────
 
-type Tab = 'categories' | 'prompts' | 'company' | 'email' | 'signature' | 'cleanup' | 'account';
+type Tab = 'categories' | 'sources' | 'prompts' | 'company' | 'email' | 'signature' | 'cleanup' | 'account';
 
 // ── Main Component ──────────────────────────────────────────
 
@@ -55,6 +57,17 @@ export default function SettingsPage() {
   const [addingCategory, setAddingCategory] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(null);
 
+  // Lead sources (Settings > Lead Sources) — the channel a lead arrived
+  // through, kept separate from category (the industry it operates in).
+  const [leadSources, setLeadSources] = useState<api.LeadSource[]>([]);
+  const [loadingSources, setLoadingSources] = useState(true);
+  const [newSourceName, setNewSourceName] = useState('');
+  const [addingSource, setAddingSource] = useState(false);
+  const [sourceError, setSourceError] = useState<string | null>(null);
+  // id of the source currently being renamed inline, plus its draft value
+  const [editingSourceId, setEditingSourceId] = useState<number | null>(null);
+  const [editingSourceName, setEditingSourceName] = useState('');
+
   // ── Load data ─────────────────────────────────────────────
 
   useEffect(() => {
@@ -62,7 +75,69 @@ export default function SettingsPage() {
     loadPrompts();
     loadCategories();
     loadManagedCategories();
+    loadLeadSources();
   }, []);
+
+  const loadLeadSources = async () => {
+    setLoadingSources(true);
+    try {
+      setLeadSources(await api.getLeadSources());
+    } catch (err) {
+      console.error('Failed to load lead sources:', err);
+    } finally {
+      setLoadingSources(false);
+    }
+  };
+
+  const handleAddLeadSource = async () => {
+    const name = newSourceName.trim();
+    if (!name) return;
+    setAddingSource(true);
+    setSourceError(null);
+    try {
+      const src = await api.createLeadSource(name);
+      setLeadSources((prev) => [...prev, src].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewSourceName('');
+    } catch (err) {
+      setSourceError(err instanceof Error ? err.message : 'Failed to add lead source');
+    } finally {
+      setAddingSource(false);
+    }
+  };
+
+  // Renaming re-stamps every lead carrying the old string server-side,
+  // so the Reports breakdown never splits across old and new spellings.
+  const handleRenameLeadSource = async (id: number) => {
+    const name = editingSourceName.trim();
+    const current = leadSources.find((s) => s.id === id);
+    if (!name || !current || name === current.name) {
+      setEditingSourceId(null);
+      return;
+    }
+    setSourceError(null);
+    try {
+      await api.renameLeadSource(id, name);
+      setEditingSourceId(null);
+      await loadLeadSources();
+    } catch (err) {
+      setSourceError(err instanceof Error ? err.message : 'Failed to rename lead source');
+    }
+  };
+
+  const handleDeleteLeadSource = async (src: api.LeadSource) => {
+    const tagged = src.lead_count ?? 0;
+    const msg = tagged > 0
+      ? `Remove "${src.name}" from the dropdown?\n\n${tagged} lead${tagged === 1 ? '' : 's'} will keep this source on their record — they just won't be re-selectable. No leads are deleted.`
+      : `Remove "${src.name}" from the dropdown?`;
+    if (!window.confirm(msg)) return;
+    setSourceError(null);
+    try {
+      await api.deleteLeadSource(src.id);
+      setLeadSources((prev) => prev.filter((s) => s.id !== src.id));
+    } catch (err) {
+      setSourceError(err instanceof Error ? err.message : 'Failed to delete lead source');
+    }
+  };
 
   const loadSettings = async () => {
     setLoadingSettings(true);
@@ -241,6 +316,7 @@ export default function SettingsPage() {
 
   const tabs: { key: Tab; label: string; icon: typeof Building2 }[] = [
     { key: 'categories', label: 'Categories', icon: Tag },
+    { key: 'sources', label: 'Lead Sources', icon: Route },
     { key: 'prompts', label: 'Category Prompts', icon: MessageSquareText },
     { key: 'company', label: 'Company Profile', icon: Building2 },
     { key: 'email', label: 'Email Preferences', icon: Mail },
@@ -356,6 +432,115 @@ export default function SettingsPage() {
                   >
                     <Trash2 size={14} />
                   </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Lead Sources tab ───────────────────────────────── */}
+      {tab === 'sources' && (
+        <div className="bg-paper border border-hair-soft rounded-xl p-6">
+          <h3 className="text-ink font-medium text-base mb-1">Manage lead sources</h3>
+          <p className="text-ink-muted text-sm mb-5">
+            Where a lead came from, as opposed to what industry they're in. Keeping these separate is what lets you ask
+            "how many Meta ad leads became clients" without the answer being tangled up in industry.
+            Click a name to rename it — every lead carrying it updates too.
+          </p>
+
+          {/* Add source */}
+          <div className="flex items-center gap-3 mb-5">
+            <input
+              type="text"
+              value={newSourceName}
+              onChange={(e) => { setNewSourceName(e.target.value); setSourceError(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAddLeadSource(); }}
+              placeholder="New lead source"
+              maxLength={80}
+              className="flex-1 bg-cream border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
+            />
+            <button
+              onClick={handleAddLeadSource}
+              disabled={!newSourceName.trim() || addingSource}
+              className="bg-ink text-white text-sm font-medium rounded-full px-5 py-2.5 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {addingSource ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              Add source
+            </button>
+          </div>
+
+          {sourceError && (
+            <div className="mb-4 bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.22)] rounded-lg px-4 py-2.5 text-red-500 text-sm">
+              {sourceError}
+            </div>
+          )}
+
+          {loadingSources ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={20} className="animate-spin text-ink-dim" />
+            </div>
+          ) : leadSources.length === 0 ? (
+            <p className="text-ink-dim text-sm italic py-4">No lead sources yet. Add one above.</p>
+          ) : (
+            <div className="space-y-2">
+              {leadSources.map((src) => (
+                <div
+                  key={src.id}
+                  className="flex items-center justify-between bg-cream border border-hair-soft rounded-lg px-4 py-3 group"
+                >
+                  {editingSourceId === src.id ? (
+                    <div className="flex items-center gap-2 flex-1 mr-3">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editingSourceName}
+                        onChange={(e) => setEditingSourceName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRenameLeadSource(src.id);
+                          if (e.key === 'Escape') setEditingSourceId(null);
+                        }}
+                        maxLength={80}
+                        className="flex-1 bg-paper border border-[rgba(10,156,212,0.3)] rounded-md px-2.5 py-1.5 text-sm text-ink focus:outline-none"
+                      />
+                      <button
+                        onClick={() => handleRenameLeadSource(src.id)}
+                        className="text-sky-ink hover:text-ink transition-colors"
+                        title="Save"
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        onClick={() => setEditingSourceId(null)}
+                        className="text-ink-dim hover:text-ink-muted transition-colors"
+                        title="Cancel"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setEditingSourceId(src.id); setEditingSourceName(src.name); }}
+                      className="text-ink text-sm font-medium text-left hover:text-sky-ink transition-colors"
+                      title="Click to rename"
+                    >
+                      {src.name}
+                      {typeof src.lead_count === 'number' && src.lead_count > 0 && (
+                        <span className="text-ink-dim text-xs font-normal ml-2">
+                          · {src.lead_count.toLocaleString()} lead{src.lead_count === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </button>
+                  )}
+                  {editingSourceId !== src.id && (
+                    <button
+                      onClick={() => handleDeleteLeadSource(src)}
+                      className="text-ink-dim hover:text-risk transition-colors opacity-0 group-hover:opacity-100"
+                      title="Remove from dropdown (never deletes leads)"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

@@ -22,7 +22,12 @@ export interface Lead {
   email: string | null;
   website: string | null;
   leadType: 'new' | 'callback';
+  /** Industry the business operates in (Recruitment, Property, ...). */
   category: string | null;
+  /** Channel the lead arrived through (Cold call, Meta ad, Miller-Leith
+   *  network, ...). Deliberately separate from `category` — one channel
+   *  brings in leads across many industries. */
+  leadSource: string | null;
   status: 'not_called' | 'called';
   unansweredCalls: number;
   voicemailLeft: boolean;
@@ -53,6 +58,12 @@ export interface Lead {
    *  at list time so the Leads page can show a "Task set / No task"
    *  pill without a per-row fetch. */
   openTaskCount?: number;
+  /** Email engagement rollup from Resend webhooks, summed across every
+   *  email sent to this lead. Computed at list time. */
+  emailOpens?: number;
+  emailClicks?: number;
+  lastEmailOpenedAt?: string | null;
+  emailBounced?: boolean;
 }
 
 export interface CallLog {

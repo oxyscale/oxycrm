@@ -38,6 +38,7 @@ interface LeadRow {
   website: string | null;
   lead_type: string;
   category: string | null;
+  lead_source: string | null;
   status: string;
   unanswered_calls: number;
   voicemail_left: number;
@@ -82,6 +83,7 @@ function mapLeadRow(row: LeadRow): Lead {
     website: row.website,
     leadType: row.lead_type as Lead['leadType'],
     category: row.category,
+    leadSource: row.lead_source,
     status: row.status as Lead['status'],
     unansweredCalls: row.unanswered_calls,
     voicemailLeft: row.voicemail_left === 1,
@@ -153,6 +155,7 @@ const createLeadSchema = z.object({
   email: z.string().email().nullable().optional(),
   website: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
+  leadSource: z.string().nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
   pipelineStage: z.enum(['pulse', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost']).nullable().optional(),
@@ -166,6 +169,7 @@ const updateLeadSchema = z.object({
   email: z.string().email().nullable().optional(),
   website: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
+  leadSource: z.string().nullable().optional(),
   consolidatedSummary: z.string().nullable().optional(),
   companyInfo: z.string().nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
@@ -195,10 +199,15 @@ router.get('/', (req, res, next) => {
     res.setHeader('Pragma', 'no-cache');
 
     const db = getDb();
-    const { status, leadType, category, contacted } = req.query;
+    const { status, leadType, category, contacted, leadSource } = req.query;
 
     let query = 'SELECT * FROM leads WHERE 1=1';
     const params: Record<string, string> = {};
+
+    if (leadSource && typeof leadSource === 'string') {
+      query += ' AND LOWER(lead_source) = LOWER(@leadSource)';
+      params.leadSource = leadSource;
+    }
 
     if (status && typeof status === 'string') {
       query += ' AND status = @status';
@@ -279,6 +288,37 @@ router.get('/', (req, res, next) => {
     for (const r of taskRows) taskMap.set(r.lead_id, r.open_tasks);
     for (const lead of leads) {
       lead.openTaskCount = taskMap.get(lead.id) ?? 0;
+    }
+
+    // Email engagement per lead — Resend webhooks populate open/click
+    // counts on emails_sent, but until now that only surfaced as chips
+    // on a single profile page. Rolling it up here powers the Leads
+    // engagement column and the "opened but never contacted" view,
+    // which is the warmest-lead signal in the system.
+    const engagementRows = db.prepare(`
+      SELECT lead_id,
+             COALESCE(SUM(open_count), 0)  AS opens,
+             COALESCE(SUM(click_count), 0) AS clicks,
+             MAX(last_opened_at)           AS last_opened_at,
+             MAX(CASE WHEN bounced_at IS NOT NULL THEN 1 ELSE 0 END) AS bounced
+      FROM emails_sent
+      WHERE direction = 'sent'
+      GROUP BY lead_id
+    `).all() as {
+      lead_id: number;
+      opens: number;
+      clicks: number;
+      last_opened_at: string | null;
+      bounced: number;
+    }[];
+    const engagementMap = new Map<number, (typeof engagementRows)[number]>();
+    for (const r of engagementRows) engagementMap.set(r.lead_id, r);
+    for (const lead of leads) {
+      const e = engagementMap.get(lead.id);
+      lead.emailOpens = e?.opens ?? 0;
+      lead.emailClicks = e?.clicks ?? 0;
+      lead.lastEmailOpenedAt = e?.last_opened_at ?? null;
+      lead.emailBounced = e?.bounced === 1;
     }
 
     logger.info({ count: leads.length, filters: { status, leadType, category } }, 'Fetched leads');
@@ -1258,8 +1298,8 @@ router.post('/', (req, res, next) => {
       ).get() as { max_pos: number };
 
       const result = db.prepare(`
-        INSERT INTO leads (name, phone, company, email, website, category, lead_type, status, pipeline_stage, temperature, queue_position, created_at, updated_at)
-        VALUES (@name, @phone, @company, @email, @website, @category, 'new', 'not_called', @pipelineStage, @temperature, @queuePosition, @now, @now)
+        INSERT INTO leads (name, phone, company, email, website, category, lead_source, lead_type, status, pipeline_stage, temperature, queue_position, created_at, updated_at)
+        VALUES (@name, @phone, @company, @email, @website, @category, @leadSource, 'new', 'not_called', @pipelineStage, @temperature, @queuePosition, @now, @now)
       `).run({
         name: payload.name,
         phone: payload.phone || '',
@@ -1267,6 +1307,7 @@ router.post('/', (req, res, next) => {
         email: payload.email ?? null,
         website: payload.website ?? null,
         category: canonicalCategory,
+        leadSource: payload.leadSource?.trim() || null,
         // null = no tier yet. Jordan places leads into a tier manually
         // from the lead profile dropdown.
         pipelineStage: payload.pipelineStage ?? null,
@@ -1379,6 +1420,28 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       );
     }
 
+    // Lead source is picked at upload time, same pattern as category —
+    // a whole CSV comes from one channel. Optional so older clients that
+    // don't send it keep working; when present it must be a managed
+    // source so the Reports breakdown never fragments on typos.
+    const sourceOverride = (req.body.leadSource as string)?.trim() || null;
+    if (sourceOverride) {
+      const sourceRow = db.prepare(
+        'SELECT name FROM lead_sources WHERE LOWER(name) = LOWER(?)',
+      ).get(sourceOverride) as { name: string } | undefined;
+      if (!sourceRow) {
+        throw new ApiError(
+          400,
+          `Lead source "${sourceOverride}" doesn't exist. Add it in Settings > Lead Sources first, then re-upload.`,
+        );
+      }
+    }
+    // Store the canonical casing from the managed list, not what was typed.
+    const canonicalSource = sourceOverride
+      ? (db.prepare('SELECT name FROM lead_sources WHERE LOWER(name) = LOWER(?)')
+          .get(sourceOverride) as { name: string }).name
+      : null;
+
     // Parse the CSV from the uploaded buffer, stripping BOM if present
     const csvContent = req.file.buffer.toString('utf-8').replace(/^﻿/, '');
     let records: Record<string, string>[];
@@ -1423,8 +1486,8 @@ router.post('/import', upload.single('file'), (req, res, next) => {
     // want CSV imports to silently inherit that — new leads must start
     // unplaced on the kanban.
     const insertStmt = db.prepare(`
-      INSERT INTO leads (name, company, phone, email, website, lead_type, category, status, pipeline_stage, queue_position)
-      VALUES (@name, @company, @phone, @email, @website, @leadType, @category, 'not_called', NULL, @queuePosition)
+      INSERT INTO leads (name, company, phone, email, website, lead_type, category, lead_source, status, pipeline_stage, queue_position)
+      VALUES (@name, @company, @phone, @email, @website, @leadType, @category, @leadSource, 'not_called', NULL, @queuePosition)
     `);
 
     // Optional per-row note. If the CSV row has a `notes` column, we
@@ -1614,6 +1677,11 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         // category column is ignored — Jordan picked the category at
         // upload time and that's the source of truth.
         const categoryValue = categoryOverride;
+        // Batch picker wins; a per-row `source` column is the fallback so
+        // a mixed-channel export can still carry its own values.
+        const sourceValue = canonicalSource
+          || (row.lead_source || row.source || row.channel || '').trim()
+          || null;
 
         const insertResult = insertStmt.run({
           name,
@@ -1623,6 +1691,7 @@ router.post('/import', upload.single('file'), (req, res, next) => {
           website: websiteValue,
           leadType,
           category: categoryValue,
+          leadSource: sourceValue,
           queuePosition: currentPos,
         });
 
@@ -1947,6 +2016,10 @@ router.patch('/:id', (req, res, next) => {
     if (updates.category !== undefined) {
       setClauses.push('category = @category');
       params.category = updates.category;
+    }
+    if (updates.leadSource !== undefined) {
+      setClauses.push('lead_source = @leadSource');
+      params.leadSource = updates.leadSource;
     }
     if (updates.consolidatedSummary !== undefined) {
       setClauses.push('consolidated_summary = @consolidatedSummary');

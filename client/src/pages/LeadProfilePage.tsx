@@ -342,6 +342,8 @@ export default function LeadProfilePage() {
 
   // Managed categories for the category dropdown
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  // Managed lead sources for the source dropdown
+  const [leadSourceOptions, setLeadSourceOptions] = useState<string[]>([]);
 
   // ── Load lead ──────────────────────────────────────────────
 
@@ -363,10 +365,13 @@ export default function LeadProfilePage() {
     if (tab === 'emails') loadEmails();
   }, [tab, lead?.id]);
 
-  // Load managed categories for the sidebar dropdown
+  // Load managed categories + lead sources for the sidebar dropdowns
   useEffect(() => {
     api.getManagedCategories()
       .then((cats) => setCategoryOptions(cats.map((c) => c.name)))
+      .catch(() => {});
+    api.getLeadSources()
+      .then((srcs) => setLeadSourceOptions(srcs.map((s) => s.name)))
       .catch(() => {});
   }, []);
 
@@ -1791,6 +1796,37 @@ export default function LeadProfilePage() {
                   )}
                   {categoryOptions.map((cat) => (
                     <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Lead source — the channel this lead arrived through.
+                  Sits directly under Category so the two dimensions read
+                  as a pair: what industry they're in, how they got here. */}
+              <div>
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Lead Source</p>
+                <select
+                  value={lead.leadSource || ''}
+                  onChange={async (e) => {
+                    const newSource = e.target.value || null;
+                    try {
+                      const updated = await api.updateLead(lead.id, { leadSource: newSource } as Partial<Lead>);
+                      setLead(updated);
+                    } catch (err) {
+                      console.error('Failed to update lead source:', err);
+                    }
+                  }}
+                  className="w-full bg-transparent text-ink-muted text-sm py-1 -ml-0.5 px-0.5 border-none focus:outline-none focus:ring-0 cursor-pointer hover:text-sky-ink transition-colors appearance-none"
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a95a0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0 center', paddingRight: '16px' }}
+                >
+                  <option value="">None</option>
+                  {/* Keep the current value selectable even if it's been
+                      removed from the managed list in Settings. */}
+                  {lead.leadSource && !leadSourceOptions.includes(lead.leadSource) && (
+                    <option value={lead.leadSource}>{lead.leadSource}</option>
+                  )}
+                  {leadSourceOptions.map((src) => (
+                    <option key={src} value={src}>{src}</option>
                   ))}
                 </select>
               </div>

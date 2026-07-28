@@ -632,8 +632,91 @@ export function initializeDatabase(db: Database.Database): void {
     db.prepare("INSERT INTO categories (name) VALUES ('Recruitment')").run();
   }
 
-  // Ensure "Miller Leith Network" category exists (added May 2026)
-  db.prepare("INSERT OR IGNORE INTO categories (name) VALUES ('Miller Leith Network')").run();
+  // NOTE (July 2026): the "Miller Leith Network" category seed was REMOVED.
+  // Miller Leith is a lead SOURCE (how the lead arrived), not an industry
+  // category (what the business does). The backfill below migrates it to
+  // the lead_sources list and clears the category on those leads so Jordan
+  // can set their real industry. Do not re-add the seed.
+
+  // ============================================================
+  // Lead sources — the channel a lead arrived through.
+  //
+  // Deliberately separate from `category` (the industry the business is
+  // in). A Facebook ad brings in leads across many industries; keeping
+  // the two on one field made the data unfilterable. Managed list, same
+  // shape as `categories`, curated in Settings > Lead Sources.
+  // ============================================================
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS lead_sources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  addColumnIfMissing(db, 'leads', 'lead_source', 'TEXT DEFAULT NULL');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(lead_source)');
+
+  // Seed the default source list once (empty table only, so Jordan's
+  // edits/deletions in Settings are never resurrected on redeploy).
+  const srcCount = (db.prepare('SELECT COUNT(*) AS n FROM lead_sources').get() as { n: number }).n;
+  if (srcCount === 0) {
+    const insertSrc = db.prepare('INSERT OR IGNORE INTO lead_sources (name) VALUES (?)');
+    for (const s of [
+      'Cold call',
+      'Meta ad',
+      'Google ad',
+      'LinkedIn ad',
+      'Miller-Leith network',
+      'Referral',
+    ]) {
+      insertSrc.run(s);
+    }
+  }
+
+  // One-time backfill, guarded by a settings flag so it runs exactly once
+  // and never overwrites a source Jordan has set by hand afterwards.
+  //
+  //   1. Leads in the legacy "Miller Leith Network" CATEGORY are referrals
+  //      from that network -> source = 'Miller-Leith network', and their
+  //      category is CLEARED (it was never an industry; Jordan will set
+  //      the real one per lead).
+  //   2. Everything else predates the source field and came from scraped
+  //      CSV lists -> 'Cold call'.
+  //   3. The legacy category is then removed from the managed list.
+  const backfillDone = db
+    .prepare("SELECT value FROM settings WHERE key = 'lead_source_backfill_v1'")
+    .get() as { value: string } | undefined;
+
+  if (!backfillDone) {
+    const runBackfill = db.transaction(() => {
+      const millerLeith = db.prepare(`
+        UPDATE leads SET lead_source = 'Miller-Leith network', category = NULL
+        WHERE lead_source IS NULL
+          AND category IS NOT NULL
+          AND REPLACE(LOWER(category), '-', ' ') LIKE '%miller leith%'
+      `).run();
+
+      const coldCall = db.prepare(`
+        UPDATE leads SET lead_source = 'Cold call' WHERE lead_source IS NULL
+      `).run();
+
+      db.prepare(
+        "DELETE FROM categories WHERE REPLACE(LOWER(name), '-', ' ') LIKE '%miller leith%'",
+      ).run();
+
+      db.prepare(
+        "INSERT INTO settings (key, value, updated_at) VALUES ('lead_source_backfill_v1', 'done', datetime('now'))",
+      ).run();
+
+      return { millerLeith: millerLeith.changes, coldCall: coldCall.changes };
+    });
+
+    const counts = runBackfill();
+    console.log(
+      `[schema] lead_source backfill: ${counts.millerLeith} -> Miller-Leith network (category cleared), ${counts.coldCall} -> Cold call`,
+    );
+  }
 
   // Tasks — add completed_at timestamp (May 2026). NULL until user manually
   // marks a task complete; used by the Tasks page to track completion history.
