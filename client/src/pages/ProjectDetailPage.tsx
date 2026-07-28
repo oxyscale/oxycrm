@@ -33,9 +33,15 @@ const STATUS_CONFIG: Record<
     bg: 'bg-[rgba(16,185,129,0.12)]',
     border: 'border-[rgba(16,185,129,0.3)]',
   },
+  ended: {
+    label: 'Ended',
+    color: 'text-ink-dim',
+    bg: 'bg-[rgba(11,13,14,0.05)]',
+    border: 'border-hair-soft',
+  },
 };
 
-const STATUS_ORDER: ProjectStatus[] = ['building', 'live'];
+const STATUS_ORDER: ProjectStatus[] = ['building', 'live', 'ended'];
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();

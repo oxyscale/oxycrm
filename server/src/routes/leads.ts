@@ -443,23 +443,51 @@ router.get('/', (req, res, next) => {
     // the lead, so it can't drift out of sync with reality:
     //   no project -> lead, building -> in_build, live -> client
     // This is what drives the Leads / In Build / Active Clients tabs.
+    // A contact can have many projects — the initial build plus each
+    // extra piece of work. Roll them up rather than reading one:
+    // ANY live project keeps them a client, so commissioning new work
+    // doesn't demote an active client back to "In Build".
     const projectRows = db.prepare(`
-      SELECT p.lead_id, p.id AS project_id, p.status,
-        (SELECT r.monthly_amount FROM client_retainers r
-          WHERE r.project_id = p.id AND r.effective_from <= DATE('now')
-          ORDER BY r.effective_from DESC, r.id DESC LIMIT 1) AS current_retainer
-      FROM projects p
-      WHERE p.lead_id IS NOT NULL
+      SELECT lead_id,
+             COUNT(*) AS project_count,
+             MAX(CASE WHEN status = 'live'     THEN 1 ELSE 0 END) AS has_live,
+             MAX(CASE WHEN status = 'building' THEN 1 ELSE 0 END) AS has_building,
+             MAX(id) AS latest_project_id
+      FROM projects
+      WHERE lead_id IS NOT NULL
+      GROUP BY lead_id
     `).all() as {
-      lead_id: number; project_id: number; status: string; current_retainer: number | null;
+      lead_id: number; project_count: number;
+      has_live: number; has_building: number; latest_project_id: number;
     }[];
     const projectMap = new Map<number, (typeof projectRows)[number]>();
     for (const r of projectRows) projectMap.set(r.lead_id, r);
+
+    // Retainers are per-client, independent of how many projects exist.
+    const retainerRows = db.prepare(`
+      SELECT lead_id, monthly_amount FROM client_retainers cr
+      WHERE effective_from <= DATE('now')
+        AND id = (SELECT id FROM client_retainers x
+                   WHERE x.lead_id = cr.lead_id AND x.effective_from <= DATE('now')
+                   ORDER BY x.effective_from DESC, x.id DESC LIMIT 1)
+    `).all() as { lead_id: number; monthly_amount: number }[];
+    const retainerMap = new Map<number, number>();
+    for (const r of retainerRows) retainerMap.set(r.lead_id, r.monthly_amount);
+
     for (const lead of leads) {
       const p = projectMap.get(lead.id);
-      lead.lifecycle = !p ? 'lead' : p.status === 'live' ? 'client' : 'in_build';
-      lead.projectId = p?.project_id ?? null;
-      lead.currentRetainer = p?.current_retainer ?? 0;
+      lead.lifecycle = !p
+        ? 'lead'
+        : p.has_live
+          ? 'client'
+          : p.has_building
+            ? 'in_build'
+            // every project ended — treat as a lead again so they can be
+            // re-engaged, with the history still on the record.
+            : 'lead';
+      lead.projectId = p?.latest_project_id ?? null;
+      lead.projectCount = p?.project_count ?? 0;
+      lead.currentRetainer = retainerMap.get(lead.id) ?? 0;
     }
 
     logger.info({ count: leads.length, filters: { status, leadType, category } }, 'Fetched leads');
@@ -478,15 +506,137 @@ router.get('/', (req, res, next) => {
  * immediately and nothing tied them together. Now the lead's own data
  * seeds the project and the link is made in one step.
  */
-const convertLeadSchema = z.object({
-  /** Defaults to the lead's company (or name when there's no company). */
+/**
+ * GET /api/leads/:id/retainers
+ * A client's full retainer history, newest first.
+ *
+ * Nothing is ever overwritten — a change adds a row — so this is both
+ * the current figure and the audit trail of what they've been billed
+ * and why it moved.
+ */
+router.get('/:id/retainers', (req, res, next) => {
+  try {
+    const db = getDb();
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) throw new ApiError(400, 'Invalid lead ID');
+
+    const rows = db.prepare(`
+      SELECT id, lead_id, monthly_amount, effective_from, note, created_at, created_by
+      FROM client_retainers WHERE lead_id = ?
+      ORDER BY effective_from DESC, id DESC
+    `).all(id) as {
+      id: number; lead_id: number; monthly_amount: number; effective_from: string;
+      note: string | null; created_at: string; created_by: string | null;
+    }[];
+
+    res.json(rows.map((r) => ({
+      id: r.id,
+      leadId: r.lead_id,
+      monthlyAmount: r.monthly_amount,
+      effectiveFrom: r.effective_from,
+      note: r.note,
+      createdAt: r.created_at,
+      createdBy: r.created_by,
+    })));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/leads/:id/retainers
+ * Records a retainer change as a new dated row.
+ */
+const createRetainerSchema = z.object({
+  monthlyAmount: z.number().min(0),
+  /** YYYY-MM-DD. Defaults to today; can be back- or future-dated so a
+   *  rise agreed now but starting next month doesn't inflate this
+   *  month's MRR. */
+  effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  note: z.string().nullable().optional(),
+});
+
+router.post('/:id/retainers', (req, res, next) => {
+  try {
+    const db = getDb();
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) throw new ApiError(400, 'Invalid lead ID');
+
+    const lead = db.prepare('SELECT id FROM leads WHERE id = ?').get(id);
+    if (!lead) throw new ApiError(404, 'Lead not found');
+
+    const payload = createRetainerSchema.parse(req.body);
+    const effectiveFrom = payload.effectiveFrom || new Date().toISOString().slice(0, 10);
+    const actor = req.user?.name || null;
+
+    const insert = db.transaction(() => {
+      const r = db.prepare(`
+        INSERT INTO client_retainers (lead_id, monthly_amount, effective_from, note, created_by)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(id, payload.monthlyAmount, effectiveFrom, payload.note ?? null, actor);
+
+      // Mirror onto the timeline so a billing change sits alongside the
+      // calls and emails rather than being buried in a separate panel.
+      db.prepare(`
+        INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+        VALUES (?, 'stage_change', ?, ?, ?, ?)
+      `).run(
+        id,
+        `Retainer set to $${payload.monthlyAmount.toLocaleString('en-AU')}/mo`,
+        payload.note || `Effective ${effectiveFrom}`,
+        new Date().toISOString(),
+        actor,
+      );
+      return r.lastInsertRowid;
+    });
+
+    const newId = insert();
+    logger.info({ leadId: id, amount: payload.monthlyAmount, effectiveFrom }, 'Retainer recorded');
+    res.status(201).json({ id: newId, leadId: id, monthlyAmount: payload.monthlyAmount, effectiveFrom });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/leads/:id/retainers/:retainerId
+ * Removes a mistaken entry. Deleting history is normally the wrong
+ * move, but a fat-fingered amount has to be correctable.
+ */
+router.delete('/:id/retainers/:retainerId', (req, res, next) => {
+  try {
+    const db = getDb();
+    const id = parseInt(req.params.id, 10);
+    const retainerId = parseInt(req.params.retainerId, 10);
+    if (isNaN(id) || isNaN(retainerId)) throw new ApiError(400, 'Invalid ID');
+
+    const r = db.prepare('DELETE FROM client_retainers WHERE id = ? AND lead_id = ?')
+      .run(retainerId, id);
+    if (r.changes === 0) throw new ApiError(404, 'Retainer entry not found');
+
+    logger.info({ leadId: id, retainerId }, 'Retainer entry deleted');
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const startProjectSchema = z.object({
+  /** Defaults to "<client> build" for a first project. */
   name: z.string().min(1).optional(),
-  /** Opening monthly retainer. Optional — often unknown at handover. */
+  /** The brief — what this piece of work covers. */
+  description: z.string().nullable().optional(),
+  /** What this work ADDS to the client's monthly retainer. A delta, not
+   *  a replacement: an existing client on $2,500 taking on $700 of extra
+   *  work moves to $3,200, and the history records why. */
+  retainerDelta: z.number().optional(),
+  /** Sets the retainer outright instead of adjusting it. Used for a
+   *  first project, where there's nothing to add to. */
   monthlyRetainer: z.number().min(0).optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
-router.post('/:id/convert', (req, res, next) => {
+router.post('/:id/projects', (req, res, next) => {
   try {
     const db = getDb();
     const id = parseInt(req.params.id, 10);
@@ -495,59 +645,87 @@ router.post('/:id/convert', (req, res, next) => {
     const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(id) as LeadRow | undefined;
     if (!lead) throw new ApiError(404, 'Lead not found');
 
-    const existingProject = db.prepare('SELECT id FROM projects WHERE lead_id = ?')
-      .get(id) as { id: number } | undefined;
-    if (existingProject) {
-      throw new ApiError(409, 'This lead is already linked to a project');
-    }
-
-    const payload = convertLeadSchema.parse(req.body ?? {});
+    const payload = startProjectSchema.parse(req.body ?? {});
     const now = new Date().toISOString();
     const startDate = payload.startDate || now.slice(0, 10);
     const clientName = lead.company?.trim() || lead.name;
-    const projectName = payload.name?.trim() || `${clientName} build`;
     const actor = req.user?.name || null;
 
-    const convert = db.transaction(() => {
+    // Is this their first project, or more work for an existing client?
+    const priorCount = (db.prepare('SELECT COUNT(*) AS n FROM projects WHERE lead_id = ?')
+      .get(id) as { n: number }).n;
+    const isFirst = priorCount === 0;
+    const projectName = payload.name?.trim()
+      || (isFirst ? `${clientName} build` : `${clientName} — additional work`);
+
+    // Current retainer, so a delta can be applied on top of it.
+    const currentRetainer = (db.prepare(`
+      SELECT monthly_amount FROM client_retainers
+      WHERE lead_id = ? AND effective_from <= DATE('now')
+      ORDER BY effective_from DESC, id DESC LIMIT 1
+    `).get(id) as { monthly_amount: number } | undefined)?.monthly_amount ?? 0;
+
+    let newRetainer: number | null = null;
+    if (payload.monthlyRetainer !== undefined) {
+      newRetainer = payload.monthlyRetainer;
+    } else if (payload.retainerDelta) {
+      newRetainer = Math.max(0, currentRetainer + payload.retainerDelta);
+    }
+
+    const start = db.transaction(() => {
       const result = db.prepare(`
         INSERT INTO projects (lead_id, name, client_name, status, value, description, notes, start_date, created_at, updated_at)
-        VALUES (?, ?, ?, 'building', ?, ?, NULL, ?, ?, ?)
+        VALUES (?, ?, ?, 'building', 0, ?, NULL, ?, ?, ?)
       `).run(
         id,
         projectName,
         clientName,
-        // Legacy value field kept in step for older reporting paths.
-        payload.monthlyRetainer ?? 0,
-        lead.consolidated_summary ?? null,
+        // First project inherits the call summary as context; extra work
+        // carries whatever brief was typed.
+        payload.description ?? (isFirst ? lead.consolidated_summary ?? null : null),
         startDate,
         now,
         now,
       );
       const projectId = Number(result.lastInsertRowid);
 
-      if (payload.monthlyRetainer && payload.monthlyRetainer > 0) {
+      if (newRetainer !== null) {
+        const note = isFirst
+          ? 'Opening retainer'
+          : `${payload.retainerDelta && payload.retainerDelta > 0 ? '+' : ''}${payload.retainerDelta ?? 0} for: ${projectName}`;
         db.prepare(`
-          INSERT INTO client_retainers (project_id, monthly_amount, effective_from, note, created_by)
-          VALUES (?, ?, ?, 'Opening retainer', ?)
-        `).run(projectId, payload.monthlyRetainer, startDate, actor);
+          INSERT INTO client_retainers (lead_id, monthly_amount, effective_from, note, created_by)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(id, newRetainer, startDate, note, actor);
       }
 
       db.prepare(`
         INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
-        VALUES (?, 'stage_change', 'Converted to project', ?, ?, ?)
-      `).run(id, `Project: ${projectName}`, now, actor);
+        VALUES (?, 'stage_change', ?, ?, ?, ?)
+      `).run(
+        id,
+        isFirst ? 'Converted to project' : 'New project started',
+        newRetainer !== null
+          ? `${projectName} — retainer now $${newRetainer.toLocaleString('en-AU')}/mo`
+          : projectName,
+        now,
+        actor,
+      );
 
-      // Won by definition — a build only starts once the deal is done.
-      db.prepare(
-        "UPDATE leads SET converted_to_project = 1, pipeline_stage = 'won', updated_at = ? WHERE id = ?",
-      ).run(now, id);
+      // A first build only starts once the deal is done. Later projects
+      // must not touch the stage — the client is already won.
+      if (isFirst) {
+        db.prepare(
+          "UPDATE leads SET converted_to_project = 1, pipeline_stage = 'won', updated_at = ? WHERE id = ?",
+        ).run(now, id);
+      }
 
       return projectId;
     });
 
-    const projectId = convert();
-    logger.info({ leadId: id, projectId, clientName }, 'Lead converted to project');
-    res.status(201).json({ projectId, name: projectName, clientName });
+    const projectId = start();
+    logger.info({ leadId: id, projectId, clientName, isFirst, newRetainer }, 'Project started');
+    res.status(201).json({ projectId, name: projectName, clientName, retainer: newRetainer });
   } catch (err) {
     next(err);
   }

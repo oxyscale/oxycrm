@@ -22,6 +22,7 @@ type FilterStatus = 'all' | ProjectStatus;
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; color: string; bg: string }> = {
   building: { label: 'In Build', color: 'text-warn', bg: 'bg-[rgba(245,158,11,0.15)]' },
   live: { label: 'Active Client', color: 'text-[#0f9d70]', bg: 'bg-[rgba(16,185,129,0.12)]' },
+  ended: { label: 'Ended', color: 'text-ink-dim', bg: 'bg-[rgba(11,13,14,0.05)]' },
 };
 
 type ProjectWithCounts = Project & { totalTasks: number; completedTasks: number };
@@ -105,7 +106,7 @@ export default function ProjectsPage() {
   };
 
   // Stats calculations
-  const activeProjects = projects.filter((p) => p.status !== 'live');
+  const activeProjects = projects.filter((p) => p.status === 'building');
   const completedProjects = projects.filter((p) => p.status === 'live');
   // Money now comes from the retainer history, not the legacy one-off
   // value field. Live clients are what generate recurring revenue.
@@ -191,7 +192,10 @@ export default function ProjectsPage() {
 
       {/* Filter bar */}
       <div className="flex items-center gap-1 mb-6 bg-paper border border-hair-soft rounded-lg p-1 w-fit">
-        {(['all', 'onboarding', 'in_progress', 'review', 'complete'] as FilterStatus[]).map(
+        {/* No `as FilterStatus[]` cast here — the cast is what let the
+            old status values survive the rename and silently filter to
+            nothing. Typed literally so a future rename breaks the build. */}
+        {(['all', 'building', 'live', 'ended'] satisfies FilterStatus[]).map(
           (status) => (
             <button
               key={status}

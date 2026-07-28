@@ -737,20 +737,73 @@ export function initializeDatabase(db: Database.Database): void {
   // number) is what makes "what were we billing in March" answerable,
   // and separates growth from existing clients expanding.
   // ============================================================
+  // Keyed to the LEAD (the client company), not to a project. A client
+  // has one monthly retainer that moves up or down as they add or drop
+  // services; the projects are the work log, not the billing unit. An
+  // active client commissioning extra work gets another project and a
+  // bumped retainer, not a second invoice line.
+  //
+  // The first cut of this table keyed rows to project_id. Rebuild it
+  // if that older shape is present, carrying rows over via the owning
+  // project's lead. SQLite can't drop a NOT NULL column in place, so
+  // this is the rename/copy/drop dance.
+  const retainerTableExists = db.prepare(
+    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='client_retainers'",
+  ).get();
+  const retainerCols = retainerTableExists
+    ? (db.prepare('PRAGMA table_info(client_retainers)').all() as { name: string }[])
+    : [];
+  const needsRetainerRebuild =
+    retainerTableExists
+    && retainerCols.some((c) => c.name === 'project_id')
+    && !retainerCols.some((c) => c.name === 'lead_id');
+
+  if (needsRetainerRebuild) {
+    db.pragma('foreign_keys = OFF');
+    try {
+      db.transaction(() => {
+        db.exec('ALTER TABLE client_retainers RENAME TO client_retainers_by_project');
+        db.exec(`
+          CREATE TABLE client_retainers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL,
+            monthly_amount REAL NOT NULL,
+            effective_from TEXT NOT NULL,
+            note TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            created_by TEXT,
+            FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+          );
+        `);
+        db.exec(`
+          INSERT INTO client_retainers (lead_id, monthly_amount, effective_from, note, created_at, created_by)
+          SELECT p.lead_id, r.monthly_amount, r.effective_from, r.note, r.created_at, r.created_by
+          FROM client_retainers_by_project r
+          JOIN projects p ON p.id = r.project_id
+          WHERE p.lead_id IS NOT NULL
+        `);
+        db.exec('DROP TABLE client_retainers_by_project');
+      })();
+      console.log('[schema] client_retainers re-keyed from project to lead');
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS client_retainers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      project_id INTEGER NOT NULL,
+      lead_id INTEGER NOT NULL,
       monthly_amount REAL NOT NULL,
       effective_from TEXT NOT NULL,          -- YYYY-MM-DD (date-only)
       note TEXT,                             -- why it changed
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       created_by TEXT,
-      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
     );
 
-    CREATE INDEX IF NOT EXISTS idx_client_retainers_project
-      ON client_retainers(project_id, effective_from DESC);
+    CREATE INDEX IF NOT EXISTS idx_client_retainers_lead
+      ON client_retainers(lead_id, effective_from DESC);
   `);
 
   // Project notes. The detail page has always POSTed a `notes` field
@@ -774,14 +827,14 @@ export function initializeDatabase(db: Database.Database): void {
         "UPDATE projects SET status = 'building' WHERE status IN ('onboarding', 'in_progress', 'review')",
       ).run();
       db.prepare("UPDATE projects SET status = 'live' WHERE status = 'complete'").run();
-      // Seed a retainer row for any live client that has a value but no
-      // history yet, so MRR isn't zero the moment the feature ships.
+      // Seed a retainer for any linked client carrying a legacy value,
+      // so MRR isn't zero the moment the feature ships.
       db.prepare(`
-        INSERT INTO client_retainers (project_id, monthly_amount, effective_from, note, created_by)
-        SELECT p.id, p.value, COALESCE(p.start_date, DATE(p.created_at)), 'Migrated from project value', 'System'
+        INSERT INTO client_retainers (lead_id, monthly_amount, effective_from, note, created_by)
+        SELECT p.lead_id, p.value, COALESCE(p.start_date, DATE(p.created_at)), 'Migrated from project value', 'System'
         FROM projects p
-        WHERE p.value > 0
-          AND NOT EXISTS (SELECT 1 FROM client_retainers r WHERE r.project_id = p.id)
+        WHERE p.value > 0 AND p.lead_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM client_retainers r WHERE r.lead_id = p.lead_id)
       `).run();
       db.prepare(
         "INSERT INTO settings (key, value, updated_at) VALUES ('project_status_v2', 'done', datetime('now'))",

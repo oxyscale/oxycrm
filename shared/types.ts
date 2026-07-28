@@ -75,9 +75,11 @@ export interface Lead {
    *  can never drift from reality. Drives the Leads / In Build /
    *  Active Clients tabs. */
   lifecycle?: Lifecycle;
-  /** Set when the contact has a linked project, so the UI can deep-link
-   *  to it instead of dumping the user on the projects list. */
+  /** Most recent linked project, for deep-linking from the contact. */
   projectId?: number | null;
+  /** How many projects this contact has — the initial build plus any
+   *  extra work commissioned since. */
+  projectCount?: number;
   /** Monthly retainer in effect today, when this contact is a client. */
   currentRetainer?: number;
 }
@@ -213,10 +215,14 @@ export interface Note {
 
 // Projects
 //
-// Two states, deliberately coarse: it's being built, or it's live and
-// the client is paying a retainer. Finer build stages can be added
-// later without a migration — the column is free-text.
-export type ProjectStatus = 'building' | 'live';
+// A client can have MANY projects over time: the initial build, then
+// each new piece of work they commission. 'ended' retires a project
+// without deleting it — it's what lets a client be stood down and
+// brought back if they return.
+//   building — work in progress
+//   live     — delivered and running
+//   ended    — finished or churned; no longer counts as active
+export type ProjectStatus = 'building' | 'live' | 'ended';
 
 export interface Project {
   id: number;
@@ -248,7 +254,10 @@ export interface Project {
  *  for any month. */
 export interface ClientRetainer {
   id: number;
-  projectId: number;
+  /** The client this retainer belongs to. Retainers are per-CLIENT,
+   *  not per-project — extra work bumps the one monthly figure rather
+   *  than opening a second billing line. */
+  leadId: number;
   monthlyAmount: number;
   /** YYYY-MM-DD — date-only, matches the follow-up date convention. */
   effectiveFrom: string;
@@ -257,9 +266,12 @@ export interface ClientRetainer {
   createdBy: string | null;
 }
 
-/** Where a contact sits in the lifecycle. Derived from what's attached
+/** Where a contact sits in the lifecycle. Derived from their projects
  *  rather than stored, so it can't drift out of sync:
- *    no project -> lead, project building -> in_build, live -> client */
+ *    any live project  -> client   (stays a client even with new work
+ *                                   in flight, which is the whole point)
+ *    any building only -> in_build
+ *    none / all ended  -> lead */
 export type Lifecycle = 'lead' | 'in_build' | 'client';
 
 export interface ProjectTask {
