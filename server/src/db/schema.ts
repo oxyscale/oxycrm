@@ -668,10 +668,32 @@ export function initializeDatabase(db: Database.Database): void {
       'Google ad',
       'LinkedIn ad',
       'Miller-Leith network',
+      'Jordan Bell network',
+      'Jarrad Dowling network',
       'Referral',
     ]) {
       insertSrc.run(s);
     }
+  }
+
+  // Personal referral networks added July 2026, after the initial seed
+  // had already run on production. Guarded by its own flag rather than
+  // an unconditional INSERT OR IGNORE so that deleting one in Settings
+  // doesn't resurrect it on the next deploy.
+  const networksAdded = db
+    .prepare("SELECT value FROM settings WHERE key = 'lead_sources_personal_networks_v1'")
+    .get() as { value: string } | undefined;
+
+  if (!networksAdded) {
+    const addNetworks = db.transaction(() => {
+      const ins = db.prepare('INSERT OR IGNORE INTO lead_sources (name) VALUES (?)');
+      ins.run('Jordan Bell network');
+      ins.run('Jarrad Dowling network');
+      db.prepare(
+        "INSERT INTO settings (key, value, updated_at) VALUES ('lead_sources_personal_networks_v1', 'done', datetime('now'))",
+      ).run();
+    });
+    addNetworks();
   }
 
   // One-time backfill, guarded by a settings flag so it runs exactly once
