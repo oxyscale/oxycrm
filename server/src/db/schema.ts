@@ -1109,15 +1109,40 @@ function retrofitCascadeIfMissing(
 
   // SQLite's officially supported pattern for changing constraints:
   // turn FK enforcement off, swap the table inside one transaction.
+  // Rewrite the CREATE to target a temp table name. The stored DDL may
+  // quote the table name ("projects") — SQLite writes it that way after
+  // an ALTER TABLE RENAME — so plain string replacement of
+  // `CREATE TABLE ${table}` silently misses and we'd then execute a
+  // CREATE using the LIVE name, which collides and takes the process
+  // down on boot. Match optional IF NOT EXISTS and any quoting style.
+  const tmpTable = `${table}_new_cascade_migration`;
+  const createPattern = new RegExp(
+    `^\\s*CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(?:"${table}"|'${table}'|\`${table}\`|\\[${table}\\]|${table})`,
+    'i',
+  );
+  const tmpSql = newSql.replace(createPattern, `CREATE TABLE ${tmpTable}`);
+  if (tmpSql === newSql || !tmpSql.includes(tmpTable)) {
+    // Couldn't safely retarget the statement — leave the table alone
+    // rather than risk executing a CREATE against the live name.
+    console.warn(
+      `[schema] skipped ON DELETE ${onDelete} retrofit for ${table}: could not rewrite CREATE statement`,
+    );
+    return;
+  }
+
   db.pragma('foreign_keys = OFF');
   try {
     db.transaction(() => {
-      const tmpTable = `${table}_new_cascade_migration`;
-      db.exec(newSql.replace(`CREATE TABLE ${table}`, `CREATE TABLE ${tmpTable}`).replace(`CREATE TABLE IF NOT EXISTS ${table}`, `CREATE TABLE ${tmpTable}`));
+      db.exec(tmpSql);
       db.exec(`INSERT INTO ${tmpTable} SELECT * FROM ${table}`);
       db.exec(`DROP TABLE ${table}`);
       db.exec(`ALTER TABLE ${tmpTable} RENAME TO ${table}`);
     })();
+    console.log(`[schema] ${table}.${fkColumn} FK set to ON DELETE ${onDelete}`);
+  } catch (err) {
+    // A failed retrofit must never stop the server booting. The old
+    // constraint stays in place and we carry on.
+    console.error(`[schema] ON DELETE ${onDelete} retrofit failed for ${table}:`, (err as Error).message);
   } finally {
     db.pragma('foreign_keys = ON');
   }
