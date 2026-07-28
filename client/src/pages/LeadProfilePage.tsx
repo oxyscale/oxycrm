@@ -46,6 +46,10 @@ import type {
 
 // ── Constants ────────────────────────────────────────────────
 
+// Sentinel value for the "+ Create category…" option. Prefixed so it can
+// never collide with a real category name.
+const CREATE_CATEGORY_VALUE = '__create_category__';
+
 const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
   { value: 'tier_1', label: 'Tier 1' },
   { value: 'tier_2', label: 'Tier 2' },
@@ -342,6 +346,12 @@ export default function LeadProfilePage() {
 
   // Managed categories for the category dropdown
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  // Inline category creation, so a new industry can be added mid-call
+  // without detouring to Settings.
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   // Managed lead sources for the source dropdown
   const [leadSourceOptions, setLeadSourceOptions] = useState<string[]>([]);
 
@@ -480,6 +490,39 @@ export default function LeadProfilePage() {
   // Delete a task (with confirmation)
   // Permanently delete the lead. Confirms twice in the prompt copy
   // because this cascades to call_logs, notes, tasks, emails, activities.
+  /**
+   * Creates a category from the lead profile and assigns it in one go.
+   *
+   * If the name already exists the create 409s — that's not a failure
+   * worth surfacing here, since the intent (put this lead in that
+   * category) is still satisfiable. Fall through and assign it.
+   */
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name || !lead) return;
+    setSavingCategory(true);
+    setCategoryError(null);
+    try {
+      try {
+        await api.createCategory(name);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (!/already exists/i.test(msg)) throw err;
+      }
+      const updated = await api.updateLead(lead.id, { category: name } as Partial<Lead>);
+      setLead(updated);
+      // Refresh so the new category is in the dropdown for other leads.
+      const cats = await api.getManagedCategories();
+      setCategoryOptions(cats.map((c) => c.name));
+      setCreatingCategory(false);
+      setNewCategoryName('');
+    } catch (err) {
+      setCategoryError(err instanceof Error ? err.message : 'Failed to create category');
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
   const handleDeleteLead = async () => {
     if (!lead || deletingLead) return;
     const ok = window.confirm(
@@ -1772,32 +1815,79 @@ export default function LeadProfilePage() {
             </h3>
 
             <div className="space-y-3">
-              {/* Category — editable dropdown */}
+              {/* Category — editable dropdown, with inline creation so a
+                  new industry can be added mid-call without detouring
+                  through Settings. Picking "Create category…" swaps the
+                  select for a text field. */}
               <div>
                 <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Category</p>
-                <select
-                  value={lead.category || ''}
-                  onChange={async (e) => {
-                    const newCategory = e.target.value || null;
-                    try {
-                      const updated = await api.updateLead(lead.id, { category: newCategory } as Partial<Lead>);
-                      setLead(updated);
-                    } catch (err) {
-                      console.error('Failed to update category:', err);
-                    }
-                  }}
-                  className="w-full bg-transparent text-ink-muted text-sm py-1 -ml-0.5 px-0.5 border-none focus:outline-none focus:ring-0 cursor-pointer hover:text-sky-ink transition-colors appearance-none"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a95a0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0 center', paddingRight: '16px' }}
-                >
-                  <option value="">None</option>
-                  {/* Ensure current category is always visible even if not in managed list */}
-                  {lead.category && !categoryOptions.includes(lead.category) && (
-                    <option value={lead.category}>{lead.category}</option>
-                  )}
-                  {categoryOptions.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                {creatingCategory ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => { setNewCategoryName(e.target.value); setCategoryError(null); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCreateCategory();
+                        if (e.key === 'Escape') { setCreatingCategory(false); setNewCategoryName(''); setCategoryError(null); }
+                      }}
+                      placeholder="New category name"
+                      maxLength={80}
+                      className="flex-1 min-w-0 bg-paper border border-[rgba(10,156,212,0.3)] rounded-md px-2 py-1 text-ink text-sm focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateCategory}
+                      disabled={!newCategoryName.trim() || savingCategory}
+                      className="text-sky-ink hover:text-ink transition-colors disabled:opacity-40"
+                      title="Create and assign"
+                    >
+                      {savingCategory ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setCreatingCategory(false); setNewCategoryName(''); setCategoryError(null); }}
+                      className="text-ink-dim hover:text-ink-muted transition-colors"
+                      title="Cancel"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={lead.category || ''}
+                    onChange={async (e) => {
+                      if (e.target.value === CREATE_CATEGORY_VALUE) {
+                        setCreatingCategory(true);
+                        setNewCategoryName('');
+                        return;
+                      }
+                      const newCategory = e.target.value || null;
+                      try {
+                        const updated = await api.updateLead(lead.id, { category: newCategory } as Partial<Lead>);
+                        setLead(updated);
+                      } catch (err) {
+                        console.error('Failed to update category:', err);
+                      }
+                    }}
+                    className="w-full bg-transparent text-ink-muted text-sm py-1 -ml-0.5 px-0.5 border-none focus:outline-none focus:ring-0 cursor-pointer hover:text-sky-ink transition-colors appearance-none"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a95a0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0 center', paddingRight: '16px' }}
+                  >
+                    <option value="">None</option>
+                    {/* Ensure current category is always visible even if not in managed list */}
+                    {lead.category && !categoryOptions.includes(lead.category) && (
+                      <option value={lead.category}>{lead.category}</option>
+                    )}
+                    {categoryOptions.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                    <option value={CREATE_CATEGORY_VALUE}>+ Create category…</option>
+                  </select>
+                )}
+                {categoryError && (
+                  <p className="text-risk text-xs mt-1">{categoryError}</p>
+                )}
               </div>
 
               {/* Lead source — the channel this lead arrived through.
@@ -1844,11 +1934,12 @@ export default function LeadProfilePage() {
                 </div>
               )}
 
-              {/* Lead type */}
-              <div>
-                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Lead Type</p>
-                <p className="text-ink-muted text-sm capitalize">{lead.leadType}</p>
-              </div>
+              {/* Lead Type row removed (July 2026). It was a leftover from
+                  the original dialler's "New Leads vs Callback Leads"
+                  session screens, which went with Twilio. Every lead is
+                  written as 'new', nothing filters on it, and it was the
+                  only place the field surfaced — so it was pure noise in
+                  the sidebar. Column left in place; harmless. */}
 
               {/* Pipeline tier */}
               <div>
