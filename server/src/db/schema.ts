@@ -657,6 +657,31 @@ export function initializeDatabase(db: Database.Database): void {
   addColumnIfMissing(db, 'leads', 'lead_source', 'TEXT DEFAULT NULL');
   db.exec('CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(lead_source)');
 
+  // Campaign attribution — one level below lead_source. Source says
+  // "Meta ad"; campaign says WHICH offer, and campaign_content says
+  // which creative/angle within it. Populated from utm_campaign /
+  // utm_content on import.
+  //
+  // Deliberately NOT a managed list like lead_sources: campaign names
+  // come from the ad platform, so requiring Jordan to pre-create each
+  // one in Settings would just block imports. The filter dropdown is
+  // built from distinct values instead.
+  addColumnIfMissing(db, 'leads', 'campaign', 'TEXT DEFAULT NULL');
+  addColumnIfMissing(db, 'leads', 'campaign_content', 'TEXT DEFAULT NULL');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_leads_campaign ON leads(campaign)');
+
+  // Stable id from the upstream system (Meta's submission_id, a form
+  // entry id, etc). This is what makes re-importing a continuously-
+  // growing export safe: rows already carrying a known external_id are
+  // skipped instead of creating a second copy of the same person.
+  // Partial index because the vast majority of rows (CSV scrapes,
+  // manual creates) have none.
+  addColumnIfMissing(db, 'leads', 'external_id', 'TEXT DEFAULT NULL');
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_leads_external_id
+       ON leads(external_id) WHERE external_id IS NOT NULL`,
+  );
+
   // Display ordering for the source dropdowns. Lower sorts first, ties
   // broken alphabetically. The main channels carry an explicit order
   // (Jordan's preference, not alphabetical); networks sit in a trailing

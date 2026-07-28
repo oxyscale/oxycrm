@@ -28,6 +28,13 @@ export interface Lead {
    *  network, ...). Deliberately separate from `category` — one channel
    *  brings in leads across many industries. */
   leadSource: string | null;
+  /** Which offer/campaign the lead came through (utm_campaign), one
+   *  level below leadSource. "Meta ad" is the channel; this is the
+   *  specific offer being run on it. */
+  campaign: string | null;
+  /** Creative/angle within the campaign (utm_content) — tells you which
+   *  hook produced the lead, not just which offer. */
+  campaignContent: string | null;
   status: 'not_called' | 'called';
   unansweredCalls: number;
   voicemailLeft: boolean;

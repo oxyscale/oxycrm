@@ -1831,6 +1831,19 @@ export default function LeadProfilePage() {
                 </select>
               </div>
 
+              {/* Campaign attribution — read-only. Comes from the ad
+                  platform via the import, so it's a record of where the
+                  lead actually came from rather than something to edit. */}
+              {lead.campaign && (
+                <div>
+                  <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Campaign</p>
+                  <p className="text-ink-muted text-sm">{lead.campaign}</p>
+                  {lead.campaignContent && (
+                    <p className="text-ink-dim text-xs mt-0.5">{lead.campaignContent}</p>
+                  )}
+                </div>
+              )}
+
               {/* Lead type */}
               <div>
                 <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Lead Type</p>

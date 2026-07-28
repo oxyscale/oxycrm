@@ -39,6 +39,8 @@ interface LeadRow {
   lead_type: string;
   category: string | null;
   lead_source: string | null;
+  campaign: string | null;
+  campaign_content: string | null;
   status: string;
   unanswered_calls: number;
   voicemail_left: number;
@@ -84,6 +86,8 @@ function mapLeadRow(row: LeadRow): Lead {
     leadType: row.lead_type as Lead['leadType'],
     category: row.category,
     leadSource: row.lead_source,
+    campaign: row.campaign,
+    campaignContent: row.campaign_content,
     status: row.status as Lead['status'],
     unansweredCalls: row.unanswered_calls,
     voicemailLeft: row.voicemail_left === 1,
@@ -178,6 +182,54 @@ function buildImportNote(row: Record<string, string>): string {
   return parts.join(' ').trim();
 }
 
+/**
+ * Reduces a phone number to a comparable key: digits only, last 9.
+ *
+ * Taking the last 9 makes "+61404396193" and "0404396193" match — the
+ * same mobile written two ways. Without this, re-importing an export
+ * that switched to E.164 format would duplicate every lead.
+ */
+function phoneKey(phone: string): string {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (digits.length < 6) return '';
+  return digits.length > 9 ? digits.slice(-9) : digits;
+}
+
+/**
+ * Pulls campaign attribution out of an import row.
+ *
+ * Primary path is the standard utm pair (utm_campaign / utm_content),
+ * which every ad platform emits. Falls back to the composite "source"
+ * string some exports carry instead — Meta's is shaped
+ * "meta / 5biz / chaos-clarity" (source / campaign / content).
+ */
+function extractCampaign(row: Record<string, string>): {
+  campaign: string | null;
+  content: string | null;
+} {
+  const clean = (v: string | undefined) => {
+    const t = (v || '').trim();
+    return t && !EMPTY_ANSWERS.has(t.toLowerCase()) ? t : '';
+  };
+
+  let campaign = clean(row.utm_campaign) || clean(row.campaign)
+    || clean(row.campaign_name) || clean(row.ad_campaign);
+  let content = clean(row.utm_content) || clean(row.campaign_content)
+    || clean(row.ad_set) || clean(row.adset) || clean(row.creative);
+
+  if (!campaign) {
+    // "meta / 5biz / chaos-clarity" -> campaign 5biz, content chaos-clarity
+    const composite = clean(row.source);
+    if (composite.includes('/')) {
+      const bits = composite.split('/').map((b) => b.trim()).filter(Boolean);
+      if (bits.length >= 2) campaign = bits[1];
+      if (!content && bits.length >= 3) content = bits[2];
+    }
+  }
+
+  return { campaign: campaign || null, content: content || null };
+}
+
 /** Safely parse a JSON string, returning a fallback on failure */
 function safeJsonParse<T>(value: string | null, fallback: T): T {
   if (!value) return fallback;
@@ -243,6 +295,8 @@ const updateLeadSchema = z.object({
   website: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
   leadSource: z.string().nullable().optional(),
+  campaign: z.string().nullable().optional(),
+  campaignContent: z.string().nullable().optional(),
   consolidatedSummary: z.string().nullable().optional(),
   companyInfo: z.string().nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
@@ -272,7 +326,7 @@ router.get('/', (req, res, next) => {
     res.setHeader('Pragma', 'no-cache');
 
     const db = getDb();
-    const { status, leadType, category, contacted, leadSource } = req.query;
+    const { status, leadType, category, contacted, leadSource, campaign } = req.query;
 
     let query = 'SELECT * FROM leads WHERE 1=1';
     const params: Record<string, string> = {};
@@ -280,6 +334,10 @@ router.get('/', (req, res, next) => {
     if (leadSource && typeof leadSource === 'string') {
       query += ' AND LOWER(lead_source) = LOWER(@leadSource)';
       params.leadSource = leadSource;
+    }
+    if (campaign && typeof campaign === 'string') {
+      query += ' AND LOWER(campaign) = LOWER(@campaign)';
+      params.campaign = campaign;
     }
 
     if (status && typeof status === 'string') {
@@ -396,6 +454,30 @@ router.get('/', (req, res, next) => {
 
     logger.info({ count: leads.length, filters: { status, leadType, category } }, 'Fetched leads');
     res.json(leads);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/leads/campaigns
+ * Distinct campaign names currently in use, newest-seen first.
+ *
+ * Unlike categories and lead sources there's no managed list to read
+ * from — campaign names originate in the ad platform, so the only
+ * source of truth is what actually arrived on the leads.
+ */
+router.get('/campaigns', (_req, res, next) => {
+  try {
+    const db = getDb();
+    const rows = db.prepare(`
+      SELECT campaign AS name, COUNT(*) AS lead_count, MAX(created_at) AS last_seen
+      FROM leads
+      WHERE campaign IS NOT NULL AND TRIM(campaign) != ''
+      GROUP BY campaign
+      ORDER BY last_seen DESC, name ASC
+    `).all() as { name: string; lead_count: number; last_seen: string }[];
+    res.json(rows);
   } catch (err) {
     next(err);
   }
@@ -1523,6 +1605,27 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         .map((r) => r.name.toLowerCase()),
     );
 
+    // ── Re-import safety ──────────────────────────────────────────
+    // Jordan's lead sheet is a living document he re-uploads as it
+    // grows, so an import has to add only what's new. Build in-memory
+    // keysets of everything already in the CRM; any row matching one is
+    // skipped rather than inserted a second time.
+    //
+    // Rows are also added to these sets as they're inserted, so
+    // duplicates WITHIN a single file are caught too.
+    const seenExternalIds = new Set(
+      (db.prepare("SELECT external_id FROM leads WHERE external_id IS NOT NULL AND external_id != ''")
+        .all() as { external_id: string }[]).map((r) => r.external_id.toLowerCase()),
+    );
+    const seenEmails = new Set(
+      (db.prepare("SELECT LOWER(TRIM(email)) AS e FROM leads WHERE email IS NOT NULL AND TRIM(email) != ''")
+        .all() as { e: string }[]).map((r) => r.e),
+    );
+    const seenPhones = new Set(
+      (db.prepare("SELECT phone FROM leads WHERE phone IS NOT NULL AND TRIM(phone) != ''")
+        .all() as { phone: string }[]).map((r) => phoneKey(r.phone)).filter(Boolean),
+    );
+
     // Parse the CSV from the uploaded buffer, stripping BOM if present
     const csvContent = req.file.buffer.toString('utf-8').replace(/^﻿/, '');
     let records: Record<string, string>[];
@@ -1567,8 +1670,8 @@ router.post('/import', upload.single('file'), (req, res, next) => {
     // want CSV imports to silently inherit that — new leads must start
     // unplaced on the kanban.
     const insertStmt = db.prepare(`
-      INSERT INTO leads (name, company, phone, email, website, lead_type, category, lead_source, status, pipeline_stage, queue_position)
-      VALUES (@name, @company, @phone, @email, @website, @leadType, @category, @leadSource, 'not_called', NULL, @queuePosition)
+      INSERT INTO leads (name, company, phone, email, website, lead_type, category, lead_source, campaign, campaign_content, external_id, status, pipeline_stage, queue_position)
+      VALUES (@name, @company, @phone, @email, @website, @leadType, @category, @leadSource, @campaign, @campaignContent, @externalId, 'not_called', NULL, @queuePosition)
     `);
 
     // Optional per-row note. If the CSV row has a `notes` column, we
@@ -1703,24 +1806,6 @@ router.post('/import', upload.single('file'), (req, res, next) => {
           continue;
         }
 
-        // Check for duplicate phone number (only if phone is provided)
-        const existing = phone ? findDuplicateStmt.get({ phone }) as (LeadRow & { call_count: number }) | undefined : undefined;
-        if (existing) {
-          result.duplicates++;
-          duplicateLeads.push({
-            id: existing.id,
-            name: existing.name,
-            phone: existing.phone,
-            status: existing.status as Lead['status'],
-            lastCalledAt: existing.last_called_at,
-            callCount: existing.call_count,
-          });
-          // Still import but flag the new one as a duplicate in the lead name
-          // so it's visible in the UI
-        }
-
-        currentPos++;
-
         // Apify Google Places scrapers put a comma-separated string in
         // 'emails' — take the first one.
         let email = (
@@ -1733,6 +1818,51 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         if (!email && row.emails) {
           email = String(row.emails).split(/[,;]/)[0]?.trim() || '';
         }
+
+        // Stable upstream id, when the export carries one.
+        const externalId = (
+          row.submission_id || row.external_id || row.entry_id || row.record_id || ''
+        ).trim();
+
+        // ── Already in the CRM? Skip rather than duplicate ──────────
+        // Jordan re-uploads the same growing sheet, so an import must
+        // add only what's new. Matching is exact-only (upstream id,
+        // email, or normalised phone); fuzzy near-matches still import
+        // and raise a duplicate flag for manual Fold/Dismiss as before.
+        const emailKey = email.toLowerCase();
+        const pKey = phoneKey(phone);
+        const alreadyPresent =
+          (externalId && seenExternalIds.has(externalId.toLowerCase()))
+          || (emailKey && seenEmails.has(emailKey))
+          || (pKey && seenPhones.has(pKey));
+
+        if (alreadyPresent) {
+          result.duplicates++;
+          // Surface which existing lead it matched, so the summary can
+          // show what was skipped rather than a bare number.
+          const existing = pKey
+            ? findDuplicateStmt.get({ phone }) as (LeadRow & { call_count: number }) | undefined
+            : undefined;
+          if (existing && duplicateLeads.length < 50) {
+            duplicateLeads.push({
+              id: existing.id,
+              name: existing.name,
+              phone: existing.phone,
+              status: existing.status as Lead['status'],
+              lastCalledAt: existing.last_called_at,
+              callCount: existing.call_count,
+            });
+          }
+          continue;
+        }
+
+        // Claim these keys immediately so a repeat later in the SAME
+        // file is caught too, not just repeats across uploads.
+        if (externalId) seenExternalIds.add(externalId.toLowerCase());
+        if (emailKey) seenEmails.add(emailKey);
+        if (pKey) seenPhones.add(pKey);
+
+        currentPos++;
 
         const website = (
           row.website
@@ -1777,6 +1907,8 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         const rowSource = (row.lead_source || row.source || row.channel || '').trim();
         const sourceValue = canonicalSource
           || (rowSource && managedSourceNames.has(rowSource.toLowerCase()) ? rowSource : null);
+        // Campaign attribution — which offer/creative produced this lead.
+        const { campaign: campaignValue, content: campaignContentValue } = extractCampaign(row);
 
         const insertResult = insertStmt.run({
           name,
@@ -1787,6 +1919,9 @@ router.post('/import', upload.single('file'), (req, res, next) => {
           leadType,
           category: categoryValue,
           leadSource: sourceValue,
+          campaign: campaignValue,
+          campaignContent: campaignContentValue,
+          externalId: externalId || null,
           queuePosition: currentPos,
         });
 
@@ -2108,6 +2243,14 @@ router.patch('/:id', (req, res, next) => {
     if (updates.leadSource !== undefined) {
       setClauses.push('lead_source = @leadSource');
       params.leadSource = updates.leadSource;
+    }
+    if (updates.campaign !== undefined) {
+      setClauses.push('campaign = @campaign');
+      params.campaign = updates.campaign;
+    }
+    if (updates.campaignContent !== undefined) {
+      setClauses.push('campaign_content = @campaignContent');
+      params.campaignContent = updates.campaignContent;
     }
     if (updates.consolidatedSummary !== undefined) {
       setClauses.push('consolidated_summary = @consolidatedSummary');

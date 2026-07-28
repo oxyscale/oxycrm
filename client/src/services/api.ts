@@ -132,6 +132,19 @@ export async function getCategories(): Promise<string[]> {
   return request<string[]>('/leads/categories');
 }
 
+/** Campaign attribution one level below lead source — which offer a
+ *  lead came through. Derived from what's actually on the leads rather
+ *  than a managed list, since campaign names come from the ad platform. */
+export interface CampaignSummary {
+  name: string;
+  lead_count: number;
+  last_seen: string;
+}
+
+export async function getCampaigns(): Promise<CampaignSummary[]> {
+  return request<CampaignSummary[]>('/leads/campaigns');
+}
+
 // ── Managed categories (Settings) ────────────────────────────
 
 export interface Category {

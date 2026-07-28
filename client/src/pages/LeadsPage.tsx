@@ -50,6 +50,9 @@ export default function LeadsPage() {
   // axis from category so "Meta ad + no task" style questions work.
   const [filterSource, setFilterSource] = useState<string>(searchParams.get('src') || 'all');
   const [sourceOptions, setSourceOptions] = useState<string[]>([]);
+  // Campaign = which offer the lead came through, one level below source.
+  const [filterCampaign, setFilterCampaign] = useState<string>(searchParams.get('camp') || 'all');
+  const [campaignOptions, setCampaignOptions] = useState<api.CampaignSummary[]>([]);
   // "Engaged" = opened an email at least once. The high-signal view is
   // engaged + not contacted: they're reading and nobody has followed up.
   const [filterEngaged, setFilterEngaged] = useState(searchParams.get('engaged') === '1');
@@ -74,6 +77,7 @@ export default function LeadsPage() {
     if (search) params.set('q', search);
     if (filterCategory !== 'all') params.set('cat', filterCategory);
     if (filterSource !== 'all') params.set('src', filterSource);
+    if (filterCampaign !== 'all') params.set('camp', filterCampaign);
     if (filterContacted !== 'all') params.set('status', filterContacted);
     if (filterEngaged) params.set('engaged', '1');
     if (sortField !== 'recent') params.set('sort', sortField);
@@ -84,7 +88,7 @@ export default function LeadsPage() {
     try {
       sessionStorage.setItem('leads-return-url', `/leads${qs ? `?${qs}` : ''}`);
     } catch { /* ignore */ }
-  }, [search, filterCategory, filterSource, filterContacted, filterEngaged, sortField, sortDir, setSearchParams]);
+  }, [search, filterCategory, filterSource, filterCampaign, filterContacted, filterEngaged, sortField, sortDir, setSearchParams]);
 
   useEffect(() => {
     syncParams();
@@ -105,6 +109,7 @@ export default function LeadsPage() {
     api.getLeadSources()
       .then((srcs) => setSourceOptions(srcs.map((s) => s.name)))
       .catch(() => { /* non-critical */ });
+    api.getCampaigns().then(setCampaignOptions).catch(() => { /* non-critical */ });
   }, []);
 
   // Auto-refresh leads when the tab regains focus (or comes back from
@@ -227,6 +232,7 @@ export default function LeadsPage() {
       if (filterCategory !== 'all' && filterCategory !== 'none' && lead.category !== filterCategory) return acc;
       if (filterSource === 'none' && lead.leadSource) return acc;
       if (filterSource !== 'all' && filterSource !== 'none' && lead.leadSource !== filterSource) return acc;
+      if (filterCampaign !== 'all' && lead.campaign !== filterCampaign) return acc;
       if (filterEngaged && !(lead.emailOpens ?? 0)) return acc;
       acc.all += 1;
       if (lead.contacted) acc.contacted += 1;
@@ -248,6 +254,7 @@ export default function LeadsPage() {
       if (filterCategory !== 'all' && filterCategory !== 'none' && lead.category !== filterCategory) return false;
       if (filterSource === 'none' && lead.leadSource) return false;
       if (filterSource !== 'all' && filterSource !== 'none' && lead.leadSource !== filterSource) return false;
+      if (filterCampaign !== 'all' && lead.campaign !== filterCampaign) return false;
       // Engaged = has opened at least one email. Applies even during a
       // search, unlike the contacted pill — it's a property of the lead,
       // not a view toggle.
@@ -435,6 +442,23 @@ export default function LeadsPage() {
             <option key={src} value={src}>{src}</option>
           ))}
         </select>
+
+        {/* Campaign filter — only worth showing once campaigns exist.
+            Options come from the leads themselves, not a managed list. */}
+        {campaignOptions.length > 0 && (
+          <select
+            value={filterCampaign}
+            onChange={(e) => setFilterCampaign(e.target.value)}
+            className="bg-paper border border-hair-soft rounded-lg px-3 py-2.5 text-sm text-ink-muted focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all"
+          >
+            <option value="all">All Campaigns</option>
+            {campaignOptions.map((c) => (
+              <option key={c.name} value={c.name}>
+                {c.name} ({c.lead_count})
+              </option>
+            ))}
+          </select>
+        )}
 
         {/* Contacted filter — three independent pills, each showing
             its running count so Jordan can see all three totals at
@@ -626,6 +650,21 @@ export default function LeadsPage() {
                   ) : (
                     <span className="text-ink-faint text-xs">&mdash;</span>
                   )}
+                  {/* Campaign sits under the source as a quieter second
+                      line — which offer, not just which channel. */}
+                  {lead.campaign && (
+                    <span
+                      className="text-ink-dim text-[11px] truncate block mt-0.5"
+                      title={lead.campaignContent
+                        ? `Campaign: ${lead.campaign} · Creative: ${lead.campaignContent}`
+                        : `Campaign: ${lead.campaign}`}
+                    >
+                      {lead.campaign}
+                      {lead.campaignContent && (
+                        <span className="text-ink-faint"> · {lead.campaignContent}</span>
+                      )}
+                    </span>
+                  )}
                 </td>
                 {/* Email engagement — opens are the signal worth scanning
                     for; clicks and bounces are rarer so they only show
@@ -706,7 +745,7 @@ export default function LeadsPage() {
 
         {filtered.length === 0 && (
           <div className="text-center py-12 text-ink-dim">
-            {search || filterCategory !== 'all' || filterSource !== 'all' || filterEngaged || filterContacted !== 'all'
+            {search || filterCategory !== 'all' || filterSource !== 'all' || filterCampaign !== 'all' || filterEngaged || filterContacted !== 'all'
               ? 'No leads match your filters'
               : 'No leads imported yet'}
           </div>
@@ -724,7 +763,7 @@ function CopyListButton({ leads }: { leads: Lead[] }) {
   const [copied, setCopied] = useState(false);
 
   const buildTsv = (): string => {
-    const header = ['Name', 'Company', 'Phone', 'Email', 'Category', 'Source', 'Stage'];
+    const header = ['Name', 'Company', 'Phone', 'Email', 'Category', 'Source', 'Campaign', 'Stage'];
     const lines = [header.join('\t')];
     for (const l of leads) {
       const row = [
@@ -734,6 +773,7 @@ function CopyListButton({ leads }: { leads: Lead[] }) {
         l.email || '',
         l.category || '',
         l.leadSource || '',
+        l.campaign || '',
         l.pipelineStage || '',
       ].map((v) => String(v).replace(/\t|\n|\r/g, ' ').trim());
       lines.push(row.join('\t'));
@@ -744,7 +784,7 @@ function CopyListButton({ leads }: { leads: Lead[] }) {
   const buildHtml = (): string => {
     const esc = (s: string) =>
       s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const header = ['Name', 'Company', 'Phone', 'Email', 'Category', 'Source', 'Stage'];
+    const header = ['Name', 'Company', 'Phone', 'Email', 'Category', 'Source', 'Campaign', 'Stage'];
     const headerRow = `<tr>${header.map((h) => `<th>${esc(h)}</th>`).join('')}</tr>`;
     const bodyRows = leads
       .map((l) => {

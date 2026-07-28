@@ -712,8 +712,8 @@ export default function HomePage() {
                   <p className="text-ink-muted text-xs mt-1">{importResult.skipped} skipped</p>
                 )}
                 {importResult.duplicates > 0 && (
-                  <p className="text-warn text-xs mt-1">
-                    {importResult.duplicates} duplicates found
+                  <p className="text-ink-muted text-xs mt-1">
+                    {importResult.duplicates} already in the CRM, not re-imported
                   </p>
                 )}
                 {importResult.errors && importResult.errors.length > 0 && (
