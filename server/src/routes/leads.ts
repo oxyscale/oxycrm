@@ -1427,6 +1427,21 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       VALUES (@name, @company, @phone, @email, @website, @leadType, @category, 'not_called', NULL, @queuePosition)
     `);
 
+    // Optional per-row note. If the CSV row has a `notes` column, we
+    // insert it as the lead's first note + an activity record so it
+    // shows up in the profile timeline. Handy for imports where each
+    // lead comes with context (e.g. Facebook lead sheet — revenue
+    // band + struggle answers land as a note per lead).
+    const insertNoteStmt = db.prepare(`
+      INSERT INTO notes (lead_id, content, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const insertNoteActivityStmt = db.prepare(`
+      INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+      VALUES (?, 'note', 'Note added', ?, ?, ?)
+    `);
+    const noteAuthor = req.user?.name || 'Import';
+
     // Prepared statement for checking duplicates by phone number
     const findDuplicateStmt = db.prepare(`
       SELECT l.*, COUNT(cl.id) as call_count
@@ -1612,6 +1627,24 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         });
 
         const insertedId = Number(insertResult.lastInsertRowid);
+
+        // Optional per-row note — accepts a handful of column aliases
+        // so different upstream sources can carry context in without
+        // renaming. If present, land the value as the lead's first note
+        // + activity so it shows up in the profile timeline immediately.
+        const noteContent = (
+          row.notes
+          || row.note
+          || row.context
+          || row.summary
+          || row.description
+          || ''
+        ).trim();
+        if (noteContent) {
+          const nowIso = new Date().toISOString();
+          insertNoteStmt.run(insertedId, noteContent, noteAuthor, nowIso, nowIso);
+          insertNoteActivityStmt.run(insertedId, noteContent, nowIso, noteAuthor);
+        }
 
         // Run dup detection against existing leads (snapshot pre-import).
         // Any match becomes a flag pill on /leads. Never auto-merges —
