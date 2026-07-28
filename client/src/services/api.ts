@@ -145,6 +145,68 @@ export async function getCampaigns(): Promise<CampaignSummary[]> {
   return request<CampaignSummary[]>('/leads/campaigns');
 }
 
+// ── Clients: projects + retainers ────────────────────────────
+//
+// A contact can have many projects over time — the first build, then
+// each new piece of work. The retainer belongs to the CLIENT, not to
+// any one project, and every change is a dated row so history survives.
+
+/**
+ * Starts a project for a contact. Works for a first build (converting a
+ * won lead) and for extra work commissioned by an existing client.
+ * `retainerDelta` adjusts their monthly figure; `monthlyRetainer` sets
+ * it outright, which is what a first project uses.
+ */
+export async function startProject(
+  leadId: number,
+  data: {
+    name?: string;
+    description?: string | null;
+    retainerDelta?: number;
+    monthlyRetainer?: number;
+    startDate?: string;
+  },
+): Promise<{ projectId: number; name: string; clientName: string; retainer: number | null }> {
+  return request(`/leads/${leadId}/projects`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export interface ClientRetainerEntry {
+  id: number;
+  leadId: number;
+  monthlyAmount: number;
+  effectiveFrom: string;
+  note: string | null;
+  createdAt: string;
+  createdBy: string | null;
+}
+
+export async function getRetainers(leadId: number): Promise<ClientRetainerEntry[]> {
+  return request<ClientRetainerEntry[]>(`/leads/${leadId}/retainers`);
+}
+
+export async function addRetainer(
+  leadId: number,
+  data: { monthlyAmount: number; effectiveFrom?: string; note?: string | null },
+): Promise<{ id: number; leadId: number; monthlyAmount: number; effectiveFrom: string }> {
+  return request(`/leads/${leadId}/retainers`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRetainer(leadId: number, retainerId: number): Promise<{ success: true }> {
+  return request(`/leads/${leadId}/retainers/${retainerId}`, { method: 'DELETE' });
+}
+
+/** Projects belonging to one contact, newest first. */
+export async function getLeadProjects(leadId: number): Promise<Project[]> {
+  const all = await request<Project[]>('/projects');
+  return all.filter((p) => p.leadId === leadId);
+}
+
 // ── Managed categories (Settings) ────────────────────────────
 
 export interface Category {

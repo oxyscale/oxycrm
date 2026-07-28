@@ -18,7 +18,6 @@ import {
   ArrowRightLeft,
   Thermometer,
   CalendarDays,
-  ExternalLink,
   Send,
   Mic,
   MicOff,
@@ -42,6 +41,8 @@ import type {
   EmailSent,
   PipelineStage,
   ActivityType,
+  Project,
+  ProjectStatus,
 } from '../types';
 
 // ── Constants ────────────────────────────────────────────────
@@ -346,6 +347,9 @@ export default function LeadProfilePage() {
 
   // Managed categories for the category dropdown
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  // Projects + retainer history for this contact.
+  const [leadProjects, setLeadProjects] = useState<Project[]>([]);
+  const [retainers, setRetainers] = useState<api.ClientRetainerEntry[]>([]);
   // Inline category creation, so a new industry can be added mid-call
   // without detouring to Settings.
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -374,6 +378,13 @@ export default function LeadProfilePage() {
     if (tab === 'notes') loadNotes();
     if (tab === 'emails') loadEmails();
   }, [tab, lead?.id]);
+
+  // Projects + retainer history, reloaded whenever the contact changes.
+  useEffect(() => {
+    if (!lead) return;
+    api.getLeadProjects(lead.id).then(setLeadProjects).catch(() => { /* non-critical */ });
+    api.getRetainers(lead.id).then(setRetainers).catch(() => { /* non-critical */ });
+  }, [lead?.id]);
 
   // Load managed categories + lead sources for the sidebar dropdowns
   useEffect(() => {
@@ -865,6 +876,23 @@ export default function LeadProfilePage() {
   const totalCallsCount = callLogs.length || 0;
   const totalNotesCount = notes.length || 0;
   const totalEmailsCount = emails.length || 0;
+
+  // Lifecycle mirrors the server's rule (any live project keeps them a
+  // client), computed here from the projects we've already loaded so the
+  // sidebar updates the moment a project changes state.
+  const lifecycle: 'lead' | 'in_build' | 'client' =
+    leadProjects.some((p) => p.status === 'live')
+      ? 'client'
+      : leadProjects.some((p) => p.status === 'building')
+        ? 'in_build'
+        : 'lead';
+  // Retainer in effect today. Future-dated changes don't count yet.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const currentRetainer =
+    retainers
+      .filter((r) => r.effectiveFrom <= todayIso)
+      .sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : a.effectiveFrom > b.effectiveFrom ? -1 : b.id - a.id))[0]
+      ?.monthlyAmount ?? 0;
 
   // ── Render ─────────────────────────────────────────────────
 
@@ -1961,20 +1989,32 @@ export default function LeadProfilePage() {
                 )}
               </div>
 
-              {/* Deal value — inline editable */}
+              {/* Money. For a prospect this is an estimate of what they'd
+                  pay monthly; once they're a client the real figure comes
+                  from the retainer history below and this is read-only. */}
               <div>
-                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Deal Value</p>
-                <DealValueEditor
-                  value={lead.dealValue ?? 0}
-                  onSave={async (val) => {
-                    try {
-                      const updated = await api.updateLead(lead.id, { dealValue: val } as Partial<Lead>);
-                      setLead(updated);
-                    } catch (err) {
-                      console.error('Failed to update deal value:', err);
-                    }
-                  }}
-                />
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">
+                  {lifecycle === 'client' ? 'Monthly Retainer' : 'Est. Monthly Retainer'}
+                </p>
+                {lifecycle === 'client' ? (
+                  <p className="text-ink text-sm font-medium">
+                    {currentRetainer > 0
+                      ? <>${currentRetainer.toLocaleString('en-AU')}<span className="text-ink-dim font-normal">/mo</span></>
+                      : <span className="text-ink-dim italic font-normal">Not set</span>}
+                  </p>
+                ) : (
+                  <DealValueEditor
+                    value={lead.dealValue ?? 0}
+                    onSave={async (val) => {
+                      try {
+                        const updated = await api.updateLead(lead.id, { dealValue: val } as Partial<Lead>);
+                        setLead(updated);
+                      } catch (err) {
+                        console.error('Failed to update deal value:', err);
+                      }
+                    }}
+                  />
+                )}
               </div>
 
               {/* Last called */}
@@ -2174,23 +2214,283 @@ export default function LeadProfilePage() {
             </div>
           </div>
 
-          {/* Converted to project link */}
-          {lead.convertedToProject && (
-            <div className="bg-[rgba(10,156,212,0.08)] border border-[rgba(10,156,212,0.15)] rounded-xl p-5">
-              <h3 className="text-sky-ink text-xs font-medium uppercase tracking-wider mb-2">
-                Converted to Project
-              </h3>
-              <button
-                onClick={() => navigate('/projects')}
-                className="text-ink-muted text-sm hover:text-ink transition-all flex items-center gap-1.5"
-              >
-                <ExternalLink size={13} />
-                View Project
-              </button>
-            </div>
-          )}
+          {/* Projects + retainer. A contact can have many projects over
+              time — the first build, then each new piece of work they
+              commission. The retainer is per-client and independent of
+              how many projects exist. */}
+          <ClientPanel
+            lead={lead}
+            projects={leadProjects}
+            retainers={retainers}
+            onChanged={async () => {
+              const [p, r, fresh] = await Promise.all([
+                api.getLeadProjects(lead.id),
+                api.getRetainers(lead.id),
+                api.getLeadById(lead.id),
+              ]);
+              setLeadProjects(p);
+              setRetainers(r);
+              setLead(fresh);
+            }}
+            onOpenProject={(projectId) => navigate(`/projects/${projectId}`)}
+          />
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Client panel ─────────────────────────────────────────────
+//
+// Projects and retainer for one contact. A contact can have many
+// projects over time — the first build, then each new piece of work.
+// The retainer belongs to the CLIENT, so extra work bumps one monthly
+// figure rather than opening a second billing line.
+
+const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
+  building: 'In Build',
+  live: 'Live',
+  ended: 'Ended',
+};
+
+function ClientPanel({
+  lead,
+  projects,
+  retainers,
+  onChanged,
+  onOpenProject,
+}: {
+  lead: Lead;
+  projects: Project[];
+  retainers: api.ClientRetainerEntry[];
+  onChanged: () => Promise<void>;
+  onOpenProject: (projectId: number) => void;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState('');
+  const [brief, setBrief] = useState('');
+  const [retainerInput, setRetainerInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyProjectId, setBusyProjectId] = useState<number | null>(null);
+
+  const isFirst = projects.length === 0;
+  const isClient = projects.some((p) => p.status === 'live');
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const current = retainers
+    .filter((r) => r.effectiveFrom <= todayIso)
+    .sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : a.effectiveFrom > b.effectiveFrom ? -1 : b.id - a.id))[0];
+  const currentAmount = current?.monthlyAmount ?? 0;
+
+  const reset = () => {
+    setShowForm(false);
+    setName('');
+    setBrief('');
+    setRetainerInput('');
+    setError(null);
+  };
+
+  const handleCreate = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const amount = parseFloat(retainerInput);
+      await api.startProject(lead.id, {
+        name: name.trim() || undefined,
+        description: brief.trim() || null,
+        // A first project SETS the retainer; later work ADDS to it, so
+        // the same input means "what this is worth per month" either way.
+        ...(Number.isFinite(amount) && amount !== 0
+          ? isFirst ? { monthlyRetainer: amount } : { retainerDelta: amount }
+          : {}),
+      });
+      reset();
+      await onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create project');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setProjectStatus = async (projectId: number, status: ProjectStatus) => {
+    setBusyProjectId(projectId);
+    try {
+      await api.updateProject(projectId, { status });
+      await onChanged();
+    } catch (err) {
+      console.error('Failed to update project status:', err);
+    } finally {
+      setBusyProjectId(null);
+    }
+  };
+
+  return (
+    <div className="bg-paper border border-hair-soft rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-ink-dim text-xs font-medium uppercase tracking-wider">
+          {isClient ? 'Client' : 'Projects'}
+        </h3>
+        {!showForm && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="text-sky-ink text-xs font-medium hover:underline flex items-center gap-1"
+          >
+            <Plus size={12} />
+            {isFirst ? 'Convert to project' : 'New project'}
+          </button>
+        )}
+      </div>
+
+      {/* Retainer — the client's single monthly figure */}
+      {(isClient || retainers.length > 0) && (
+        <div className="mb-4 pb-4 border-b border-hair-soft">
+          <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1">Monthly Retainer</p>
+          <p className="text-ink text-xl font-bold">
+            ${currentAmount.toLocaleString('en-AU')}
+            <span className="text-ink-dim text-sm font-normal">/mo</span>
+          </p>
+          <p className="text-ink-dim text-xs mt-0.5">
+            ${(currentAmount * 12).toLocaleString('en-AU')} a year
+            {current?.effectiveFrom && ` · since ${current.effectiveFrom}`}
+          </p>
+          {retainers.length > 1 && (
+            <details className="mt-2">
+              <summary className="text-ink-dim text-xs cursor-pointer hover:text-ink-muted">
+                History ({retainers.length})
+              </summary>
+              <div className="mt-2 space-y-1.5">
+                {retainers.map((r) => (
+                  <div key={r.id} className="flex items-baseline justify-between gap-2 text-xs">
+                    <span className="text-ink-muted">
+                      ${r.monthlyAmount.toLocaleString('en-AU')}
+                      <span className="text-ink-dim"> from {r.effectiveFrom}</span>
+                    </span>
+                    {r.note && <span className="text-ink-faint truncate max-w-[55%]">{r.note}</span>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+
+      {/* New project form */}
+      {showForm && (
+        <div className="mb-4 space-y-2">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={isFirst ? `${lead.company || lead.name} build` : 'What are we adding?'}
+            className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)]"
+          />
+          <textarea
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            placeholder="Brief — what's involved"
+            rows={3}
+            className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] resize-none"
+          />
+          <div>
+            <input
+              type="number"
+              value={retainerInput}
+              onChange={(e) => setRetainerInput(e.target.value)}
+              placeholder={isFirst ? 'Monthly retainer' : 'Adds to retainer, e.g. 700'}
+              className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)]"
+            />
+            {!isFirst && retainerInput && Number.isFinite(parseFloat(retainerInput)) && (
+              <p className="text-ink-dim text-xs mt-1">
+                ${currentAmount.toLocaleString('en-AU')} → $
+                {Math.max(0, currentAmount + parseFloat(retainerInput)).toLocaleString('en-AU')}/mo
+              </p>
+            )}
+          </div>
+          {error && <p className="text-risk text-xs">{error}</p>}
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={handleCreate}
+              disabled={saving}
+              className="bg-ink text-white text-xs font-medium rounded-full px-4 py-2 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 flex items-center gap-1.5"
+            >
+              {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              Create project
+            </button>
+            <button onClick={reset} className="text-ink-dim hover:text-ink-muted text-xs">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Project list */}
+      {projects.length === 0 ? (
+        !showForm && (
+          <p className="text-ink-dim text-xs italic">
+            No projects yet. Convert this lead when the deal is done.
+          </p>
+        )
+      ) : (
+        <div className="space-y-2">
+          {projects.map((p) => (
+            <div key={p.id} className="bg-cream border border-hair-soft rounded-lg px-3 py-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <button
+                  onClick={() => onOpenProject(p.id)}
+                  className="text-ink text-sm font-medium text-left hover:text-sky-ink transition-colors truncate"
+                >
+                  {p.name}
+                </button>
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap ${
+                    p.status === 'live'
+                      ? 'bg-[rgba(16,185,129,0.12)] text-[#0f9d70]'
+                      : p.status === 'building'
+                        ? 'bg-[rgba(245,158,11,0.15)] text-warn'
+                        : 'bg-[rgba(11,13,14,0.05)] text-ink-dim'
+                  }`}
+                >
+                  {PROJECT_STATUS_LABEL[p.status]}
+                </span>
+              </div>
+              {/* Status controls. "Restore" is the way back for a client
+                  who stopped and later returned — ending every project
+                  drops them out of Active Clients, and bringing one back
+                  to live returns them, history intact. */}
+              <div className="flex items-center gap-2 mt-2">
+                {p.status === 'building' && (
+                  <button
+                    onClick={() => setProjectStatus(p.id, 'live')}
+                    disabled={busyProjectId === p.id}
+                    className="text-[11px] text-sky-ink hover:underline disabled:opacity-40"
+                  >
+                    Mark live
+                  </button>
+                )}
+                {p.status === 'live' && (
+                  <button
+                    onClick={() => setProjectStatus(p.id, 'ended')}
+                    disabled={busyProjectId === p.id}
+                    className="text-[11px] text-ink-dim hover:text-risk disabled:opacity-40"
+                  >
+                    End
+                  </button>
+                )}
+                {p.status === 'ended' && (
+                  <button
+                    onClick={() => setProjectStatus(p.id, 'live')}
+                    disabled={busyProjectId === p.id}
+                    className="text-[11px] text-sky-ink hover:underline disabled:opacity-40"
+                  >
+                    Restore
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

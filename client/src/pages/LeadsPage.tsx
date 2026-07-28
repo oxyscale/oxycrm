@@ -52,6 +52,11 @@ export default function LeadsPage() {
   const [sourceOptions, setSourceOptions] = useState<string[]>([]);
   // Campaign = which offer the lead came through, one level below source.
   const [filterCampaign, setFilterCampaign] = useState<string>(searchParams.get('camp') || 'all');
+  // Lifecycle tab — Leads / In Build / Active Clients. Derived server-side
+  // from each contact's projects, so it can't drift from reality.
+  const [tab, setTab] = useState<'lead' | 'in_build' | 'client'>(
+    (searchParams.get('tab') as 'lead' | 'in_build' | 'client') || 'lead'
+  );
   const [campaignOptions, setCampaignOptions] = useState<api.CampaignSummary[]>([]);
   // "Engaged" = opened an email at least once. The high-signal view is
   // engaged + not contacted: they're reading and nobody has followed up.
@@ -78,6 +83,7 @@ export default function LeadsPage() {
     if (filterCategory !== 'all') params.set('cat', filterCategory);
     if (filterSource !== 'all') params.set('src', filterSource);
     if (filterCampaign !== 'all') params.set('camp', filterCampaign);
+    if (tab !== 'lead') params.set('tab', tab);
     if (filterContacted !== 'all') params.set('status', filterContacted);
     if (filterEngaged) params.set('engaged', '1');
     if (sortField !== 'recent') params.set('sort', sortField);
@@ -88,7 +94,7 @@ export default function LeadsPage() {
     try {
       sessionStorage.setItem('leads-return-url', `/leads${qs ? `?${qs}` : ''}`);
     } catch { /* ignore */ }
-  }, [search, filterCategory, filterSource, filterCampaign, filterContacted, filterEngaged, sortField, sortDir, setSearchParams]);
+  }, [search, filterCategory, filterSource, filterCampaign, tab, filterContacted, filterEngaged, sortField, sortDir, setSearchParams]);
 
   useEffect(() => {
     syncParams();
@@ -226,6 +232,17 @@ export default function LeadsPage() {
   // category updates the numbers) but IGNORE the current contacted
   // pill (otherwise the inactive pills would always show 0) and the
   // search box (numbers shouldn't jump while typing).
+  // Tab counts are deliberately unfiltered by the other controls — the
+  // tab bar should show how many contacts exist in each stage, not how
+  // many survive the current category/source filters.
+  const lifecycleCounts = leads.reduce(
+    (acc, lead) => {
+      acc[lead.lifecycle ?? 'lead'] += 1;
+      return acc;
+    },
+    { lead: 0, in_build: 0, client: 0 } as Record<'lead' | 'in_build' | 'client', number>,
+  );
+
   const counts = leads.reduce(
     (acc, lead) => {
       if (filterCategory === 'none' && lead.category) return acc;
@@ -233,6 +250,7 @@ export default function LeadsPage() {
       if (filterSource === 'none' && lead.leadSource) return acc;
       if (filterSource !== 'all' && filterSource !== 'none' && lead.leadSource !== filterSource) return acc;
       if (filterCampaign !== 'all' && lead.campaign !== filterCampaign) return acc;
+      if ((lead.lifecycle ?? 'lead') !== tab) return acc;
       if (filterEngaged && !(lead.emailOpens ?? 0)) return acc;
       acc.all += 1;
       if (lead.contacted) acc.contacted += 1;
@@ -255,6 +273,7 @@ export default function LeadsPage() {
       if (filterSource === 'none' && lead.leadSource) return false;
       if (filterSource !== 'all' && filterSource !== 'none' && lead.leadSource !== filterSource) return false;
       if (filterCampaign !== 'all' && lead.campaign !== filterCampaign) return false;
+      if ((lead.lifecycle ?? 'lead') !== tab) return false;
       // Engaged = has opened at least one email. Applies even during a
       // search, unlike the contacted pill — it's a property of the lead,
       // not a view toggle.
@@ -357,6 +376,32 @@ export default function LeadsPage() {
         >
           Create lead
         </PillButton>
+      </div>
+
+      {/* Lifecycle tabs — the same table, same row click, same task and
+          contact flow, filtered by where the contact sits. Columns adapt
+          per tab so Active Clients shows a retainer instead of a source. */}
+      <div className="flex items-center gap-1 mb-5 bg-paper border border-hair-soft rounded-lg p-1 w-fit">
+        {([
+          { key: 'lead', label: 'Leads' },
+          { key: 'in_build', label: 'In Build' },
+          { key: 'client', label: 'Active Clients' },
+        ] as const).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              tab === t.key
+                ? 'bg-[rgba(10,156,212,0.15)] text-sky-ink'
+                : 'text-ink-dim hover:text-ink-muted'
+            }`}
+          >
+            {t.label}
+            <span className={`ml-2 text-xs ${tab === t.key ? 'text-sky-ink/70' : 'text-ink-faint'}`}>
+              {lifecycleCounts[t.key].toLocaleString()}
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* Filters bar */}
@@ -540,7 +585,9 @@ export default function LeadsPage() {
                   {sortField === 'category' && <ArrowUpDown size={12} className="text-sky-ink" />}
                 </span>
               </th>
-              <th className="w-[150px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Source</th>
+              <th className="w-[150px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">
+                {tab === 'client' ? 'Retainer' : 'Source'}
+              </th>
               <th className="w-[92px] text-center text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Email</th>
               <th className="w-[110px] text-center text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Task</th>
               <th className="w-[130px] text-right text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Status</th>
@@ -645,14 +692,27 @@ export default function LeadsPage() {
                     text rather than a pill so it stays visually quieter
                     than Category, which is the primary tag. */}
                 <td className="px-3 py-3 overflow-hidden">
-                  {lead.leadSource ? (
+                  {/* On the Active Clients tab this column carries the
+                      monthly retainer instead — the number that matters
+                      once someone's paying, where the acquisition channel
+                      no longer is. */}
+                  {tab === 'client' ? (
+                    (lead.currentRetainer ?? 0) > 0 ? (
+                      <span className="text-ink text-sm font-medium">
+                        ${(lead.currentRetainer ?? 0).toLocaleString('en-AU')}
+                        <span className="text-ink-dim text-xs font-normal">/mo</span>
+                      </span>
+                    ) : (
+                      <span className="text-ink-faint text-xs">Not set</span>
+                    )
+                  ) : lead.leadSource ? (
                     <span className="text-ink-muted text-xs truncate block">{lead.leadSource}</span>
                   ) : (
                     <span className="text-ink-faint text-xs">&mdash;</span>
                   )}
                   {/* Campaign sits under the source as a quieter second
                       line — which offer, not just which channel. */}
-                  {lead.campaign && (
+                  {tab !== 'client' && lead.campaign && (
                     <span
                       className="text-ink-dim text-[11px] truncate block mt-0.5"
                       title={lead.campaignContent

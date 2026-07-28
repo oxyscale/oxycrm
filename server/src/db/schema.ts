@@ -1003,13 +1003,19 @@ export function initializeDatabase(db: Database.Database): void {
   // working in the CRM.
   addColumnIfMissing(db, 'leads', 'last_viewed_at', 'TEXT DEFAULT NULL');
 
-  // One-time (May 2026): set $10k default deal value for Pulse leads that
-  // don't have one yet. Safe to re-run — only touches NULL/0 values.
-  db.prepare(`
-    UPDATE leads SET deal_value = 10000
-    WHERE pipeline_stage = 'pulse'
-      AND (deal_value IS NULL OR deal_value = 0)
-  `).run();
+  // REMOVED (July 2026): a backfill that stamped deal_value = 10000 on
+  // every Pulse lead with no value. It was labelled "one-time" but was
+  // never guarded, so it re-ran on every boot — clearing a value to 0
+  // silently restored the $10k on the next deploy, and the Pipeline and
+  // Home pages were reporting a pipeline figure largely made of it.
+  //
+  // Invented numbers are worse than blank ones: a lead with no estimate
+  // should read as unset, not as $10k of forecast. Money for clients now
+  // comes from the dated retainer history instead.
+  //
+  // Existing $10k values are left alone on purpose — some may since have
+  // been set deliberately, and overwriting real data to undo fake data
+  // is Jordan's call, not a migration's.
 
   // ============================================================
   // Duplicate flags — populated by the duplicate scan.
