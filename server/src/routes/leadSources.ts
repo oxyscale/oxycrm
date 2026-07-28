@@ -26,21 +26,26 @@ interface LeadSourceRow {
   id: number;
   name: string;
   created_at: string;
+  sort_order: number;
   lead_count?: number;
 }
 
 // ── GET /api/lead-sources — list all sources ───────────────
 // Returns lead_count so Settings can show "Cold call · 1,180 leads"
 // and warn before deleting a source that's actually in use.
+//
+// Ordered by sort_order first, then alphabetically. Networks carry a
+// higher sort_order so they group at the bottom, below the everyday
+// channels, rather than scattering through the alphabet.
 
 router.get('/', (_req, res, next) => {
   try {
     const db = getDb();
     const rows = db.prepare(`
-      SELECT s.id, s.name, s.created_at,
+      SELECT s.id, s.name, s.created_at, s.sort_order,
         (SELECT COUNT(*) FROM leads WHERE LOWER(leads.lead_source) = LOWER(s.name)) AS lead_count
       FROM lead_sources s
-      ORDER BY s.name ASC
+      ORDER BY s.sort_order ASC, s.name ASC
     `).all() as LeadSourceRow[];
 
     res.json(rows);
@@ -71,12 +76,17 @@ router.post('/', (req, res, next) => {
       throw new ApiError(409, `Lead source "${trimmed}" already exists`);
     }
 
+    // Anything with "network" in the name joins the trailing network
+    // group automatically, so new networks land where Jordan expects
+    // without a manual reorder step.
+    const sortOrder = /network/i.test(trimmed) ? 100 : 0;
+
     const result = db.prepare(
-      'INSERT INTO lead_sources (name) VALUES (?)'
-    ).run(trimmed);
+      'INSERT INTO lead_sources (name, sort_order) VALUES (?, ?)'
+    ).run(trimmed, sortOrder);
 
     const row = db.prepare(
-      'SELECT id, name, created_at FROM lead_sources WHERE id = ?'
+      'SELECT id, name, created_at, sort_order FROM lead_sources WHERE id = ?'
     ).get(result.lastInsertRowid) as LeadSourceRow;
 
     logger.info({ id: row.id, name: row.name }, 'Lead source created');
@@ -115,9 +125,13 @@ router.patch('/:id', (req, res, next) => {
     ).get(trimmed, id) as { id: number } | undefined;
     if (clash) throw new ApiError(409, `Lead source "${trimmed}" already exists`);
 
+    // Keep the network grouping in step with the new name.
+    const sortOrder = /network/i.test(trimmed) ? 100 : 0;
+
     let leadsUpdated = 0;
     const tx = db.transaction(() => {
-      db.prepare('UPDATE lead_sources SET name = ? WHERE id = ?').run(trimmed, id);
+      db.prepare('UPDATE lead_sources SET name = ?, sort_order = ? WHERE id = ?')
+        .run(trimmed, sortOrder, id);
       const r = db.prepare(
         'UPDATE leads SET lead_source = ? WHERE LOWER(lead_source) = LOWER(?)',
       ).run(trimmed, existing.name);

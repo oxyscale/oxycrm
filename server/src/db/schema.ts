@@ -657,22 +657,30 @@ export function initializeDatabase(db: Database.Database): void {
   addColumnIfMissing(db, 'leads', 'lead_source', 'TEXT DEFAULT NULL');
   db.exec('CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(lead_source)');
 
+  // Display ordering for the source dropdowns. Lower sorts first, ties
+  // broken alphabetically. Personal/partner networks sit in a trailing
+  // group (100) so the everyday channels stay at the top of the list.
+  addColumnIfMissing(db, 'lead_sources', 'sort_order', 'INTEGER NOT NULL DEFAULT 0');
+
   // Seed the default source list once (empty table only, so Jordan's
   // edits/deletions in Settings are never resurrected on redeploy).
   const srcCount = (db.prepare('SELECT COUNT(*) AS n FROM lead_sources').get() as { n: number }).n;
   if (srcCount === 0) {
-    const insertSrc = db.prepare('INSERT OR IGNORE INTO lead_sources (name) VALUES (?)');
-    for (const s of [
-      'Cold call',
-      'Meta ad',
-      'Google ad',
-      'LinkedIn ad',
-      'Miller-Leith network',
-      'Jordan Bell network',
-      'Jarrad Dowling network',
-      'Referral',
-    ]) {
-      insertSrc.run(s);
+    const insertSrc = db.prepare(
+      'INSERT OR IGNORE INTO lead_sources (name, sort_order) VALUES (?, ?)',
+    );
+    const NETWORK_GROUP = 100;
+    for (const [name, order] of [
+      ['Cold call', 0],
+      ['Meta ad', 0],
+      ['Google ad', 0],
+      ['LinkedIn ad', 0],
+      ['Client referral', 0],
+      ['Miller-Leith network', NETWORK_GROUP],
+      ['Jordan Bell network', NETWORK_GROUP],
+      ['Jarrad Dowling network', NETWORK_GROUP],
+    ] as [string, number][]) {
+      insertSrc.run(name, order);
     }
   }
 
@@ -694,6 +702,37 @@ export function initializeDatabase(db: Database.Database): void {
       ).run();
     });
     addNetworks();
+  }
+
+  // July 2026: push the network sources into the trailing display group
+  // and rename the generic "Referral" to "Client referral". Guarded so a
+  // later manual reorder or rename in Settings isn't undone on redeploy.
+  const sourceOrderingDone = db
+    .prepare("SELECT value FROM settings WHERE key = 'lead_sources_ordering_v1'")
+    .get() as { value: string } | undefined;
+
+  if (!sourceOrderingDone) {
+    const applyOrdering = db.transaction(() => {
+      db.prepare(
+        "UPDATE lead_sources SET sort_order = 100 WHERE LOWER(name) LIKE '%network%'",
+      ).run();
+
+      // Rename in the managed list AND re-stamp any leads already
+      // carrying the old string, so the two never drift apart.
+      const renamed = db.prepare(
+        "UPDATE lead_sources SET name = 'Client referral' WHERE LOWER(name) = 'referral'",
+      ).run();
+      if (renamed.changes > 0) {
+        db.prepare(
+          "UPDATE leads SET lead_source = 'Client referral' WHERE LOWER(lead_source) = 'referral'",
+        ).run();
+      }
+
+      db.prepare(
+        "INSERT INTO settings (key, value, updated_at) VALUES ('lead_sources_ordering_v1', 'done', datetime('now'))",
+      ).run();
+    });
+    applyOrdering();
   }
 
   // One-time backfill, guarded by a settings flag so it runs exactly once

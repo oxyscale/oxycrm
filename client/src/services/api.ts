@@ -182,6 +182,9 @@ export interface LeadSource {
   id: number;
   name: string;
   created_at: string;
+  /** Display grouping — lower sorts first, ties broken alphabetically.
+   *  Networks use 100 so they group below the everyday channels. */
+  sort_order?: number;
   /** Count of leads currently tagged with this source (case-insensitive). */
   lead_count?: number;
 }

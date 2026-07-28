@@ -96,7 +96,15 @@ export default function SettingsPage() {
     setSourceError(null);
     try {
       const src = await api.createLeadSource(name);
-      setLeadSources((prev) => [...prev, src].sort((a, b) => a.name.localeCompare(b.name)));
+      // Match the server's ordering (group first, then alphabetical) so a
+      // newly-added network drops straight into the bottom group instead
+      // of sitting alphabetically until the next reload.
+      setLeadSources((prev) =>
+        [...prev, src].sort(
+          (a, b) =>
+            (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name),
+        ),
+      );
       setNewSourceName('');
     } catch (err) {
       setSourceError(err instanceof Error ? err.message : 'Failed to add lead source');
