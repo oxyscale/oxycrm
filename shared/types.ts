@@ -71,6 +71,15 @@ export interface Lead {
   emailClicks?: number;
   lastEmailOpenedAt?: string | null;
   emailBounced?: boolean;
+  /** Derived lifecycle stage — computed from any linked project, so it
+   *  can never drift from reality. Drives the Leads / In Build /
+   *  Active Clients tabs. */
+  lifecycle?: Lifecycle;
+  /** Set when the contact has a linked project, so the UI can deep-link
+   *  to it instead of dumping the user on the projects list. */
+  projectId?: number | null;
+  /** Monthly retainer in effect today, when this contact is a client. */
+  currentRetainer?: number;
 }
 
 export interface CallLog {
@@ -203,7 +212,11 @@ export interface Note {
 }
 
 // Projects
-export type ProjectStatus = 'onboarding' | 'in_progress' | 'review' | 'complete';
+//
+// Two states, deliberately coarse: it's being built, or it's live and
+// the client is paying a retainer. Finer build stages can be added
+// later without a migration — the column is free-text.
+export type ProjectStatus = 'building' | 'live';
 
 export interface Project {
   id: number;
@@ -211,14 +224,43 @@ export interface Project {
   name: string;
   clientName: string;
   status: ProjectStatus;
+  /** Legacy one-off value. Superseded by the retainer history — kept so
+   *  older rows still render. New money goes through `currentRetainer`. */
   value: number;
   description: string | null;
+  notes: string | null;
   startDate: string | null;
   endDate: string | null;
   createdAt: string;
   updatedAt: string;
   tasks?: ProjectTask[];
+  /** Monthly retainer in effect today, from the retainer history.
+   *  0 when the client has no retainer set. */
+  currentRetainer?: number;
+  /** When the current retainer took effect (YYYY-MM-DD). */
+  retainerSince?: string | null;
+  totalTasks?: number;
+  completedTasks?: number;
 }
+
+/** One dated change to a client's monthly retainer. Never overwritten —
+ *  a change adds a row, so history stays intact and MRR is computable
+ *  for any month. */
+export interface ClientRetainer {
+  id: number;
+  projectId: number;
+  monthlyAmount: number;
+  /** YYYY-MM-DD — date-only, matches the follow-up date convention. */
+  effectiveFrom: string;
+  note: string | null;
+  createdAt: string;
+  createdBy: string | null;
+}
+
+/** Where a contact sits in the lifecycle. Derived from what's attached
+ *  rather than stored, so it can't drift out of sync:
+ *    no project -> lead, project building -> in_build, live -> client */
+export type Lifecycle = 'lead' | 'in_build' | 'client';
 
 export interface ProjectTask {
   id: number;

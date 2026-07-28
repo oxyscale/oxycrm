@@ -100,6 +100,8 @@ function mapCallbackWithLeadRow(row: CallbackWithLeadRow): CallbackWithLead {
     // Legacy callbacks route: lead_source isn't joined here. This branch
     // is being phased out and no consumer reads the field.
     leadSource: null,
+    campaign: null,
+    campaignContent: null,
     status: row.l_status as Lead['status'],
     unansweredCalls: row.l_unanswered_calls,
     voicemailLeft: row.l_voicemail_left === 1,

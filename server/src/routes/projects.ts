@@ -25,6 +25,7 @@ interface ProjectRow {
   status: string;
   value: number;
   description: string | null;
+  notes: string | null;
   start_date: string | null;
   end_date: string | null;
   created_at: string;
@@ -48,6 +49,7 @@ function mapProjectRow(row: ProjectRow): Project {
     status: row.status as ProjectStatus,
     value: row.value,
     description: row.description,
+    notes: row.notes,
     startDate: row.start_date,
     endDate: row.end_date,
     createdAt: row.created_at,
@@ -76,12 +78,16 @@ const createProjectSchema = z.object({
   value: z.number().min(0).optional(),
   description: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
+  /** Opening monthly retainer. Recorded as the first row of the
+   *  retainer history rather than a static field. */
+  monthlyRetainer: z.number().min(0).optional(),
 });
 
 const updateProjectSchema = z.object({
   name: z.string().min(1).optional(),
   clientName: z.string().min(1).optional(),
-  status: z.enum(['onboarding', 'in_progress', 'review', 'complete']).optional(),
+  status: z.enum(['building', 'live']).optional(),
+  notes: z.string().nullable().optional(),
   value: z.number().min(0).optional(),
   description: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
@@ -111,10 +117,20 @@ router.get('/', (req, res, next) => {
     const db = getDb();
     const { status } = req.query;
 
+    // Current retainer = the latest dated row that has already taken
+    // effect. A correlated subquery keeps this to one statement while
+    // still respecting future-dated changes (a rise scheduled for next
+    // month must not count until it lands).
     let query = `
       SELECT p.*,
         COUNT(pt.id) AS task_count,
-        SUM(CASE WHEN pt.completed = 1 THEN 1 ELSE 0 END) AS completed_count
+        SUM(CASE WHEN pt.completed = 1 THEN 1 ELSE 0 END) AS completed_count,
+        (SELECT r.monthly_amount FROM client_retainers r
+          WHERE r.project_id = p.id AND r.effective_from <= DATE('now')
+          ORDER BY r.effective_from DESC, r.id DESC LIMIT 1) AS current_retainer,
+        (SELECT r.effective_from FROM client_retainers r
+          WHERE r.project_id = p.id AND r.effective_from <= DATE('now')
+          ORDER BY r.effective_from DESC, r.id DESC LIMIT 1) AS retainer_since
       FROM projects p
       LEFT JOIN project_tasks pt ON pt.project_id = p.id
     `;
@@ -127,12 +143,25 @@ router.get('/', (req, res, next) => {
 
     query += ' GROUP BY p.id ORDER BY p.created_at DESC';
 
-    const rows = db.prepare(query).all(params) as (ProjectRow & { task_count: number; completed_count: number })[];
+    const rows = db.prepare(query).all(params) as (ProjectRow & {
+      task_count: number;
+      completed_count: number;
+      current_retainer: number | null;
+      retainer_since: string | null;
+    })[];
 
     const projects = rows.map((row) => ({
       ...mapProjectRow(row),
+      // The client reads totalTasks/completedTasks. The old response
+      // used taskCount/completedTaskCount, so every card rendered
+      // "undefined/undefined tasks" and 0% progress. Send both names —
+      // the new ones the UI expects, and the old ones for compatibility.
+      totalTasks: row.task_count,
+      completedTasks: row.completed_count ?? 0,
       taskCount: row.task_count,
       completedTaskCount: row.completed_count ?? 0,
+      currentRetainer: row.current_retainer ?? 0,
+      retainerSince: row.retainer_since ?? null,
     }));
 
     logger.info({ count: projects.length, status }, 'Fetched projects');
@@ -167,7 +196,133 @@ router.get('/:id', (req, res, next) => {
     const project = mapProjectRow(projectRow);
     project.tasks = taskRows.map(mapTaskRow);
 
+    // Retainer in effect today (future-dated changes excluded).
+    const current = db.prepare(`
+      SELECT monthly_amount, effective_from FROM client_retainers
+      WHERE project_id = ? AND effective_from <= DATE('now')
+      ORDER BY effective_from DESC, id DESC LIMIT 1
+    `).get(id) as { monthly_amount: number; effective_from: string } | undefined;
+    project.currentRetainer = current?.monthly_amount ?? 0;
+    project.retainerSince = current?.effective_from ?? null;
+
     res.json(project);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/projects/:id/retainers
+ * Full retainer history, newest first. Every change is its own row —
+ * nothing is overwritten — so this doubles as the audit trail for what
+ * a client has been billed and when it changed.
+ */
+router.get('/:id/retainers', (req, res, next) => {
+  try {
+    const db = getDb();
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) throw new ApiError(400, 'Invalid project ID');
+
+    const rows = db.prepare(`
+      SELECT id, project_id, monthly_amount, effective_from, note, created_at, created_by
+      FROM client_retainers WHERE project_id = ?
+      ORDER BY effective_from DESC, id DESC
+    `).all(id) as {
+      id: number; project_id: number; monthly_amount: number;
+      effective_from: string; note: string | null;
+      created_at: string; created_by: string | null;
+    }[];
+
+    res.json(rows.map((r) => ({
+      id: r.id,
+      projectId: r.project_id,
+      monthlyAmount: r.monthly_amount,
+      effectiveFrom: r.effective_from,
+      note: r.note,
+      createdAt: r.created_at,
+      createdBy: r.created_by,
+    })));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/projects/:id/retainers
+ * Records a retainer change. Adds a dated row rather than editing the
+ * current figure, so "what were we billing in March" stays answerable
+ * and growth from existing clients can be separated from new business.
+ */
+const createRetainerSchema = z.object({
+  monthlyAmount: z.number().min(0),
+  /** YYYY-MM-DD. Defaults to today. Can be back- or future-dated. */
+  effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  note: z.string().nullable().optional(),
+});
+
+router.post('/:id/retainers', (req, res, next) => {
+  try {
+    const db = getDb();
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) throw new ApiError(400, 'Invalid project ID');
+
+    const project = db.prepare('SELECT id, lead_id, client_name FROM projects WHERE id = ?')
+      .get(id) as { id: number; lead_id: number | null; client_name: string } | undefined;
+    if (!project) throw new ApiError(404, 'Project not found');
+
+    const payload = createRetainerSchema.parse(req.body);
+    const effectiveFrom = payload.effectiveFrom || new Date().toISOString().slice(0, 10);
+    const actor = req.user?.name || null;
+
+    const insert = db.transaction(() => {
+      const r = db.prepare(`
+        INSERT INTO client_retainers (project_id, monthly_amount, effective_from, note, created_by)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(id, payload.monthlyAmount, effectiveFrom, payload.note ?? null, actor);
+
+      // Mirror onto the lead's timeline so a retainer change shows up
+      // alongside calls and emails rather than only inside the project.
+      if (project.lead_id) {
+        db.prepare(`
+          INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+          VALUES (?, 'stage_change', ?, ?, ?, ?)
+        `).run(
+          project.lead_id,
+          `Retainer set to $${payload.monthlyAmount.toLocaleString('en-AU')}/mo`,
+          payload.note || `Effective ${effectiveFrom}`,
+          new Date().toISOString(),
+          actor,
+        );
+      }
+      return r.lastInsertRowid;
+    });
+
+    const newId = insert();
+    logger.info({ projectId: id, amount: payload.monthlyAmount, effectiveFrom }, 'Retainer recorded');
+    res.status(201).json({ id: newId, projectId: id, monthlyAmount: payload.monthlyAmount, effectiveFrom });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/projects/:id/retainers/:retainerId
+ * Removes a mistaken entry. Deleting history is normally wrong, but a
+ * fat-fingered amount has to be correctable.
+ */
+router.delete('/:id/retainers/:retainerId', (req, res, next) => {
+  try {
+    const db = getDb();
+    const id = parseInt(req.params.id, 10);
+    const retainerId = parseInt(req.params.retainerId, 10);
+    if (isNaN(id) || isNaN(retainerId)) throw new ApiError(400, 'Invalid ID');
+
+    const r = db.prepare('DELETE FROM client_retainers WHERE id = ? AND project_id = ?')
+      .run(retainerId, id);
+    if (r.changes === 0) throw new ApiError(404, 'Retainer entry not found');
+
+    logger.info({ projectId: id, retainerId }, 'Retainer entry deleted');
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }
@@ -186,7 +341,7 @@ router.post('/', (req, res, next) => {
     const createProject = db.transaction(() => {
       const result = db.prepare(`
         INSERT INTO projects (lead_id, name, client_name, status, value, description, start_date, created_at, updated_at)
-        VALUES (?, ?, ?, 'onboarding', ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, 'building', ?, ?, ?, ?, ?)
       `).run(
         payload.leadId ?? null,
         payload.name,
@@ -207,6 +362,20 @@ router.post('/', (req, res, next) => {
 
         db.prepare('UPDATE leads SET converted_to_project = 1, updated_at = ? WHERE id = ?')
           .run(now, payload.leadId);
+      }
+
+      // Opening retainer becomes the first row of the history, so MRR
+      // is derived from one place from the very start.
+      if (payload.monthlyRetainer && payload.monthlyRetainer > 0) {
+        db.prepare(`
+          INSERT INTO client_retainers (project_id, monthly_amount, effective_from, note, created_by)
+          VALUES (?, ?, ?, 'Opening retainer', ?)
+        `).run(
+          result.lastInsertRowid,
+          payload.monthlyRetainer,
+          payload.startDate || now.slice(0, 10),
+          req.user?.name || null,
+        );
       }
 
       return result.lastInsertRowid;
@@ -259,6 +428,16 @@ router.patch('/:id', (req, res, next) => {
     if (updates.status !== undefined) {
       setClauses.push('status = @status');
       params.status = updates.status;
+      // Going live ends the build. Stamp the completion date so the
+      // client's "live since" is a real value rather than always "--".
+      if (updates.status === 'live' && !existing.end_date) {
+        setClauses.push("end_date = COALESCE(@endDateNow, end_date)");
+        params.endDateNow = new Date().toISOString().slice(0, 10);
+      }
+    }
+    if (updates.notes !== undefined) {
+      setClauses.push('notes = @notes');
+      params.notes = updates.notes;
     }
     if (updates.value !== undefined) {
       setClauses.push('value = @value');

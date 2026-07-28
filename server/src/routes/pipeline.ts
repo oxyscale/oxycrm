@@ -28,6 +28,8 @@ interface LeadRow {
   lead_type: string;
   category: string | null;
   lead_source: string | null;
+  campaign: string | null;
+  campaign_content: string | null;
   status: string;
   unanswered_calls: number;
   voicemail_left: number;
@@ -58,6 +60,8 @@ function mapLeadRow(row: LeadRow): Lead {
     leadType: row.lead_type as Lead['leadType'],
     category: row.category,
     leadSource: row.lead_source,
+    campaign: row.campaign,
+    campaignContent: row.campaign_content,
     status: row.status as Lead['status'],
     unansweredCalls: row.unanswered_calls,
     voicemailLeft: row.voicemail_left === 1,

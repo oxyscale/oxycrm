@@ -183,19 +183,6 @@ function buildImportNote(row: Record<string, string>): string {
 }
 
 /**
- * Reduces a phone number to a comparable key: digits only, last 9.
- *
- * Taking the last 9 makes "+61404396193" and "0404396193" match — the
- * same mobile written two ways. Without this, re-importing an export
- * that switched to E.164 format would duplicate every lead.
- */
-function phoneKey(phone: string): string {
-  const digits = (phone || '').replace(/\D/g, '');
-  if (digits.length < 6) return '';
-  return digits.length > 9 ? digits.slice(-9) : digits;
-}
-
-/**
  * Pulls campaign attribution out of an import row.
  *
  * Primary path is the standard utm pair (utm_campaign / utm_content),
@@ -452,8 +439,115 @@ router.get('/', (req, res, next) => {
       lead.emailBounced = e?.bounced === 1;
     }
 
+    // Lifecycle — derived from the linked project rather than stored on
+    // the lead, so it can't drift out of sync with reality:
+    //   no project -> lead, building -> in_build, live -> client
+    // This is what drives the Leads / In Build / Active Clients tabs.
+    const projectRows = db.prepare(`
+      SELECT p.lead_id, p.id AS project_id, p.status,
+        (SELECT r.monthly_amount FROM client_retainers r
+          WHERE r.project_id = p.id AND r.effective_from <= DATE('now')
+          ORDER BY r.effective_from DESC, r.id DESC LIMIT 1) AS current_retainer
+      FROM projects p
+      WHERE p.lead_id IS NOT NULL
+    `).all() as {
+      lead_id: number; project_id: number; status: string; current_retainer: number | null;
+    }[];
+    const projectMap = new Map<number, (typeof projectRows)[number]>();
+    for (const r of projectRows) projectMap.set(r.lead_id, r);
+    for (const lead of leads) {
+      const p = projectMap.get(lead.id);
+      lead.lifecycle = !p ? 'lead' : p.status === 'live' ? 'client' : 'in_build';
+      lead.projectId = p?.project_id ?? null;
+      lead.currentRetainer = p?.current_retainer ?? 0;
+    }
+
     logger.info({ count: leads.length, filters: { status, leadType, category } }, 'Fetched leads');
     res.json(leads);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/leads/:id/convert
+ * Turns a won lead into a project (a build), carrying its details over.
+ *
+ * Previously this meant going to Projects, clicking New, and retyping
+ * the client name and value by hand — so the two records drifted apart
+ * immediately and nothing tied them together. Now the lead's own data
+ * seeds the project and the link is made in one step.
+ */
+const convertLeadSchema = z.object({
+  /** Defaults to the lead's company (or name when there's no company). */
+  name: z.string().min(1).optional(),
+  /** Opening monthly retainer. Optional — often unknown at handover. */
+  monthlyRetainer: z.number().min(0).optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+router.post('/:id/convert', (req, res, next) => {
+  try {
+    const db = getDb();
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) throw new ApiError(400, 'Invalid lead ID');
+
+    const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(id) as LeadRow | undefined;
+    if (!lead) throw new ApiError(404, 'Lead not found');
+
+    const existingProject = db.prepare('SELECT id FROM projects WHERE lead_id = ?')
+      .get(id) as { id: number } | undefined;
+    if (existingProject) {
+      throw new ApiError(409, 'This lead is already linked to a project');
+    }
+
+    const payload = convertLeadSchema.parse(req.body ?? {});
+    const now = new Date().toISOString();
+    const startDate = payload.startDate || now.slice(0, 10);
+    const clientName = lead.company?.trim() || lead.name;
+    const projectName = payload.name?.trim() || `${clientName} build`;
+    const actor = req.user?.name || null;
+
+    const convert = db.transaction(() => {
+      const result = db.prepare(`
+        INSERT INTO projects (lead_id, name, client_name, status, value, description, notes, start_date, created_at, updated_at)
+        VALUES (?, ?, ?, 'building', ?, ?, NULL, ?, ?, ?)
+      `).run(
+        id,
+        projectName,
+        clientName,
+        // Legacy value field kept in step for older reporting paths.
+        payload.monthlyRetainer ?? 0,
+        lead.consolidated_summary ?? null,
+        startDate,
+        now,
+        now,
+      );
+      const projectId = Number(result.lastInsertRowid);
+
+      if (payload.monthlyRetainer && payload.monthlyRetainer > 0) {
+        db.prepare(`
+          INSERT INTO client_retainers (project_id, monthly_amount, effective_from, note, created_by)
+          VALUES (?, ?, ?, 'Opening retainer', ?)
+        `).run(projectId, payload.monthlyRetainer, startDate, actor);
+      }
+
+      db.prepare(`
+        INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+        VALUES (?, 'stage_change', 'Converted to project', ?, ?, ?)
+      `).run(id, `Project: ${projectName}`, now, actor);
+
+      // Won by definition — a build only starts once the deal is done.
+      db.prepare(
+        "UPDATE leads SET converted_to_project = 1, pipeline_stage = 'won', updated_at = ? WHERE id = ?",
+      ).run(now, id);
+
+      return projectId;
+    });
+
+    const projectId = convert();
+    logger.info({ leadId: id, projectId, clientName }, 'Lead converted to project');
+    res.status(201).json({ projectId, name: projectName, clientName });
   } catch (err) {
     next(err);
   }
@@ -1621,9 +1715,13 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       (db.prepare("SELECT LOWER(TRIM(email)) AS e FROM leads WHERE email IS NOT NULL AND TRIM(email) != ''")
         .all() as { e: string }[]).map((r) => r.e),
     );
+    // Reuses the same phoneKey the dedupe scan uses (digits only, last
+    // 9) so "+61404396193" and "0404396193" resolve to one key.
     const seenPhones = new Set(
       (db.prepare("SELECT phone FROM leads WHERE phone IS NOT NULL AND TRIM(phone) != ''")
-        .all() as { phone: string }[]).map((r) => phoneKey(r.phone)).filter(Boolean),
+        .all() as { phone: string }[])
+        .map((r) => phoneKey(r.phone))
+        .filter((k): k is string => !!k),
     );
 
     // Parse the CSV from the uploaded buffer, stripping BOM if present

@@ -21,33 +21,21 @@ const STATUS_CONFIG: Record<
   ProjectStatus,
   { label: string; color: string; bg: string; border: string }
 > = {
-  onboarding: {
-    label: 'Onboarding',
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/15',
-    border: 'border-blue-500/30',
+  building: {
+    label: 'In Build',
+    color: 'text-warn',
+    bg: 'bg-[rgba(245,158,11,0.15)]',
+    border: 'border-[rgba(245,158,11,0.3)]',
   },
-  in_progress: {
-    label: 'In Progress',
-    color: 'text-amber-400',
-    bg: 'bg-amber-500/15',
-    border: 'border-amber-500/30',
-  },
-  review: {
-    label: 'Review',
-    color: 'text-purple-400',
-    bg: 'bg-purple-500/15',
-    border: 'border-purple-500/30',
-  },
-  complete: {
-    label: 'Complete',
-    color: 'text-sky-ink',
-    bg: 'bg-[rgba(10,156,212,0.15)]',
-    border: 'border-[rgba(10,156,212,0.3)]',
+  live: {
+    label: 'Active Client',
+    color: 'text-[#0f9d70]',
+    bg: 'bg-[rgba(16,185,129,0.12)]',
+    border: 'border-[rgba(16,185,129,0.3)]',
   },
 };
 
-const STATUS_ORDER: ProjectStatus[] = ['onboarding', 'in_progress', 'review', 'complete'];
+const STATUS_ORDER: ProjectStatus[] = ['building', 'live'];
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();

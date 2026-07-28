@@ -371,7 +371,7 @@ export function initializeDatabase(db: Database.Database): void {
       end_date TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL
     );
 
     -- Project tasks table: checklist items within a project
@@ -553,7 +553,13 @@ export function initializeDatabase(db: Database.Database): void {
   // emails behind. SQLite cannot ALTER FK constraints in place — the
   // helper recreates the table only when the existing FK is wrong.
   retrofitCascadeIfMissing(db, 'notes', 'lead_id', 'leads');
-  retrofitCascadeIfMissing(db, 'projects', 'lead_id', 'leads');
+  // projects.lead_id is SET NULL, deliberately NOT cascade. The column is
+  // nullable, and a project is a real delivery record with its own tasks
+  // and retainer history. Cascading meant the Wrong Number disposition
+  // (which hard-deletes a lead) silently destroyed live client records.
+  // Losing the link back to the lead is recoverable; losing the client
+  // is not.
+  retrofitCascadeIfMissing(db, 'projects', 'lead_id', 'leads', 'SET NULL');
   retrofitCascadeIfMissing(db, 'project_tasks', 'project_id', 'projects');
   retrofitCascadeIfMissing(db, 'emails_sent', 'lead_id', 'leads');
   retrofitCascadeIfMissing(db, 'activities', 'lead_id', 'leads');
@@ -714,6 +720,74 @@ export function initializeDatabase(db: Database.Database): void {
     for (const [name, order] of SOURCE_ORDER) {
       insertSrc.run(name, order);
     }
+  }
+
+  // ============================================================
+  // Client lifecycle + retainers (July 2026)
+  //
+  // OxyScale charges a monthly retainer, no build fees. A single
+  // one-off `value` on a project can't express that, so money now
+  // lives in a dated retainer history:
+  //
+  //   current retainer = latest row with effective_from <= today
+  //   MRR              = sum of current retainers over live clients
+  //   ARR              = MRR * 12
+  //
+  // Storing every change as its own row (rather than overwriting one
+  // number) is what makes "what were we billing in March" answerable,
+  // and separates growth from existing clients expanding.
+  // ============================================================
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS client_retainers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      monthly_amount REAL NOT NULL,
+      effective_from TEXT NOT NULL,          -- YYYY-MM-DD (date-only)
+      note TEXT,                             -- why it changed
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_by TEXT,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_client_retainers_project
+      ON client_retainers(project_id, effective_from DESC);
+  `);
+
+  // Project notes. The detail page has always POSTed a `notes` field
+  // with nowhere to store it — the update schema stripped it, the
+  // server 400'd on "no valid fields", and the client swallowed the
+  // error. The textarea looked like it saved and never did.
+  addColumnIfMissing(db, 'projects', 'notes', 'TEXT');
+
+  // Project status simplifies to two states: it's being built, or it's
+  // live and the client is on a retainer. Jordan explicitly didn't want
+  // a build-stage kanban yet (George will shape that later), and the
+  // column stays free-text so finer stages can be added with no
+  // migration. Legacy values are folded in.
+  const projectStatusDone = db
+    .prepare("SELECT value FROM settings WHERE key = 'project_status_v2'")
+    .get() as { value: string } | undefined;
+
+  if (!projectStatusDone) {
+    const migrateStatus = db.transaction(() => {
+      db.prepare(
+        "UPDATE projects SET status = 'building' WHERE status IN ('onboarding', 'in_progress', 'review')",
+      ).run();
+      db.prepare("UPDATE projects SET status = 'live' WHERE status = 'complete'").run();
+      // Seed a retainer row for any live client that has a value but no
+      // history yet, so MRR isn't zero the moment the feature ships.
+      db.prepare(`
+        INSERT INTO client_retainers (project_id, monthly_amount, effective_from, note, created_by)
+        SELECT p.id, p.value, COALESCE(p.start_date, DATE(p.created_at)), 'Migrated from project value', 'System'
+        FROM projects p
+        WHERE p.value > 0
+          AND NOT EXISTS (SELECT 1 FROM client_retainers r WHERE r.project_id = p.id)
+      `).run();
+      db.prepare(
+        "INSERT INTO settings (key, value, updated_at) VALUES ('project_status_v2', 'done', datetime('now'))",
+      ).run();
+    });
+    migrateStatus();
   }
 
   // Personal referral networks added July 2026, after the initial seed
@@ -951,11 +1025,12 @@ function retrofitCascadeIfMissing(
   table: string,
   fkColumn: string,
   parentTable: string,
+  onDelete: 'CASCADE' | 'SET NULL' = 'CASCADE',
 ): void {
   const fks = db.prepare(`PRAGMA foreign_key_list(${table})`).all() as ForeignKeyInfo[];
   const existing = fks.find((f) => f.from === fkColumn && f.table === parentTable);
   if (!existing) return;
-  if (existing.on_delete === 'CASCADE') return; // already correct
+  if (existing.on_delete === onDelete) return; // already correct
 
   // Look up the original CREATE TABLE so we can rebuild it byte-for-byte
   // with the FK clause swapped. Falling back to the parsed PRAGMA info
@@ -965,13 +1040,17 @@ function retrofitCascadeIfMissing(
     .get(table) as { sql: string } | undefined;
   if (!row?.sql) return;
 
+  // Matches the FK clause whether or not it already carries an ON DELETE
+  // action, so this can swap CASCADE -> SET NULL as well as add a missing
+  // clause. (The original only matched the no-clause case.)
   const fkPattern = new RegExp(
-    `FOREIGN KEY\\s*\\(\\s*${fkColumn}\\s*\\)\\s*REFERENCES\\s+${parentTable}\\s*\\(\\s*id\\s*\\)(?!\\s*ON DELETE)`,
+    `FOREIGN KEY\\s*\\(\\s*${fkColumn}\\s*\\)\\s*REFERENCES\\s+${parentTable}\\s*\\(\\s*id\\s*\\)` +
+      `(\\s*ON DELETE\\s+(?:CASCADE|SET NULL|SET DEFAULT|RESTRICT|NO ACTION))?`,
     'i',
   );
   const newSql = row.sql.replace(
     fkPattern,
-    `FOREIGN KEY (${fkColumn}) REFERENCES ${parentTable}(id) ON DELETE CASCADE`,
+    `FOREIGN KEY (${fkColumn}) REFERENCES ${parentTable}(id) ON DELETE ${onDelete}`,
   );
   if (newSql === row.sql) return; // pattern didn't match — bail safely
 

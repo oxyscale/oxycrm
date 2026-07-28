@@ -17,11 +17,11 @@ import PillButton from '../components/ui/PillButton';
 
 type FilterStatus = 'all' | ProjectStatus;
 
+// Two states only: it's being built, or it's live and on a retainer.
+// George can add finer build stages later without a migration.
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; color: string; bg: string }> = {
-  onboarding: { label: 'Onboarding', color: 'text-blue-400', bg: 'bg-blue-500/15' },
-  in_progress: { label: 'In Progress', color: 'text-amber-400', bg: 'bg-amber-500/15' },
-  review: { label: 'Review', color: 'text-purple-400', bg: 'bg-purple-500/15' },
-  complete: { label: 'Complete', color: 'text-sky-ink', bg: 'bg-[rgba(10,156,212,0.15)]' },
+  building: { label: 'In Build', color: 'text-warn', bg: 'bg-[rgba(245,158,11,0.15)]' },
+  live: { label: 'Active Client', color: 'text-[#0f9d70]', bg: 'bg-[rgba(16,185,129,0.12)]' },
 };
 
 type ProjectWithCounts = Project & { totalTasks: number; completedTasks: number };
@@ -105,18 +105,14 @@ export default function ProjectsPage() {
   };
 
   // Stats calculations
-  const activeProjects = projects.filter((p) => p.status !== 'complete');
-  const completedProjects = projects.filter((p) => p.status === 'complete');
-  const totalValue = activeProjects.reduce((sum, p) => sum + (p.value || 0), 0);
-  const avgCompletion =
-    activeProjects.length > 0
-      ? Math.round(
-          activeProjects.reduce((sum, p) => {
-            if (p.totalTasks === 0) return sum;
-            return sum + (p.completedTasks / p.totalTasks) * 100;
-          }, 0) / activeProjects.filter((p) => p.totalTasks > 0).length || 0
-        )
-      : 0;
+  const activeProjects = projects.filter((p) => p.status !== 'live');
+  const completedProjects = projects.filter((p) => p.status === 'live');
+  // Money now comes from the retainer history, not the legacy one-off
+  // value field. Live clients are what generate recurring revenue.
+  const monthlyRecurring = completedProjects.reduce(
+    (sum, p) => sum + (p.currentRetainer || 0), 0,
+  );
+  const totalValue = monthlyRecurring;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-AU', {
@@ -166,27 +162,30 @@ export default function ProjectsPage() {
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-paper border border-hair-soft rounded-xl p-4">
           <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1">
-            Active Projects
+            In Build
           </p>
           <p className="text-ink text-2xl font-bold">{activeProjects.length}</p>
         </div>
         <div className="bg-paper border border-hair-soft rounded-xl p-4">
           <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1">
-            Total Value
+            Active Clients
+          </p>
+          <p className="text-ink text-2xl font-bold">{completedProjects.length}</p>
+        </div>
+        {/* The two numbers that actually matter for a retainer business.
+            Both come from the dated retainer history, so a client's
+            rise or fall flows straight through. */}
+        <div className="bg-paper border border-hair-soft rounded-xl p-4">
+          <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1">
+            Monthly Recurring
           </p>
           <p className="text-sky-ink text-2xl font-bold">{formatCurrency(totalValue)}</p>
         </div>
         <div className="bg-paper border border-hair-soft rounded-xl p-4">
           <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1">
-            Completed
+            Annual Recurring
           </p>
-          <p className="text-ink text-2xl font-bold">{completedProjects.length}</p>
-        </div>
-        <div className="bg-paper border border-hair-soft rounded-xl p-4">
-          <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1">
-            Avg Completion
-          </p>
-          <p className="text-ink text-2xl font-bold">{avgCompletion}%</p>
+          <p className="text-ink text-2xl font-bold">{formatCurrency(monthlyRecurring * 12)}</p>
         </div>
       </div>
 
