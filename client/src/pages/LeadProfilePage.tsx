@@ -1994,7 +1994,7 @@ export default function LeadProfilePage() {
                   from the retainer history below and this is read-only. */}
               <div>
                 <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">
-                  {lifecycle === 'client' ? 'Monthly Retainer' : 'Est. Monthly Retainer'}
+                  {lifecycle === 'client' ? 'Monthly Revenue' : 'Estimated Monthly Revenue'}
                 </p>
                 {lifecycle === 'client' ? (
                   <p className="text-ink text-sm font-medium">
@@ -2342,7 +2342,7 @@ function ClientPanel({
       {/* Retainer — the client's single monthly figure */}
       {(isClient || retainers.length > 0) && (
         <div className="mb-4 pb-4 border-b border-hair-soft">
-          <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1">Monthly Retainer</p>
+          <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1">Monthly Revenue</p>
           <p className="text-ink text-xl font-bold">
             ${currentAmount.toLocaleString('en-AU')}
             <span className="text-ink-dim text-sm font-normal">/mo</span>
