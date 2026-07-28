@@ -658,9 +658,26 @@ export function initializeDatabase(db: Database.Database): void {
   db.exec('CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(lead_source)');
 
   // Display ordering for the source dropdowns. Lower sorts first, ties
-  // broken alphabetically. Personal/partner networks sit in a trailing
-  // group (100) so the everyday channels stay at the top of the list.
+  // broken alphabetically. The main channels carry an explicit order
+  // (Jordan's preference, not alphabetical); networks sit in a trailing
+  // group at 100 where they stay alphabetical among themselves, so a
+  // newly-added network slots in sensibly without a manual reorder.
   addColumnIfMissing(db, 'lead_sources', 'sort_order', 'INTEGER NOT NULL DEFAULT 0');
+
+  // Canonical ordering. Referenced by both the fresh-install seed and
+  // the migration below so the two can never disagree.
+  const SOURCE_ORDER: [string, number][] = [
+    ['Meta ad', 10],
+    ['LinkedIn ad', 20],
+    ['Cold call', 30],
+    ['Client referral', 40],
+    ['Organic', 50],
+    // 90 is the landing spot for any new non-network source: end of the
+    // main group, still above the networks.
+    ['Miller-Leith network', 100],
+    ['Jordan Bell network', 100],
+    ['Jarrad Dowling network', 100],
+  ];
 
   // Seed the default source list once (empty table only, so Jordan's
   // edits/deletions in Settings are never resurrected on redeploy).
@@ -669,17 +686,7 @@ export function initializeDatabase(db: Database.Database): void {
     const insertSrc = db.prepare(
       'INSERT OR IGNORE INTO lead_sources (name, sort_order) VALUES (?, ?)',
     );
-    const NETWORK_GROUP = 100;
-    for (const [name, order] of [
-      ['Cold call', 0],
-      ['Meta ad', 0],
-      ['Google ad', 0],
-      ['LinkedIn ad', 0],
-      ['Client referral', 0],
-      ['Miller-Leith network', NETWORK_GROUP],
-      ['Jordan Bell network', NETWORK_GROUP],
-      ['Jarrad Dowling network', NETWORK_GROUP],
-    ] as [string, number][]) {
+    for (const [name, order] of SOURCE_ORDER) {
       insertSrc.run(name, order);
     }
   }
@@ -733,6 +740,54 @@ export function initializeDatabase(db: Database.Database): void {
       ).run();
     });
     applyOrdering();
+  }
+
+  // July 2026 (v2): Jordan's explicit channel order, replacing the
+  // alphabetical main group. Adds "Organic" and retires "Google ad"
+  // (not running Google at the moment). Guarded separately from v1 so
+  // a later manual reorder in Settings survives redeploys.
+  const sourceOrderingV2 = db
+    .prepare("SELECT value FROM settings WHERE key = 'lead_sources_ordering_v2'")
+    .get() as { value: string } | undefined;
+
+  if (!sourceOrderingV2) {
+    const applyOrderingV2 = db.transaction(() => {
+      db.prepare('INSERT OR IGNORE INTO lead_sources (name, sort_order) VALUES (?, ?)')
+        .run('Organic', 50);
+
+      const setOrder = db.prepare(
+        'UPDATE lead_sources SET sort_order = ? WHERE LOWER(name) = LOWER(?)',
+      );
+      for (const [name, order] of SOURCE_ORDER) {
+        setOrder.run(order, name);
+      }
+      // Anything not named above (e.g. a source Jordan added himself)
+      // lands at the end of the main group rather than jumping to front.
+      db.prepare(`
+        UPDATE lead_sources SET sort_order = 90
+        WHERE sort_order = 0 AND LOWER(name) NOT LIKE '%network%'
+      `).run();
+
+      // Retire Google ad — but only when nothing is tagged with it.
+      // Deleting a source never deletes leads, though leaving a lead
+      // pointing at a string with no dropdown entry is a papercut worth
+      // avoiding. If it IS in use we keep it and say so in the log.
+      const googleInUse = db.prepare(
+        "SELECT COUNT(*) AS n FROM leads WHERE LOWER(lead_source) = 'google ad'",
+      ).get() as { n: number };
+      if (googleInUse.n === 0) {
+        db.prepare("DELETE FROM lead_sources WHERE LOWER(name) = 'google ad'").run();
+      } else {
+        console.log(
+          `[schema] kept "Google ad" source — ${googleInUse.n} lead(s) still tagged with it`,
+        );
+      }
+
+      db.prepare(
+        "INSERT INTO settings (key, value, updated_at) VALUES ('lead_sources_ordering_v2', 'done', datetime('now'))",
+      ).run();
+    });
+    applyOrderingV2();
   }
 
   // One-time backfill, guarded by a settings flag so it runs exactly once

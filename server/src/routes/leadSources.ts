@@ -77,9 +77,10 @@ router.post('/', (req, res, next) => {
     }
 
     // Anything with "network" in the name joins the trailing network
-    // group automatically, so new networks land where Jordan expects
-    // without a manual reorder step.
-    const sortOrder = /network/i.test(trimmed) ? 100 : 0;
+    // group automatically. Everything else lands at the end of the main
+    // group (90) rather than the front, so a new channel never displaces
+    // the curated order of the established ones.
+    const sortOrder = /network/i.test(trimmed) ? 100 : 90;
 
     const result = db.prepare(
       'INSERT INTO lead_sources (name, sort_order) VALUES (?, ?)'
@@ -125,8 +126,19 @@ router.patch('/:id', (req, res, next) => {
     ).get(trimmed, id) as { id: number } | undefined;
     if (clash) throw new ApiError(409, `Lead source "${trimmed}" already exists`);
 
-    // Keep the network grouping in step with the new name.
-    const sortOrder = /network/i.test(trimmed) ? 100 : 0;
+    // Keep the network grouping in step with the new name. A rename out
+    // of the network group lands at the end of the main group.
+    const existingOrder = db.prepare('SELECT sort_order FROM lead_sources WHERE id = ?')
+      .get(id) as { sort_order: number } | undefined;
+    const wasNetwork = (existingOrder?.sort_order ?? 0) >= 100;
+    const isNetwork = /network/i.test(trimmed);
+    // Preserve a curated position when the grouping hasn't changed —
+    // renaming "Meta ad" to "Meta ads" shouldn't shunt it to the bottom.
+    const sortOrder = isNetwork
+      ? 100
+      : wasNetwork
+        ? 90
+        : (existingOrder?.sort_order ?? 90);
 
     let leadsUpdated = 0;
     const tx = db.transaction(() => {
