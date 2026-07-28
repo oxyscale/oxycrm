@@ -2017,13 +2017,10 @@ export default function LeadProfilePage() {
                 )}
               </div>
 
-              {/* Last called */}
-              {lead.lastCalledAt && (
-                <div>
-                  <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Last Called</p>
-                  <p className="text-ink-muted text-sm">{formatShortDate(lead.lastCalledAt)}</p>
-                </div>
-              )}
+              {/* Last Called removed (July 2026) — call and contact dates
+                  live in the notes and activity timeline, which carry the
+                  context too. A bare date in the sidebar duplicated that
+                  without adding anything. */}
 
               {/* Created */}
               <div>
