@@ -69,6 +69,13 @@ export default function PipelinePage() {
   // Stage move dropdown state
   const [openMoveDropdown, setOpenMoveDropdown] = useState<number | null>(null);
   const [movingLead, setMovingLead] = useState<number | null>(null);
+  // Drag-and-drop between tier columns. Native HTML5 DnD — no library
+  // needed for a column-target kanban, and it keeps the bundle lean.
+  const [draggingLeadId, setDraggingLeadId] = useState<number | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<PipelineStage | null>(null);
+  // Set on drag start, cleared shortly after drop. Suppresses the card's
+  // navigate-on-click so finishing a drag doesn't open the lead profile.
+  const didDragRef = useRef(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // ── Data loading ────────────────────────────────────────────
@@ -138,6 +145,32 @@ export default function PipelinePage() {
     } finally {
       setMovingLead(null);
     }
+  };
+
+  // ── Drag and drop ───────────────────────────────────────────
+
+  const handleDragStart = (leadId: number) => {
+    didDragRef.current = true;
+    setDraggingLeadId(leadId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingLeadId(null);
+    setDragOverStage(null);
+    // Let the click event that follows a drag fire and be ignored first.
+    setTimeout(() => { didDragRef.current = false; }, 0);
+  };
+
+  const handleDrop = (targetStage: PipelineStage) => {
+    setDragOverStage(null);
+    const leadId = draggingLeadId;
+    setDraggingLeadId(null);
+    if (leadId === null) return;
+    // No-op when dropped back into the column it came from.
+    const currentStage = (Object.keys(pipeline) as PipelineStage[])
+      .find((k) => (pipeline[k] || []).some((l) => l.id === leadId));
+    if (currentStage === targetStage) return;
+    handleStageChange(leadId, targetStage);
   };
 
   // ── Derived data ────────────────────────────────────────────
@@ -266,7 +299,27 @@ export default function PipelinePage() {
               return (
                 <div
                   key={stage.key}
-                  className="w-72 flex-shrink-0 flex flex-col bg-paper border border-hair-soft rounded-xl overflow-hidden"
+                  onDragOver={(e) => {
+                    // preventDefault is what marks this a valid drop target.
+                    e.preventDefault();
+                    if (dragOverStage !== stage.key) setDragOverStage(stage.key);
+                  }}
+                  onDragLeave={(e) => {
+                    // Only clear when leaving the column itself, not when
+                    // crossing between child cards inside it.
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setDragOverStage((prev) => (prev === stage.key ? null : prev));
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleDrop(stage.key);
+                  }}
+                  className={`w-72 flex-shrink-0 flex flex-col bg-paper border rounded-xl overflow-hidden transition-all ${
+                    dragOverStage === stage.key
+                      ? 'border-sky-hair ring-2 ring-[rgba(94,197,230,0.35)]'
+                      : 'border-hair-soft'
+                  }`}
                 >
                   {/* Column header */}
                   <div className={`${stage.bgTint} border-b border-hair-soft`}>
@@ -295,14 +348,21 @@ export default function PipelinePage() {
                       leads.map((lead) => (
                         <div
                           key={lead.id}
-                          className={`bg-tray border border-hair-soft rounded-lg p-3.5 hover:border-hair-strong transition-all group ${
+                          draggable
+                          onDragStart={() => handleDragStart(lead.id)}
+                          onDragEnd={handleDragEnd}
+                          title="Drag to move between tiers"
+                          className={`bg-tray border border-hair-soft rounded-lg p-3.5 hover:border-hair-strong transition-all group cursor-grab active:cursor-grabbing ${
                             movingLead === lead.id ? 'opacity-50' : ''
-                          }`}
+                          } ${draggingLeadId === lead.id ? 'opacity-40 ring-2 ring-sky-hair' : ''}`}
                         >
                           {/* Clickable lead info */}
                           <div
                             className="cursor-pointer"
                             onClick={() => {
+                              // Swallow the click that fires at the end of a
+                              // drag, otherwise every drop opens the profile.
+                              if (didDragRef.current) return;
                               rememberLeadProfileReturn();
                               navigate(`/leads/${lead.id}`);
                             }}
