@@ -600,7 +600,8 @@ export default function HomePage() {
                 ))}
               </select>
               <p className="text-ink-dim text-xs mt-1.5">
-                Required. Applied to every lead in this CSV. Need a new one?{' '}
+                Optional. Applied to every lead in this CSV — leave blank for mixed batches
+                and set each lead's industry as you work through them. Need a new one?{' '}
                 <button
                   type="button"
                   onClick={() => navigate('/settings')}
@@ -670,7 +671,7 @@ export default function HomePage() {
                 <>
                   <p className="text-ink-muted text-sm">Drop a CSV here, or click to browse</p>
                   <p className="text-ink-dim text-xs mt-1 font-mono tracking-wide">
-                    columns · name · company · phone · email · category
+                    reads name · company · phone · email · website · form answers
                   </p>
                 </>
               )}
@@ -682,15 +683,10 @@ export default function HomePage() {
                 size="md"
                 icon={<Upload size={16} />}
                 onClick={handleImport}
-                disabled={!selectedFile || !importCategory.trim() || importing}
+                disabled={!selectedFile || importing}
               >
                 {importing ? 'Importing…' : 'Import leads'}
               </PillButton>
-              {!importCategory.trim() && selectedFile && (
-                <p className="text-ink-dim text-xs mt-2">
-                  Pick or type a category above to enable import.
-                </p>
-              )}
             </div>
 
             {importError && (

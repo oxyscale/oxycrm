@@ -105,6 +105,79 @@ function mapLeadRow(row: LeadRow): Lead {
   };
 }
 
+// Free email providers — a lead's address on one of these tells us
+// nothing about their website, so domain inference has to skip them.
+const PERSONAL_EMAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.com.au', 'ymail.com',
+  'hotmail.com', 'hotmail.com.au', 'outlook.com', 'outlook.com.au',
+  'live.com', 'live.com.au', 'msn.com', 'icloud.com', 'me.com', 'mac.com',
+  'bigpond.com', 'bigpond.net.au', 'optusnet.com.au', 'iinet.net.au',
+  'tpg.com.au', 'internode.on.net', 'aussiebroadband.com.au',
+  'protonmail.com', 'proton.me', 'aol.com', 'fastmail.com',
+]);
+
+/**
+ * Derives a website from a business email domain. Inbound form captures
+ * (Meta/Google lead ads) never include a website field, but a lead using
+ * name@theircompany.com.au has effectively told us theirs. Returns '' for
+ * free providers and anything that doesn't look like a domain.
+ */
+function inferWebsiteFromEmail(email: string): string {
+  if (!email || !email.includes('@')) return '';
+  const domain = email.split('@')[1]?.toLowerCase().trim().replace(/\.$/, '') || '';
+  if (!domain || PERSONAL_EMAIL_DOMAINS.has(domain)) return '';
+  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return '';
+  return `https://${domain}`;
+}
+
+// Columns from lead-capture forms worth keeping as context on the lead.
+// Anything not listed here (utm_*, fbclid, submission ids, tracking junk)
+// is deliberately dropped — it would bury the useful answers.
+const CONTEXT_COLUMNS: [key: string, label: string][] = [
+  ['revenue', 'Revenue'],
+  ['budget', 'Budget'],
+  ['timeline', 'Timeline'],
+  ['struggle', 'Struggle'],
+  ['message', 'Message'],
+  ['enquiry', 'Enquiry'],
+  ['comments', 'Comments'],
+  ['goal', 'Goal'],
+];
+
+// Form fields left blank often arrive as a literal placeholder rather
+// than an empty string. Treat these as "no answer".
+const EMPTY_ANSWERS = new Set(['', '-', 'n/a', 'na', 'none', 'not given', 'not provided', 'null']);
+
+/**
+ * Builds the note that gets attached to an imported lead. Combines any
+ * explicit note column with the answers a lead gave on the capture form,
+ * so the first call starts with their own words rather than a blank
+ * profile.
+ */
+function buildImportNote(row: Record<string, string>): string {
+  const parts: string[] = [];
+
+  const submitted = (row.submitted_at || row.submission_date || row.date || '').trim();
+  if (submitted) {
+    // ISO timestamps carry a time we don't need; date is enough.
+    const dateOnly = submitted.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) parts.push(`Enquired ${dateOnly}.`);
+  }
+
+  const explicit = (
+    row.notes || row.note || row.context || row.summary || row.description || ''
+  ).trim();
+  if (explicit) parts.push(explicit);
+
+  for (const [key, label] of CONTEXT_COLUMNS) {
+    const raw = (row[key] || '').trim();
+    if (!raw || EMPTY_ANSWERS.has(raw.toLowerCase())) continue;
+    parts.push(`${label}: ${raw}`);
+  }
+
+  return parts.join(' ').trim();
+}
+
 /** Safely parse a JSON string, returning a fallback on failure */
 function safeJsonParse<T>(value: string | null, fallback: T): T {
   if (!value) return fallback;
@@ -1402,22 +1475,23 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       throw new ApiError(400, 'leadType must be "new" or "callback"');
     }
 
-    // Category is REQUIRED on every import and must already exist in the
-    // managed categories list. No more inline category creation — Jordan
-    // wants categories created up-front in Settings > Categories, so the
-    // managed list stays curated and the dropdown stays clean.
+    // Category is OPTIONAL. Inbound batches (Meta ads, organic) arrive
+    // as a mix of industries, so forcing one category across the batch
+    // would just be wrong data. When supplied it still has to be a
+    // managed category, which keeps the curated list free of typos.
+    // Leads imported without one show as "No Category" and can be
+    // filtered for and set as Jordan works through them.
     const categoryOverride = (req.body.category as string)?.trim() || null;
-    if (!categoryOverride) {
-      throw new ApiError(400, 'Category is required. Pick one from Settings > Categories.');
-    }
-    const categoryExists = db.prepare(
-      'SELECT 1 FROM categories WHERE LOWER(name) = LOWER(?)',
-    ).get(categoryOverride) as { 1: number } | undefined;
-    if (!categoryExists) {
-      throw new ApiError(
-        400,
-        `Category "${categoryOverride}" doesn't exist. Add it in Settings > Categories first, then re-upload.`,
-      );
+    if (categoryOverride) {
+      const categoryExists = db.prepare(
+        'SELECT 1 FROM categories WHERE LOWER(name) = LOWER(?)',
+      ).get(categoryOverride) as { 1: number } | undefined;
+      if (!categoryExists) {
+        throw new ApiError(
+          400,
+          `Category "${categoryOverride}" doesn't exist. Add it in Settings > Categories first, then re-upload.`,
+        );
+      }
     }
 
     // Lead source is picked at upload time, same pattern as category —
@@ -1441,6 +1515,13 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       ? (db.prepare('SELECT name FROM lead_sources WHERE LOWER(name) = LOWER(?)')
           .get(sourceOverride) as { name: string }).name
       : null;
+
+    // Lowercased managed source names, for validating any per-row source
+    // column without a query per row.
+    const managedSourceNames = new Set(
+      (db.prepare('SELECT name FROM lead_sources').all() as { name: string }[])
+        .map((r) => r.name.toLowerCase()),
+    );
 
     // Parse the CSV from the uploaded buffer, stripping BOM if present
     const csvContent = req.file.buffer.toString('utf-8').replace(/^﻿/, '');
@@ -1582,7 +1663,8 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         }
 
         const phone = (
-          row.phone
+          row.mobile_e164               // already E.164 normalised — prefer it
+          || row.phone
           || row.phone_unformatted      // Apify
           || row.phone_number
           || row.phonenumber
@@ -1600,11 +1682,19 @@ router.post('/import', upload.single('file'), (req, res, next) => {
 
         // Name is required — phone can be empty (user may have email/website to find it later)
         if (!name) {
+          // Trailing blank rows are extremely common in spreadsheet
+          // exports (Jordan's Facebook sheet has 86 of them). They're not
+          // a mapping problem, so skip them quietly rather than firing
+          // the "no name column" diagnostic on the first one and making
+          // a clean import look broken.
+          const rowIsEmpty = Object.values(row).every((v) => !String(v ?? '').trim());
+          if (rowIsEmpty) continue;
+
           result.skipped++;
           // Surface the actual headers in the first error so the user can
           // see which column in their CSV holds the name and rename it.
           if (result.errors.length === 0) {
-            const headers = Object.keys(row).join(', ');
+            const headers = Object.keys(row).filter(Boolean).join(', ');
             result.errors.push(
               `No name column detected. Your CSV's columns are: [${headers}]. ` +
               `Rename one of them to "name" (or use "first_name" + "last_name") and re-upload.`
@@ -1671,17 +1761,22 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         ).trim() || null;
         const phoneValue = phone || '';
         const emailValue = email || null;
-        const websiteValue = website || fallbackUrl || null;
+        // No website column on inbound form captures — derive it from a
+        // business email domain rather than leaving the field empty.
+        const websiteValue = website || fallbackUrl || inferWebsiteFromEmail(email) || null;
         // Category is locked to the batch override (validated against
         // managed categories at the top of this handler). The CSV's own
         // category column is ignored — Jordan picked the category at
         // upload time and that's the source of truth.
         const categoryValue = categoryOverride;
-        // Batch picker wins; a per-row `source` column is the fallback so
-        // a mixed-channel export can still carry its own values.
+        // Batch picker wins. A per-row source column is the fallback, but
+        // only when it names a managed source — raw exports put tracking
+        // strings in `source` (e.g. "meta / 5biz / raining-data") and
+        // those must never become lead sources or the Reports breakdown
+        // fragments into one-off values.
+        const rowSource = (row.lead_source || row.source || row.channel || '').trim();
         const sourceValue = canonicalSource
-          || (row.lead_source || row.source || row.channel || '').trim()
-          || null;
+          || (rowSource && managedSourceNames.has(rowSource.toLowerCase()) ? rowSource : null);
 
         const insertResult = insertStmt.run({
           name,
@@ -1697,18 +1792,11 @@ router.post('/import', upload.single('file'), (req, res, next) => {
 
         const insertedId = Number(insertResult.lastInsertRowid);
 
-        // Optional per-row note — accepts a handful of column aliases
-        // so different upstream sources can carry context in without
-        // renaming. If present, land the value as the lead's first note
-        // + activity so it shows up in the profile timeline immediately.
-        const noteContent = (
-          row.notes
-          || row.note
-          || row.context
-          || row.summary
-          || row.description
-          || ''
-        ).trim();
+        // Per-row note built from an explicit note column plus any
+        // capture-form answers (revenue, struggle, timeline...). Lands as
+        // the lead's first note + activity so the profile opens with
+        // their own words instead of blank.
+        const noteContent = buildImportNote(row);
         if (noteContent) {
           const nowIso = new Date().toISOString();
           insertNoteStmt.run(insertedId, noteContent, noteAuthor, nowIso, nowIso);
