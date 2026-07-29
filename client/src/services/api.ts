@@ -875,11 +875,14 @@ export async function draftVoicemailEmail(params: {
 
 export async function createLead(data: {
   name: string;
-  phone: string;
+  phone?: string;
   company?: string;
   email?: string;
   website?: string;
   category?: string;
+  /** Channel the lead arrived through. Optional — often unknown when
+   *  creating a lead by hand. */
+  leadSource?: string;
   temperature?: 'hot' | 'warm' | 'cold';
   pipelineStage?: string;
 }): Promise<Lead> {

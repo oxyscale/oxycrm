@@ -41,6 +41,10 @@ const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
   lost: { label: 'Lost', color: '#ef4444' },
 };
 
+// Sentinel for the "+ Create category…" option. Prefixed so it can
+// never collide with a real category name.
+const CREATE_CATEGORY_VALUE = '__create_category__';
+
 const ACTIVITY_ICONS: Record<string, typeof Mail> = {
   call: Clock,
   email: Mail,
@@ -96,6 +100,7 @@ export default function HomePage() {
     email: '',
     website: '',
     category: '',
+    leadSource: '',
   });
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState<{
@@ -106,6 +111,12 @@ export default function HomePage() {
   // Managed categories for the dropdown
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  // Inline category creation on the create-lead form. Bouncing to
+  // Settings discarded everything already typed here.
+  const [creatingInlineCategory, setCreatingInlineCategory] = useState(false);
+  const [inlineCategoryName, setInlineCategoryName] = useState('');
+  const [savingInlineCategory, setSavingInlineCategory] = useState(false);
+  const [inlineCategoryError, setInlineCategoryError] = useState<string | null>(null);
 
   // Calendar status — checked on mount, on window focus, and on a slow
   // 5-min interval (matches the server's validity cache TTL so we are
@@ -269,6 +280,35 @@ export default function HomePage() {
     }
   };
 
+  /**
+   * Creates a category from the create-lead form and selects it, without
+   * navigating away — going to Settings discarded everything already
+   * typed into the form. A name that already exists isn't an error here:
+   * the intent (use that category) still holds, so it just gets selected.
+   */
+  const handleInlineCreateCategory = async () => {
+    const name = inlineCategoryName.trim();
+    if (!name) return;
+    setSavingInlineCategory(true);
+    setInlineCategoryError(null);
+    try {
+      try {
+        await api.createCategory(name);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (!/already exists/i.test(msg)) throw err;
+      }
+      await reloadCategoryOptions();
+      setNewLead((prev) => ({ ...prev, category: name }));
+      setCreatingInlineCategory(false);
+      setInlineCategoryName('');
+    } catch (err) {
+      setInlineCategoryError(err instanceof Error ? err.message : 'Failed to create category');
+    } finally {
+      setSavingInlineCategory(false);
+    }
+  };
+
   const handleCreateLead = async () => {
     if (!newLead.name.trim()) return;
     setCreating(true);
@@ -283,6 +323,7 @@ export default function HomePage() {
         email: newLead.email.trim() || undefined,
         website: newLead.website.trim() || undefined,
         category: newLead.category.trim() || undefined,
+        leadSource: newLead.leadSource.trim() || undefined,
         // No auto-stage on create — defaults to tier_3 server-side. The user
         // moves leads to tier_2 / tier_1 manually as the conversation matures.
         pipelineStage: undefined,
@@ -292,7 +333,7 @@ export default function HomePage() {
         leadName: created.name,
       });
 
-      setNewLead({ name: '', company: '', phone: '', email: '', website: '', category: '' });
+      setNewLead({ name: '', company: '', phone: '', email: '', website: '', category: '', leadSource: '' });
 
       const freshLeads = await api.getLeads({ status: 'not_called' });
       setLeads(freshLeads);
@@ -529,34 +570,90 @@ export default function HomePage() {
                 <EyebrowLabel variant="bare" className="mb-2">
                   Category
                 </EyebrowLabel>
-                {/* Strict select — only managed categories. To add a new
-                    one, the user goes to Settings > Categories. This keeps
-                    the managed list curated and stops scrape-junk strings
-                    from polluting the lead.category column. */}
+                {/* Managed categories, plus inline creation. Sending the
+                    user to Settings meant losing everything already typed
+                    into this form, so the new category is created right
+                    here and selected. */}
+                {creatingInlineCategory ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={inlineCategoryName}
+                      onChange={(e) => { setInlineCategoryName(e.target.value); setInlineCategoryError(null); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); handleInlineCreateCategory(); }
+                        if (e.key === 'Escape') { setCreatingInlineCategory(false); setInlineCategoryName(''); setInlineCategoryError(null); }
+                      }}
+                      placeholder="New category name"
+                      maxLength={80}
+                      className={tempInputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleInlineCreateCategory}
+                      disabled={!inlineCategoryName.trim() || savingInlineCategory}
+                      className="shrink-0 text-sky-ink hover:text-ink transition-colors disabled:opacity-40"
+                      title="Create and select"
+                    >
+                      {savingInlineCategory ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setCreatingInlineCategory(false); setInlineCategoryName(''); setInlineCategoryError(null); }}
+                      className="shrink-0 text-ink-dim hover:text-ink-muted transition-colors"
+                      title="Cancel"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={newLead.category}
+                    onChange={(e) => {
+                      if (e.target.value === CREATE_CATEGORY_VALUE) {
+                        setCreatingInlineCategory(true);
+                        setInlineCategoryName('');
+                        return;
+                      }
+                      setNewLead((prev) => ({ ...prev, category: e.target.value }));
+                    }}
+                    className={tempInputClass}
+                    disabled={loadingCategories}
+                  >
+                    <option value="">Select a category…</option>
+                    {categoryOptions.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                    <option value={CREATE_CATEGORY_VALUE}>+ Create category…</option>
+                  </select>
+                )}
+                {inlineCategoryError && (
+                  <p className="text-risk text-xs mt-1.5">{inlineCategoryError}</p>
+                )}
+              </div>
+
+              {/* Lead source — optional. Inbound batches arrive across
+                  many channels and Jordan often doesn't know at create
+                  time, so this never blocks the form. */}
+              <div>
+                <EyebrowLabel variant="bare" className="mb-2">
+                  Lead source
+                </EyebrowLabel>
                 <select
-                  value={newLead.category}
+                  value={newLead.leadSource}
                   onChange={(e) =>
-                    setNewLead((prev) => ({ ...prev, category: e.target.value }))
+                    setNewLead((prev) => ({ ...prev, leadSource: e.target.value }))
                   }
                   className={tempInputClass}
-                  disabled={loadingCategories || categoryOptions.length === 0}
+                  disabled={sourceOptions.length === 0}
                 >
-                  <option value="">Select a category…</option>
-                  {categoryOptions.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
+                  <option value="">None</option>
+                  {sourceOptions.map((src) => (
+                    <option key={src} value={src}>{src}</option>
                   ))}
                 </select>
-                <p className="text-ink-dim text-xs mt-1.5">
-                  Need a new category?{' '}
-                  <button
-                    type="button"
-                    onClick={() => navigate('/settings')}
-                    className="text-sky-ink hover:underline"
-                  >
-                    Add it in Settings → Categories
-                  </button>
-                  {' '}first.
-                </p>
+                <p className="text-ink-dim text-xs mt-1.5">Optional.</p>
               </div>
             </div>
 
