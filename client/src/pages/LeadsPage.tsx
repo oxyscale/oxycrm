@@ -58,9 +58,6 @@ export default function LeadsPage() {
     (searchParams.get('tab') as 'lead' | 'in_build' | 'client') || 'lead'
   );
   const [campaignOptions, setCampaignOptions] = useState<api.CampaignSummary[]>([]);
-  // "Engaged" = opened an email at least once. The high-signal view is
-  // engaged + not contacted: they're reading and nobody has followed up.
-  const [filterEngaged, setFilterEngaged] = useState(searchParams.get('engaged') === '1');
   const [filterContacted, setFilterContacted] = useState<'all' | 'contacted' | 'not_contacted'>(
     (searchParams.get('status') as 'all' | 'contacted' | 'not_contacted') || 'all'
   );
@@ -85,7 +82,6 @@ export default function LeadsPage() {
     if (filterCampaign !== 'all') params.set('camp', filterCampaign);
     if (tab !== 'lead') params.set('tab', tab);
     if (filterContacted !== 'all') params.set('status', filterContacted);
-    if (filterEngaged) params.set('engaged', '1');
     if (sortField !== 'recent') params.set('sort', sortField);
     if (sortDir !== 'asc') params.set('dir', sortDir);
     setSearchParams(params, { replace: true });
@@ -94,7 +90,7 @@ export default function LeadsPage() {
     try {
       sessionStorage.setItem('leads-return-url', `/leads${qs ? `?${qs}` : ''}`);
     } catch { /* ignore */ }
-  }, [search, filterCategory, filterSource, filterCampaign, tab, filterContacted, filterEngaged, sortField, sortDir, setSearchParams]);
+  }, [search, filterCategory, filterSource, filterCampaign, tab, filterContacted, sortField, sortDir, setSearchParams]);
 
   useEffect(() => {
     syncParams();
@@ -251,7 +247,6 @@ export default function LeadsPage() {
       if (filterSource !== 'all' && filterSource !== 'none' && lead.leadSource !== filterSource) return acc;
       if (filterCampaign !== 'all' && lead.campaign !== filterCampaign) return acc;
       if ((lead.lifecycle ?? 'lead') !== tab) return acc;
-      if (filterEngaged && !(lead.emailOpens ?? 0)) return acc;
       acc.all += 1;
       if (lead.contacted) acc.contacted += 1;
       else acc.notContacted += 1;
@@ -274,10 +269,6 @@ export default function LeadsPage() {
       if (filterSource !== 'all' && filterSource !== 'none' && lead.leadSource !== filterSource) return false;
       if (filterCampaign !== 'all' && lead.campaign !== filterCampaign) return false;
       if ((lead.lifecycle ?? 'lead') !== tab) return false;
-      // Engaged = has opened at least one email. Applies even during a
-      // search, unlike the contacted pill — it's a property of the lead,
-      // not a view toggle.
-      if (filterEngaged && !(lead.emailOpens ?? 0)) return false;
       if (search) {
         const q = search.toLowerCase();
         return (
@@ -404,10 +395,13 @@ export default function LeadsPage() {
         ))}
       </div>
 
-      {/* Filters bar */}
-      <div className="flex items-center gap-3 mb-6">
+      {/* Filter area, two rows. Nine controls crammed into one row left
+          the search box tiny and pushed the table narrow enough to clip
+          names. Row 1 is search (which deserves the width) plus the
+          export; row 2 is the filters, grouped. */}
+      <div className="flex items-center gap-3 mb-3">
         {/* Search with recent leads dropdown */}
-        <div className="relative flex-1 max-w-sm" ref={searchWrapperRef}>
+        <div className="relative flex-1" ref={searchWrapperRef}>
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-dim z-10" />
           <input
             type="text"
@@ -462,6 +456,12 @@ export default function LeadsPage() {
           )}
         </div>
 
+        <CopyListButton leads={filtered} />
+      </div>
+
+      {/* Row 2 — filters. Dropdowns narrow which contacts are in scope;
+          the pills switch between contacted states. */}
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
         {/* Category filter */}
         <select
           value={filterCategory}
@@ -505,6 +505,8 @@ export default function LeadsPage() {
           </select>
         )}
 
+        <div className="w-px h-6 bg-hair-soft mx-1" aria-hidden />
+
         {/* Contacted filter — three independent pills, each showing
             its running count so Jordan can see all three totals at
             once instead of cycling through them. Counts ignore the
@@ -544,27 +546,6 @@ export default function LeadsPage() {
           >
             Not Contacted <span className={filterContacted === 'not_contacted' ? 'text-[#dc2626]/70 ml-1' : 'text-ink-dim ml-1'}>{counts.notContacted.toLocaleString()}</span>
           </button>
-          {/* Copy list — exports the currently-visible (filtered+sorted)
-              leads as TSV to the clipboard. TSV pastes cleanly into
-              Sheets/Excel with columns intact. Header row + Name,
-              Company, Phone, Email, Category, Stage. */}
-          {/* Engaged — has opened at least one email. Pair it with the
-              Not Contacted pill for the warmest view in the CRM: people
-              reading your emails who nobody has followed up. */}
-          <button
-            type="button"
-            onClick={() => setFilterEngaged((v) => !v)}
-            title="Leads who have opened at least one email"
-            className={`rounded-full px-3.5 py-2 text-sm font-medium border transition-all select-none inline-flex items-center gap-1.5 ${
-              filterEngaged
-                ? 'bg-sky-wash border-sky-hair text-sky-ink'
-                : 'bg-paper border-hair-soft text-ink-muted hover:bg-[rgba(11,13,14,0.03)]'
-            }`}
-          >
-            <MailOpen size={13} />
-            Engaged
-          </button>
-          <CopyListButton leads={filtered} />
         </div>
       </div>
 
@@ -579,13 +560,13 @@ export default function LeadsPage() {
                   {sortField === 'name' && <ArrowUpDown size={12} className="text-sky-ink" />}
                 </span>
               </th>
-              <th className="w-[180px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3 select-none cursor-pointer hover:text-ink-muted transition-colors" onClick={() => handleSort('category')}>
+              <th className="w-[150px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3 select-none cursor-pointer hover:text-ink-muted transition-colors" onClick={() => handleSort('category')}>
                 <span className="flex items-center gap-1">
                   Category
                   {sortField === 'category' && <ArrowUpDown size={12} className="text-sky-ink" />}
                 </span>
               </th>
-              <th className="w-[150px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">
+              <th className="w-[130px] text-left text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">
                 {tab === 'client' ? 'Retainer' : 'Source'}
               </th>
               <th className="w-[92px] text-center text-ink-dim text-xs font-medium uppercase tracking-wider px-3 py-3">Email</th>
@@ -805,7 +786,7 @@ export default function LeadsPage() {
 
         {filtered.length === 0 && (
           <div className="text-center py-12 text-ink-dim">
-            {search || filterCategory !== 'all' || filterSource !== 'all' || filterCampaign !== 'all' || filterEngaged || filterContacted !== 'all'
+            {search || filterCategory !== 'all' || filterSource !== 'all' || filterCampaign !== 'all' || filterContacted !== 'all'
               ? 'No leads match your filters'
               : 'No leads imported yet'}
           </div>
