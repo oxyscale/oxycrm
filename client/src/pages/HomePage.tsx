@@ -83,6 +83,7 @@ export default function HomePage() {
   // Lead source for the CSV batch — the channel it arrived through.
   const [importSource, setImportSource] = useState('');
   const [sourceOptions, setSourceOptions] = useState<string[]>([]);
+  const [campaignNames, setCampaignNames] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -101,6 +102,7 @@ export default function HomePage() {
     website: '',
     category: '',
     leadSource: '',
+    campaign: '',
   });
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState<{
@@ -186,6 +188,9 @@ export default function HomePage() {
     reloadCategoryOptions();
     api.getLeadSources()
       .then((srcs) => setSourceOptions(srcs.map((s) => s.name)))
+      .catch(() => { /* non-critical */ });
+    api.getCampaigns()
+      .then((cs) => setCampaignNames(cs.map((c) => c.name)))
       .catch(() => { /* non-critical */ });
   }, [showCreateLead, showImport, reloadCategoryOptions]);
 
@@ -324,6 +329,7 @@ export default function HomePage() {
         website: newLead.website.trim() || undefined,
         category: newLead.category.trim() || undefined,
         leadSource: newLead.leadSource.trim() || undefined,
+        campaign: newLead.campaign.trim() || undefined,
         // No auto-stage on create — defaults to tier_3 server-side. The user
         // moves leads to tier_2 / tier_1 manually as the conversation matures.
         pipelineStage: undefined,
@@ -333,7 +339,7 @@ export default function HomePage() {
         leadName: created.name,
       });
 
-      setNewLead({ name: '', company: '', phone: '', email: '', website: '', category: '', leadSource: '' });
+      setNewLead({ name: '', company: '', phone: '', email: '', website: '', category: '', leadSource: '', campaign: '' });
 
       const freshLeads = await api.getLeads({ status: 'not_called' });
       setLeads(freshLeads);
@@ -653,6 +659,33 @@ export default function HomePage() {
                     <option key={src} value={src}>{src}</option>
                   ))}
                 </select>
+                <p className="text-ink-dim text-xs mt-1.5">Optional.</p>
+              </div>
+
+              {/* Campaign — which offer produced this lead. Imports fill
+                  this from the ad platform's utm columns; a lead added by
+                  hand needs it set here or the attribution is lost.
+                  Free text so a brand-new campaign doesn't need setting
+                  up first, with existing names offered as a datalist. */}
+              <div>
+                <EyebrowLabel variant="bare" className="mb-2">
+                  Campaign
+                </EyebrowLabel>
+                <input
+                  type="text"
+                  list="known-campaigns"
+                  value={newLead.campaign}
+                  onChange={(e) =>
+                    setNewLead((prev) => ({ ...prev, campaign: e.target.value }))
+                  }
+                  placeholder="e.g. 5biz"
+                  className={tempInputClass}
+                />
+                <datalist id="known-campaigns">
+                  {campaignNames.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
                 <p className="text-ink-dim text-xs mt-1.5">Optional.</p>
               </div>
             </div>

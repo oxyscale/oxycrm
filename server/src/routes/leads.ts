@@ -268,6 +268,8 @@ const createLeadSchema = z.object({
   website: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
   leadSource: z.string().nullable().optional(),
+  campaign: z.string().nullable().optional(),
+  campaignContent: z.string().nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
   pipelineStage: z.enum(['pulse', 'tier_1', 'tier_2', 'tier_3', 'won', 'lost']).nullable().optional(),
@@ -1725,8 +1727,8 @@ router.post('/', (req, res, next) => {
       ).get() as { max_pos: number };
 
       const result = db.prepare(`
-        INSERT INTO leads (name, phone, company, email, website, category, lead_source, lead_type, status, pipeline_stage, temperature, queue_position, created_at, updated_at)
-        VALUES (@name, @phone, @company, @email, @website, @category, @leadSource, 'new', 'not_called', @pipelineStage, @temperature, @queuePosition, @now, @now)
+        INSERT INTO leads (name, phone, company, email, website, category, lead_source, campaign, campaign_content, lead_type, status, pipeline_stage, temperature, queue_position, created_at, updated_at)
+        VALUES (@name, @phone, @company, @email, @website, @category, @leadSource, @campaign, @campaignContent, 'new', 'not_called', @pipelineStage, @temperature, @queuePosition, @now, @now)
       `).run({
         name: payload.name,
         phone: payload.phone || '',
@@ -1735,6 +1737,8 @@ router.post('/', (req, res, next) => {
         website: payload.website ?? null,
         category: canonicalCategory,
         leadSource: payload.leadSource?.trim() || null,
+        campaign: payload.campaign?.trim() || null,
+        campaignContent: payload.campaignContent?.trim() || null,
         // null = no tier yet. Jordan places leads into a tier manually
         // from the lead profile dropdown.
         pipelineStage: payload.pipelineStage ?? null,

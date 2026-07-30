@@ -883,6 +883,9 @@ export async function createLead(data: {
   /** Channel the lead arrived through. Optional — often unknown when
    *  creating a lead by hand. */
   leadSource?: string;
+  /** Which offer produced the lead. Imports read this from utm columns;
+   *  a hand-added lead needs it set explicitly or attribution is lost. */
+  campaign?: string;
   temperature?: 'hot' | 'warm' | 'cold';
   pipelineStage?: string;
 }): Promise<Lead> {

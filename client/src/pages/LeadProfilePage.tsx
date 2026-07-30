@@ -50,6 +50,9 @@ import type {
 // Sentinel value for the "+ Create category…" option. Prefixed so it can
 // never collide with a real category name.
 const CREATE_CATEGORY_VALUE = '__create_category__';
+// Same trick for the campaign picker — lets "+ New campaign…" live in the
+// same <select> without ever colliding with a real campaign name.
+const CREATE_CAMPAIGN_VALUE = '__create_campaign__';
 
 const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
   { value: 'tier_1', label: 'Tier 1' },
@@ -352,6 +355,11 @@ export default function LeadProfilePage() {
   const [retainers, setRetainers] = useState<api.ClientRetainerEntry[]>([]);
   // Inline category creation, so a new industry can be added mid-call
   // without detouring to Settings.
+  // Campaign picker. Options come from campaigns already present on
+  // leads (imports set them from utm columns); typing adds a new one.
+  const [campaignNames, setCampaignNames] = useState<string[]>([]);
+  const [typingCampaign, setTypingCampaign] = useState(false);
+  const [newCampaignName, setNewCampaignName] = useState('');
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [savingCategory, setSavingCategory] = useState(false);
@@ -393,6 +401,9 @@ export default function LeadProfilePage() {
       .catch(() => {});
     api.getLeadSources()
       .then((srcs) => setLeadSourceOptions(srcs.map((s) => s.name)))
+      .catch(() => {});
+    api.getCampaigns()
+      .then((cs) => setCampaignNames(cs.map((c) => c.name)))
       .catch(() => {});
   }, []);
 
@@ -531,6 +542,23 @@ export default function LeadProfilePage() {
       setCategoryError(err instanceof Error ? err.message : 'Failed to create category');
     } finally {
       setSavingCategory(false);
+    }
+  };
+
+  /** Sets (or clears) the campaign this lead came through. */
+  const handleSetCampaign = async (campaign: string | null) => {
+    if (!lead) return;
+    try {
+      const updated = await api.updateLead(lead.id, { campaign } as Partial<Lead>);
+      setLead(updated);
+      setTypingCampaign(false);
+      setNewCampaignName('');
+      // Pick up a brand-new name so it's offered on other leads too.
+      api.getCampaigns()
+        .then((cs) => setCampaignNames(cs.map((c) => c.name)))
+        .catch(() => {});
+    } catch (err) {
+      console.error('Failed to update campaign:', err);
     }
   };
 
@@ -1949,18 +1977,73 @@ export default function LeadProfilePage() {
                 </select>
               </div>
 
-              {/* Campaign attribution — read-only. Comes from the ad
-                  platform via the import, so it's a record of where the
-                  lead actually came from rather than something to edit. */}
-              {lead.campaign && (
-                <div>
-                  <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Campaign</p>
-                  <p className="text-ink-muted text-sm">{lead.campaign}</p>
-                  {lead.campaignContent && (
-                    <p className="text-ink-dim text-xs mt-0.5">{lead.campaignContent}</p>
-                  )}
-                </div>
-              )}
+              {/* Campaign attribution. Usually set by the import from the
+                  ad platform's utm columns, but a lead added by hand has
+                  none — so it's editable. Options come from campaigns
+                  already in the data, with room to type a new one. */}
+              <div>
+                <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">Campaign</p>
+                {typingCampaign ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={newCampaignName}
+                      onChange={(e) => setNewCampaignName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSetCampaign(newCampaignName.trim() || null);
+                        if (e.key === 'Escape') { setTypingCampaign(false); setNewCampaignName(''); }
+                      }}
+                      placeholder="Campaign name"
+                      maxLength={80}
+                      className="flex-1 min-w-0 bg-paper border border-[rgba(10,156,212,0.3)] rounded-md px-2 py-1 text-ink text-sm focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSetCampaign(newCampaignName.trim() || null)}
+                      disabled={!newCampaignName.trim()}
+                      className="text-sky-ink hover:text-ink transition-colors disabled:opacity-40"
+                      title="Save"
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setTypingCampaign(false); setNewCampaignName(''); }}
+                      className="text-ink-dim hover:text-ink-muted transition-colors"
+                      title="Cancel"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={lead.campaign || ''}
+                    onChange={(e) => {
+                      if (e.target.value === CREATE_CAMPAIGN_VALUE) {
+                        setTypingCampaign(true);
+                        setNewCampaignName('');
+                        return;
+                      }
+                      handleSetCampaign(e.target.value || null);
+                    }}
+                    className="w-full bg-transparent text-ink-muted text-sm py-1 -ml-0.5 px-0.5 border-none focus:outline-none focus:ring-0 cursor-pointer hover:text-sky-ink transition-colors appearance-none"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a95a0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0 center', paddingRight: '16px' }}
+                  >
+                    <option value="">None</option>
+                    {lead.campaign && !campaignNames.includes(lead.campaign) && (
+                      <option value={lead.campaign}>{lead.campaign}</option>
+                    )}
+                    {campaignNames.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                    <option value={CREATE_CAMPAIGN_VALUE}>+ New campaign…</option>
+                  </select>
+                )}
+                {lead.campaignContent && !typingCampaign && (
+                  <p className="text-ink-dim text-xs mt-0.5">{lead.campaignContent}</p>
+                )}
+              </div>
 
               {/* Lead Type row removed (July 2026). It was a leftover from
                   the original dialler's "New Leads vs Callback Leads"
