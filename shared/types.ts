@@ -8,8 +8,9 @@
 // (pipeline_stage IS NULL in the DB). NULL = not yet placed in the kanban.
 // The Lead profile dropdown includes a "Remove from pipeline" action that
 // nulls the stage.
-// Flow: New Lead (NULL) → Pulse → Tier 3 → Tier 2 → Tier 1 → Won / Lost
-export type PipelineStage = 'pulse' | 'tier_1' | 'tier_2' | 'tier_3' | 'won' | 'lost';
+// Flow: New Lead (NULL) → Pulse → Tier 3 → Tier 2 → Tier 1 → Proposals → Won / Lost
+// Proposals = a quote is out and we're waiting on their decision.
+export type PipelineStage = 'pulse' | 'tier_1' | 'tier_2' | 'tier_3' | 'proposal' | 'won' | 'lost';
 
 // Temperature
 export type Temperature = 'hot' | 'warm' | 'cold';

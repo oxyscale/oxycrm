@@ -87,7 +87,7 @@ function mapLeadRow(row: LeadRow): Lead {
 // ============================================================
 
 const PIPELINE_STAGES: [PipelineStage, ...PipelineStage[]] = [
-  'tier_1', 'tier_2', 'tier_3', 'pulse', 'won', 'lost',
+  'proposal', 'tier_1', 'tier_2', 'tier_3', 'pulse', 'won', 'lost',
 ];
 
 const TEMPERATURES: [Temperature, ...Temperature[]] = ['hot', 'warm', 'cold'];
@@ -107,6 +107,7 @@ const updateTemperatureSchema = z.object({
 
 const stageLabels: Record<PipelineStage, string> = {
   pulse: 'Pulse',
+  proposal: 'Proposals',
   tier_1: 'Tier 1',
   tier_2: 'Tier 2',
   tier_3: 'Tier 3',
@@ -361,7 +362,7 @@ router.get('/stats', (req, res, next) => {
       SELECT COALESCE(SUM(p.value), 0) AS total_value
       FROM projects p
       JOIN leads l ON l.id = p.lead_id
-      WHERE l.pipeline_stage IN ('tier_1', 'won')
+      WHERE l.pipeline_stage IN ('tier_1', 'proposal', 'won')
     `).get() as { total_value: number };
 
     // Temperature breakdown

@@ -34,7 +34,7 @@ function formatLongDate(yyyymmdd: string): string {
 }
 
 function tierLabel(tier: string): string {
-  return ({ pulse: 'Pulse', tier_1: 'Tier 1', tier_2: 'Tier 2', tier_3: 'Tier 3', won: 'Won', lost: 'Lost' })[tier] || tier;
+  return ({ pulse: 'Pulse', proposal: 'Proposals', tier_1: 'Tier 1', tier_2: 'Tier 2', tier_3: 'Tier 3', won: 'Won', lost: 'Lost' })[tier] || tier;
 }
 
 // ── Component ──────────────────────────────────────────────────
@@ -216,13 +216,13 @@ export default function PrintReportPage() {
             <SectionLabel>Pipeline by Tier</SectionLabel>
             <div className="grid grid-cols-4 gap-3 mb-6">
               {data.byTier
-                .filter((b) => ['tier_1', 'tier_2', 'tier_3', 'pulse'].includes(b.tier))
+                .filter((b) => ['proposal', 'tier_1', 'tier_2', 'tier_3', 'pulse'].includes(b.tier))
                 .sort((a, b2) => {
-                  const order = ['tier_1', 'tier_2', 'tier_3', 'pulse'];
+                  const order = ['proposal', 'tier_1', 'tier_2', 'tier_3', 'pulse'];
                   return order.indexOf(a.tier) - order.indexOf(b2.tier);
                 })
                 .map((b) => {
-                  const weight = ({ tier_1: '80%', tier_2: '40%', tier_3: '20%', pulse: '10%' } as Record<string, string>)[b.tier];
+                  const weight = ({ proposal: '90%', tier_1: '80%', tier_2: '40%', tier_3: '20%', pulse: '10%' } as Record<string, string>)[b.tier];
                   return (
                   <div
                     key={b.tier}

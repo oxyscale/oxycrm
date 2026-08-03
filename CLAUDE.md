@@ -170,16 +170,35 @@ Phosphor Icons (regular for UI, bold for small sizes, fill for emphasis). Sky In
 
 ### Pipeline stages (canonical values)
 ```
-'new_lead' | 'follow_up' | 'call_booked' | 'negotiation' | 'won' | 'lost' | 'not_interested'
+'pulse' | 'tier_3' | 'tier_2' | 'tier_1' | 'proposal' | 'won' | 'lost'
 ```
-If you add a new stage, update:
-1. `shared/types.ts` (`PipelineStage` type)
-2. `server/src/routes/leads.ts` (both `createLeadSchema` and `updateLeadSchema` zod enums)
-3. `server/src/routes/pipeline.ts` (`PIPELINE_STAGES` array + `stageLabels`)
-4. `client/src/pages/LeadProfilePage.tsx` (`PIPELINE_STAGES` array)
-5. `client/src/pages/HomePage.tsx` (`STAGE_CONFIG` object)
+Plus `NULL` = not placed on the kanban. The legacy names
+(new_lead / follow_up / call_booked / negotiation / not_interested) are
+migrated away at boot in `server/src/db/schema.ts`.
 
-Missing any one of these causes silent 400 errors.
+Adding a stage means updating ELEVEN places. Miss one and you get
+silent 400s or a stage that's invisible in reports:
+
+Server
+1. `shared/types.ts` — `PipelineStage`
+2. `server/src/routes/leads.ts` — both zod enums AND the two
+   `REAL_TIER_STAGES` sets used by dedupe scoring
+3. `server/src/routes/pipeline.ts` — `PIPELINE_STAGES` + `stageLabels`
+4. `server/src/routes/email.ts` — zod enum
+5. `server/src/routes/reports.ts` — `TIER_LABELS`, both `IN (...)` lists,
+   the `byTier` array, the `CASE` ordering, the active-tier filters, and
+   `TIER_WEIGHTS`
+
+Client
+6. `client/src/pages/LeadProfilePage.tsx` — `PIPELINE_STAGES`
+7. `client/src/pages/HomePage.tsx` — `STAGE_CONFIG`
+8. `client/src/pages/PipelinePage.tsx` — `STAGES` + the active-value list
+9. `client/src/pages/ReportsPage.tsx` — filter, order, weight labels, label map
+10. `client/src/pages/PrintReportPage.tsx` — same four
+11. `client/src/services/api.ts` — `ReportTierBucket.tier` union
+
+Quickest check: `grep -rn "tier_1" client/src server/src shared` and make
+sure every list you find includes the new stage.
 
 ### Dispositions
 ```
