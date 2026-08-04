@@ -69,6 +69,11 @@ export default function PipelinePage() {
 
   // Stage move dropdown state
   const [openMoveDropdown, setOpenMoveDropdown] = useState<number | null>(null);
+  // Viewport coords for the Move menu. It renders `fixed` rather than
+  // `absolute` because the column has overflow-hidden and the board is a
+  // horizontal scroller — an absolutely-positioned menu gets clipped by
+  // both, which is what made it render as a blank sliver.
+  const [moveMenuPos, setMoveMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [movingLead, setMovingLead] = useState<number | null>(null);
   // Drag-and-drop between tier columns. Native HTML5 DnD — no library
   // needed for a column-target kanban, and it keeps the bundle lean.
@@ -90,10 +95,20 @@ export default function PipelinePage() {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setOpenMoveDropdown(null);
+        setMoveMenuPos(null);
       }
     };
+    // Fixed positioning is captured once on open, so any scroll or resize
+    // would leave the menu stranded away from its card. Close it instead.
+    const dismiss = () => { setOpenMoveDropdown(null); setMoveMenuPos(null); };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', dismiss, true);
+    window.addEventListener('resize', dismiss);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', dismiss, true);
+      window.removeEventListener('resize', dismiss);
+    };
   }, []);
 
   const loadData = async () => {
@@ -124,6 +139,7 @@ export default function PipelinePage() {
   const handleStageChange = async (leadId: number, newStage: PipelineStage) => {
     setMovingLead(leadId);
     setOpenMoveDropdown(null);
+    setMoveMenuPos(null);
     try {
       const updated = await api.updateLeadStage(leadId, newStage);
       // Move lead in local state
@@ -411,7 +427,20 @@ export default function PipelinePage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setOpenMoveDropdown(openMoveDropdown === lead.id ? null : lead.id);
+                                  if (openMoveDropdown === lead.id) {
+                                    setOpenMoveDropdown(null);
+                                    setMoveMenuPos(null);
+                                    return;
+                                  }
+                                  const r = e.currentTarget.getBoundingClientRect();
+                                  // Roughly one row per stage plus padding.
+                                  const menuH = STAGES.length * 28 + 8;
+                                  const openUp = r.bottom + menuH > window.innerHeight - 8;
+                                  setMoveMenuPos({
+                                    top: openUp ? r.top - menuH - 4 : r.bottom + 4,
+                                    left: r.right,
+                                  });
+                                  setOpenMoveDropdown(lead.id);
                                 }}
                                 className="text-ink-dim hover:text-ink-muted transition-all flex items-center gap-1 text-[10px] opacity-0 group-hover:opacity-100"
                               >
@@ -420,8 +449,15 @@ export default function PipelinePage() {
                                 <ChevronDown size={8} />
                               </button>
 
-                              {openMoveDropdown === lead.id && (
-                                <div className="absolute right-0 bottom-full mb-1 bg-paper border border-hair-soft rounded-lg shadow-xl shadow-black/40 py-1 z-50 min-w-[140px]">
+                              {openMoveDropdown === lead.id && moveMenuPos && (
+                                <div
+                                  style={{
+                                    position: 'fixed',
+                                    top: moveMenuPos.top,
+                                    left: moveMenuPos.left,
+                                    transform: 'translateX(-100%)',
+                                  }}
+                                  className="bg-paper border border-hair-soft rounded-lg shadow-lg shadow-[rgba(11,13,14,0.12)] py-1 z-50 min-w-[150px]">
                                   {STAGES.filter((s) => s.key !== stage.key).map((target) => (
                                     <button
                                       key={target.key}
