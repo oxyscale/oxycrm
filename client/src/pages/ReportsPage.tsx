@@ -317,7 +317,7 @@ export default function ReportsPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {data.byTier.filter((t) => ['proposal', 'tier_1', 'tier_2', 'tier_3', 'pulse'].includes(t.tier))
                 .sort((a, b) => {
-                  const order = ['proposal', 'tier_1', 'tier_2', 'tier_3', 'pulse'];
+                  const order = ['tier_1', 'tier_2', 'tier_3', 'pulse', 'proposal'];
                   return order.indexOf(a.tier) - order.indexOf(b.tier);
                 })
                 .map((t) => {
@@ -558,10 +558,10 @@ function EmptyRow({ text }: { text: string }) {
 
 const TIER_LABELS: Record<string, string> = {
   pulse: 'Pulse',
-  proposal: 'Proposals',
   tier_1: 'Tier 1',
   tier_2: 'Tier 2',
   tier_3: 'Tier 3',
+  proposal: 'Proposals',
   won: 'Won',
   lost: 'Lost',
 };

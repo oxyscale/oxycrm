@@ -30,11 +30,11 @@ interface StageColumn {
 }
 
 const STAGES: StageColumn[] = [
-  { key: 'proposal', label: 'Proposals', color: 'bg-sky', bgTint: 'bg-[rgba(94,197,230,0.08)]' },
   { key: 'tier_1', label: 'Tier 1', color: 'bg-sky-ink', bgTint: 'bg-[rgba(10,156,212,0.06)]' },
   { key: 'tier_2', label: 'Tier 2', color: 'bg-amber-400', bgTint: 'bg-[rgba(245,158,11,0.06)]' },
   { key: 'tier_3', label: 'Tier 3', color: 'bg-ink-dim', bgTint: 'bg-[rgba(138,149,160,0.06)]' },
   { key: 'pulse', label: 'Pulse', color: 'bg-violet-500', bgTint: 'bg-[rgba(139,92,246,0.06)]' },
+  { key: 'proposal', label: 'Proposals', color: 'bg-sky', bgTint: 'bg-[rgba(94,197,230,0.08)]' },
   { key: 'won', label: 'Won', color: 'bg-emerald-500', bgTint: 'bg-[rgba(16,185,129,0.06)]' },
   { key: 'lost', label: 'Lost', color: 'bg-red-400', bgTint: 'bg-[rgba(248,113,113,0.06)]' },
 ];
@@ -183,7 +183,7 @@ export default function PipelinePage() {
   const unplacedCount = stats?.unplaced ?? 0;
 
   // Sum deal values across active tiers (Pulse/Tier 1/2/3 — Won/Lost are closed)
-  const activePipelineValue = (['proposal', 'tier_1', 'tier_2', 'tier_3', 'pulse'] as const).reduce((sum, key) => {
+  const activePipelineValue = (['tier_1', 'tier_2', 'tier_3', 'pulse', 'proposal'] as const).reduce((sum, key) => {
     const list = pipeline[key] || [];
     return sum + list.reduce((s, l) => s + (l.dealValue || 0), 0);
   }, 0);

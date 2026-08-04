@@ -218,7 +218,7 @@ export default function PrintReportPage() {
               {data.byTier
                 .filter((b) => ['proposal', 'tier_1', 'tier_2', 'tier_3', 'pulse'].includes(b.tier))
                 .sort((a, b2) => {
-                  const order = ['proposal', 'tier_1', 'tier_2', 'tier_3', 'pulse'];
+                  const order = ['tier_1', 'tier_2', 'tier_3', 'pulse', 'proposal'];
                   return order.indexOf(a.tier) - order.indexOf(b2.tier);
                 })
                 .map((b) => {

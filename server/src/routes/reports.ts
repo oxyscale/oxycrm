@@ -37,10 +37,10 @@ interface TierBucket {
 
 const TIER_LABELS: Record<string, string> = {
   pulse: 'Pulse',
-  proposal: 'Proposals',
   tier_1: 'Tier 1',
   tier_2: 'Tier 2',
   tier_3: 'Tier 3',
+  proposal: 'Proposals',
   won: 'Won',
   lost: 'Lost',
 };
@@ -74,7 +74,7 @@ router.get('/', (req, res, next) => {
     `).all(catParam) as { tier: string; count: number; total_value: number }[];
 
     // Build the full set of tiers (even ones with 0) so the UI shows every column.
-    const byTier: TierBucket[] = (['proposal', 'tier_1', 'tier_2', 'tier_3', 'pulse', 'won', 'lost'] as const).map(
+    const byTier: TierBucket[] = (['tier_1', 'tier_2', 'tier_3', 'pulse', 'proposal', 'won', 'lost'] as const).map(
       (t) => {
         const row = tierRows.find((r) => r.tier === t);
         return {
@@ -191,7 +191,7 @@ router.get('/', (req, res, next) => {
       WHERE pipeline_stage IN ('pulse','tier_1','tier_2','tier_3','proposal')
         ${catFilter}
       ORDER BY
-        CASE pipeline_stage WHEN 'proposal' THEN 1 WHEN 'tier_1' THEN 2 WHEN 'tier_2' THEN 3 WHEN 'tier_3' THEN 4 WHEN 'pulse' THEN 5 END,
+        CASE pipeline_stage WHEN 'tier_1' THEN 1 WHEN 'tier_2' THEN 2 WHEN 'tier_3' THEN 3 WHEN 'pulse' THEN 4 WHEN 'proposal' THEN 5 END,
         deal_value DESC
     `).all(catParam) as Array<{
       id: number; name: string; company: string | null; category: string | null;
