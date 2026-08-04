@@ -171,10 +171,10 @@ Phosphor Icons (regular for UI, bold for small sizes, fill for emphasis). Sky In
 ### Pipeline stages (canonical values)
 ```
 'tier_1' | 'tier_2' | 'tier_3' | 'pulse' | 'proposal' | 'won' | 'lost'
-
-Board order left to right. Proposals sits after Pulse, just before the
-two closed states.
 ```
+Listed in board order, left to right — Proposals sits after Pulse, just
+before the two closed states.
+
 Plus `NULL` = not placed on the kanban. The legacy names
 (new_lead / follow_up / call_booked / negotiation / not_interested) are
 migrated away at boot in `server/src/db/schema.ts`.
