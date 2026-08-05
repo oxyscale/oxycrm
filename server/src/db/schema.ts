@@ -723,6 +723,63 @@ export function initializeDatabase(db: Database.Database): void {
   }
 
   // ============================================================
+  // Suppression list — contacts deliberately removed.
+  //
+  // Jordan re-uploads a master spreadsheet that keeps growing, so a lead
+  // he deletes would simply reappear on the next import. Deleting one
+  // now records its identifiers here, and the importer skips any row
+  // matching them. Clearing a row re-admits that contact.
+  // ============================================================
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS suppressed_contacts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      external_id TEXT,
+      email TEXT,
+      phone_key TEXT,             -- digits only, last 9 (see phoneKey)
+      name TEXT,
+      company TEXT,
+      reason TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_by TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_suppressed_external ON suppressed_contacts(external_id);
+    CREATE INDEX IF NOT EXISTS idx_suppressed_email    ON suppressed_contacts(email);
+    CREATE INDEX IF NOT EXISTS idx_suppressed_phone    ON suppressed_contacts(phone_key);
+  `);
+
+  // One-time: relabel notes the CSV importer created before it started
+  // attributing them to 'Import'. They were stamped with the importing
+  // user's name, which made every imported lead register as "contacted"
+  // — a note is normally evidence Jordan spoke to someone, but a note
+  // transcribed from a lead form isn't.
+  //
+  // Identified as: the lead's ONLY note, written within 10 seconds of
+  // the lead itself. Nobody hand-types a note that fast.
+  const importNotesRelabelled = db
+    .prepare("SELECT value FROM settings WHERE key = 'import_notes_relabelled_v1'")
+    .get() as { value: string } | undefined;
+
+  if (!importNotesRelabelled) {
+    const relabel = db.transaction(() => {
+      const r = db.prepare(`
+        UPDATE notes SET created_by = 'Import'
+        WHERE created_by != 'Import'
+          AND (SELECT COUNT(*) FROM notes n2 WHERE n2.lead_id = notes.lead_id) = 1
+          AND ABS(julianday(created_at) - julianday(
+                (SELECT l.created_at FROM leads l WHERE l.id = notes.lead_id)
+              )) * 86400 < 10
+      `).run();
+      db.prepare(
+        "INSERT INTO settings (key, value, updated_at) VALUES ('import_notes_relabelled_v1', 'done', datetime('now'))",
+      ).run();
+      return r.changes;
+    });
+    const n = relabel();
+    if (n > 0) console.log(`[schema] relabelled ${n} importer-created note(s) to 'Import'`);
+  }
+
+  // ============================================================
   // Client lifecycle + retainers (July 2026)
   //
   // OxyScale charges a monthly retainer, no build fees. A single

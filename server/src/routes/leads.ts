@@ -206,8 +206,14 @@ function extractCampaign(row: Record<string, string>): {
 
   if (!campaign) {
     // "meta / 5biz / chaos-clarity" -> campaign 5biz, content chaos-clarity
+    //
+    // Requires the SPACED separator Meta actually emits. Splitting on a
+    // bare "/" also matched referrer URLs that land in this column —
+    // "https://l.facebook.com/" produced a campaign called
+    // "l.facebook.com", which is a referrer, not an offer.
     const composite = clean(row.source);
-    if (composite.includes('/')) {
+    const looksLikeUrl = /^https?:\/\//i.test(composite) || /^[a-z0-9.-]+\.[a-z]{2,}\//i.test(composite);
+    if (composite.includes(' / ') && !looksLikeUrl) {
       const bits = composite.split('/').map((b) => b.trim()).filter(Boolean);
       if (bits.length >= 2) campaign = bits[1];
       if (!content && bits.length >= 3) content = bits[2];
@@ -349,7 +355,7 @@ router.get('/', (req, res, next) => {
       query += ` AND (
         leads.pipeline_stage = 'pulse'
         OR leads.manually_contacted = 1
-        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
+        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id AND notes.created_by != 'Import')
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = leads.id)
@@ -361,7 +367,7 @@ router.get('/', (req, res, next) => {
       // default for new leads) would silently fall out of this filter.
       query += ` AND (leads.pipeline_stage IS NULL OR leads.pipeline_stage != 'pulse')
         AND COALESCE(leads.manually_contacted, 0) = 0
-        AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
+        AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id AND notes.created_by != 'Import')
         AND NOT EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
         AND NOT EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
         AND NOT EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = leads.id)`;
@@ -383,7 +389,7 @@ router.get('/', (req, res, next) => {
       SELECT CASE WHEN (
         ? = 1
         OR ? = 1
-        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
+        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ? AND notes.created_by != 'Import')
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = ?)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = ?)
         OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = ?)
@@ -1661,7 +1667,7 @@ router.get('/:id', (req, res, next) => {
       SELECT CASE WHEN (
         ? = 1
         OR ? = 1
-        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ?)
+        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ? AND notes.created_by != 'Import')
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = ?)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = ?)
         OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = ?)
@@ -1906,6 +1912,22 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         .filter((k): k is string => !!k),
     );
 
+    // Contacts Jordan has deliberately deleted. The master sheet still
+    // lists them, so without this they'd be re-added on every upload.
+    const suppressedRows = db.prepare(
+      'SELECT external_id, email, phone_key FROM suppressed_contacts',
+    ).all() as { external_id: string | null; email: string | null; phone_key: string | null }[];
+    const suppressedExternalIds = new Set(
+      suppressedRows.map((r) => r.external_id?.toLowerCase()).filter((v): v is string => !!v),
+    );
+    const suppressedEmails = new Set(
+      suppressedRows.map((r) => r.email?.toLowerCase()).filter((v): v is string => !!v),
+    );
+    const suppressedPhones = new Set(
+      suppressedRows.map((r) => r.phone_key).filter((v): v is string => !!v),
+    );
+    let suppressedSkipped = 0;
+
     // Parse the CSV from the uploaded buffer, stripping BOM if present
     const csvContent = req.file.buffer.toString('utf-8').replace(/^﻿/, '');
     let records: Record<string, string>[];
@@ -1967,7 +1989,10 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
       VALUES (?, 'note', 'Note added', ?, ?, ?)
     `);
-    const noteAuthor = req.user?.name || 'Import';
+    // Deliberately NOT the importing user: this note is transcribed form
+    // data, not something Jordan wrote. Attributing it to him would make
+    // every imported lead look contacted (see the contacted check below).
+    const noteAuthor = 'Import';
 
     // Prepared statement for checking duplicates by phone number
     const findDuplicateStmt = db.prepare(`
@@ -2111,6 +2136,19 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         // and raise a duplicate flag for manual Fold/Dismiss as before.
         const emailKey = email.toLowerCase();
         const pKey = phoneKey(phone);
+
+        // Deliberately removed before — leave them out. Checked ahead of
+        // the already-present test so a re-added row can't sneak back in
+        // via a different identifier.
+        const isSuppressed =
+          (externalId && suppressedExternalIds.has(externalId.toLowerCase()))
+          || (emailKey && suppressedEmails.has(emailKey))
+          || (pKey && suppressedPhones.has(pKey));
+        if (isSuppressed) {
+          suppressedSkipped++;
+          continue;
+        }
+
         const alreadyPresent =
           (externalId && seenExternalIds.has(externalId.toLowerCase()))
           || (emailKey && seenEmails.has(emailKey))
@@ -2261,10 +2299,15 @@ router.post('/import', upload.single('file'), (req, res, next) => {
     insertAll();
 
     logger.info(
-      { imported: result.imported, skipped: result.skipped, duplicates: result.duplicates, flagsInserted },
+      { imported: result.imported, skipped: result.skipped, duplicates: result.duplicates, suppressedSkipped, flagsInserted },
       'CSV import complete',
     );
-    res.status(201).json({ ...result, duplicateLeads, flaggedAsDuplicate: flagsInserted });
+    res.status(201).json({
+      ...result,
+      duplicateLeads,
+      flaggedAsDuplicate: flagsInserted,
+      suppressedSkipped,
+    });
   } catch (err) {
     const msg = (err as Error).message || 'Unknown error';
     logger.error({ err, message: msg, stack: (err as Error).stack }, 'CSV import failed');
@@ -2667,12 +2710,38 @@ router.delete('/:id', (req, res, next) => {
       throw new ApiError(400, 'Invalid lead ID');
     }
 
-    const result = db.prepare('DELETE FROM leads WHERE id = ?').run(id);
+    // Capture identifiers BEFORE deleting so the contact can be kept out
+    // of future imports. Jordan re-uploads a growing master sheet, so a
+    // lead he removes would otherwise reappear on the very next upload.
+    const lead = db.prepare('SELECT id, name, company, email, phone, external_id FROM leads WHERE id = ?')
+      .get(id) as {
+        id: number; name: string; company: string | null;
+        email: string | null; phone: string | null; external_id: string | null;
+      } | undefined;
+    if (!lead) throw new ApiError(404, 'Lead not found');
+
+    const suppress = db.transaction(() => {
+      db.prepare(`
+        INSERT INTO suppressed_contacts (external_id, email, phone_key, name, company, reason, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        lead.external_id || null,
+        lead.email?.trim().toLowerCase() || null,
+        phoneKey(lead.phone),
+        lead.name,
+        lead.company,
+        'Deleted from CRM',
+        req.user?.name || null,
+      );
+      return db.prepare('DELETE FROM leads WHERE id = ?').run(id);
+    });
+
+    const result = suppress();
     if (result.changes === 0) {
       throw new ApiError(404, 'Lead not found');
     }
 
-    logger.info({ leadId: id }, 'Lead deleted');
+    logger.info({ leadId: id, name: lead.name }, 'Lead deleted and suppressed from future imports');
     res.status(204).send();
   } catch (err) {
     next(err);

@@ -161,7 +161,7 @@ router.get('/', (req, res, next) => {
       WHERE (
         pipeline_stage = 'pulse'
         OR manually_contacted = 1
-        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
+        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id AND notes.created_by != 'Import')
         OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id)
         OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = leads.id)
