@@ -82,6 +82,13 @@ export default function PipelinePage() {
   // navigate-on-click so finishing a drag doesn't open the lead profile.
   const didDragRef = useRef(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // The horizontal scroller holding the columns, plus the rAF handle for
+  // edge auto-scroll. Dragging a card to the screen edge has to pan the
+  // board — otherwise a column that's off-screen can't be reached at all,
+  // since holding a drag blocks normal scrolling.
+  const boardRef = useRef<HTMLDivElement>(null);
+  const autoScrollRef = useRef<number | null>(null);
+  const autoScrollDirRef = useRef(0);
 
   // ── Data loading ────────────────────────────────────────────
 
@@ -100,6 +107,10 @@ export default function PipelinePage() {
     // Fixed positioning is captured once on open, so any scroll or resize
     // would leave the menu stranded away from its card. Close it instead.
     const dismiss = () => { setOpenMoveDropdown(null); setMoveMenuPos(null); };
+    // Belt and braces: never leave an animation frame running.
+    const cancelPan = () => stopAutoScroll();
+    window.addEventListener('dragend', cancelPan);
+    window.addEventListener('drop', cancelPan);
     document.addEventListener('mousedown', handleClickOutside);
     window.addEventListener('scroll', dismiss, true);
     window.addEventListener('resize', dismiss);
@@ -107,6 +118,9 @@ export default function PipelinePage() {
       document.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener('scroll', dismiss, true);
       window.removeEventListener('resize', dismiss);
+      window.removeEventListener('dragend', cancelPan);
+      window.removeEventListener('drop', cancelPan);
+      stopAutoScroll();
     };
   }, []);
 
@@ -148,10 +162,13 @@ export default function PipelinePage() {
         for (const key of Object.keys(next)) {
           next[key] = next[key].filter((l) => l.id !== leadId);
         }
-        // Add to target column
+        // Prepend, not append. The server orders each column by
+        // updated_at DESC and the move just bumped it — appending meant
+        // the card sat at the bottom until the next load then jumped to
+        // the top. Putting it first matches where it will actually be.
         const targetKey = newStage;
         if (!next[targetKey]) next[targetKey] = [];
-        next[targetKey] = [...next[targetKey], updated];
+        next[targetKey] = [updated, ...next[targetKey]];
         return next;
       });
       // Refresh stats
@@ -165,12 +182,55 @@ export default function PipelinePage() {
 
   // ── Drag and drop ───────────────────────────────────────────
 
+  // Pans the board while a card is held near either edge. Speed ramps up
+  // the closer to the edge you get, so a nudge creeps and pinning to the
+  // very edge moves fast.
+  const stopAutoScroll = () => {
+    if (autoScrollRef.current !== null) {
+      cancelAnimationFrame(autoScrollRef.current);
+      autoScrollRef.current = null;
+    }
+    autoScrollDirRef.current = 0;
+  };
+
+  const runAutoScroll = () => {
+    const el = boardRef.current;
+    if (!el || autoScrollDirRef.current === 0) {
+      autoScrollRef.current = null;
+      return;
+    }
+    el.scrollLeft += autoScrollDirRef.current;
+    autoScrollRef.current = requestAnimationFrame(runAutoScroll);
+  };
+
+  const handleDragOverBoard = (e: React.DragEvent) => {
+    const el = boardRef.current;
+    if (!el) return;
+    const EDGE = 90;        // px from the edge where panning kicks in
+    const MAX_SPEED = 22;   // px per frame when fully pinned to the edge
+    const { left, right } = el.getBoundingClientRect();
+    const fromLeft = e.clientX - left;
+    const fromRight = right - e.clientX;
+
+    let dir = 0;
+    if (fromLeft < EDGE) dir = -Math.ceil(((EDGE - fromLeft) / EDGE) * MAX_SPEED);
+    else if (fromRight < EDGE) dir = Math.ceil(((EDGE - fromRight) / EDGE) * MAX_SPEED);
+
+    autoScrollDirRef.current = dir;
+    if (dir !== 0 && autoScrollRef.current === null) {
+      autoScrollRef.current = requestAnimationFrame(runAutoScroll);
+    } else if (dir === 0) {
+      stopAutoScroll();
+    }
+  };
+
   const handleDragStart = (leadId: number) => {
     didDragRef.current = true;
     setDraggingLeadId(leadId);
   };
 
   const handleDragEnd = () => {
+    stopAutoScroll();
     setDraggingLeadId(null);
     setDragOverStage(null);
     // Let the click event that follows a drag fire and be ignored first.
@@ -307,8 +367,13 @@ export default function PipelinePage() {
           </div>
         </div>
       ) : (
-        <div className="overflow-x-auto pb-4">
-          <div className="flex gap-4 min-w-max">
+        <div
+          ref={boardRef}
+          onDragOver={handleDragOverBoard}
+          onDrop={stopAutoScroll}
+          className="overflow-x-auto overflow-y-hidden pb-4"
+        >
+          <div className="flex gap-4 min-w-max items-start">
             {STAGES.map((stage) => {
               const leads = pipeline[stage.key] || [];
               const columnValue = leads.reduce((sum, l) => sum + (l.dealValue || 0), 0);
@@ -354,8 +419,11 @@ export default function PipelinePage() {
                     </div>
                   </div>
 
-                  {/* Card list — grows with content; whole page scrolls */}
-                  <div className="p-3 space-y-2.5">
+                  {/* Card list scrolls WITHIN the column. Previously it grew
+                      unbounded, which pushed the board's horizontal scrollbar
+                      thousands of pixels below the fold — the reason the far
+                      columns were unreachable. */}
+                  <div className="p-3 space-y-2.5 overflow-y-auto max-h-[calc(100vh-330px)]">
                     {leads.length === 0 ? (
                       <div className="py-8 text-center">
                         <p className="text-ink-dim text-xs">No leads</p>
