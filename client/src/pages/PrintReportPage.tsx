@@ -34,7 +34,7 @@ function formatLongDate(yyyymmdd: string): string {
 }
 
 function tierLabel(tier: string): string {
-  return ({ pulse: 'Pulse', proposal: 'Proposals', tier_1: 'Tier 1', tier_2: 'Tier 2', tier_3: 'Tier 3', won: 'Won', lost: 'Lost' })[tier] || tier;
+  return ({ hot: 'Hot', pulse: 'Pulse', proposal: 'Proposal sent', meeting_booked: 'Meeting booked', won: 'Won', lost: 'Lost' })[tier] || tier;
 }
 
 // ── Component ──────────────────────────────────────────────────
@@ -216,13 +216,13 @@ export default function PrintReportPage() {
             <SectionLabel>Pipeline by Tier</SectionLabel>
             <div className="grid grid-cols-4 gap-3 mb-6">
               {data.byTier
-                .filter((b) => ['proposal', 'tier_1', 'tier_2', 'tier_3', 'pulse'].includes(b.tier))
+                .filter((b) => ['hot', 'pulse', 'proposal', 'meeting_booked'].includes(b.tier))
                 .sort((a, b2) => {
-                  const order = ['tier_1', 'tier_2', 'tier_3', 'pulse', 'proposal'];
+                  const order = ['hot', 'pulse', 'proposal', 'meeting_booked'];
                   return order.indexOf(a.tier) - order.indexOf(b2.tier);
                 })
                 .map((b) => {
-                  const weight = ({ proposal: '90%', tier_1: '80%', tier_2: '40%', tier_3: '20%', pulse: '10%' } as Record<string, string>)[b.tier];
+                  const weight = ({ meeting_booked: '85%', proposal: '60%', hot: '30%', pulse: '10%' } as Record<string, string>)[b.tier];
                   return (
                   <div
                     key={b.tier}
@@ -297,8 +297,8 @@ export default function PrintReportPage() {
                       </td>
                       <td className="py-2.5 pr-3 align-top">
                         <span className={`text-[11px] font-mono font-semibold uppercase tracking-[0.15em] ${
-                          lead.tier === 'tier_1' ? 'text-[#0a9cd4]'
-                          : lead.tier === 'tier_2' ? 'text-[#f59e0b]'
+                          lead.tier === 'hot' ? 'text-[#0a9cd4]'
+                          : lead.tier === 'meeting_booked' ? 'text-[#f59e0b]'
                           : lead.tier === 'pulse' ? 'text-[#8b5cf6]'
                           : 'text-[#8a95a0]'
                         }`}>

@@ -87,7 +87,7 @@ function mapLeadRow(row: LeadRow): Lead {
 // ============================================================
 
 const PIPELINE_STAGES: [PipelineStage, ...PipelineStage[]] = [
-  'tier_1', 'tier_2', 'tier_3', 'pulse', 'proposal', 'won', 'lost',
+  'hot', 'pulse', 'proposal', 'meeting_booked', 'won', 'lost',
 ];
 
 const TEMPERATURES: [Temperature, ...Temperature[]] = ['hot', 'warm', 'cold'];
@@ -107,10 +107,9 @@ const updateTemperatureSchema = z.object({
 
 const stageLabels: Record<PipelineStage, string> = {
   pulse: 'Pulse',
-  tier_1: 'Tier 1',
-  tier_2: 'Tier 2',
-  tier_3: 'Tier 3',
-  proposal: 'Proposals',
+  hot: 'Hot',
+  proposal: 'Proposal sent',
+  meeting_booked: 'Meeting booked',
   won: 'Won',
   lost: 'Lost',
 };
@@ -356,13 +355,13 @@ router.get('/stats', (req, res, next) => {
     const closedTotal = wonCount + lostCount;
     const conversionRate = closedTotal > 0 ? Math.round((wonCount / closedTotal) * 100) : 0;
 
-    // Total pipeline value — sum of project values for leads in tier_1 (close
+    // Total pipeline value — sum of project values for leads in the late
     // to closing) or won. Tier 1 maps to the legacy 'negotiation' bucket.
     const valueRow = db.prepare(`
       SELECT COALESCE(SUM(p.value), 0) AS total_value
       FROM projects p
       JOIN leads l ON l.id = p.lead_id
-      WHERE l.pipeline_stage IN ('tier_1', 'proposal', 'won')
+      WHERE l.pipeline_stage IN ('hot', 'proposal', 'meeting_booked', 'won')
     `).get() as { total_value: number };
 
     // Temperature breakdown

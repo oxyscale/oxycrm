@@ -722,6 +722,35 @@ export function initializeDatabase(db: Database.Database): void {
     }
   }
 
+  // August 2026: the three working tiers collapse into a single "Hot"
+  // stage, and "Meeting booked" joins the board.
+  //   Tier 1 / Tier 2 -> Hot   (both were actively-worked stages)
+  //   Tier 3          -> Pulse (the coldest tier; Pulse is the warm-but-
+  //                             not-active bucket, which is what it was)
+  // Guarded so a lead Jordan moves afterwards isn't dragged back.
+  const stagesV3 = db
+    .prepare("SELECT value FROM settings WHERE key = 'pipeline_stages_v3'")
+    .get() as { value: string } | undefined;
+
+  if (!stagesV3) {
+    const migrateStages = db.transaction(() => {
+      const hot = db.prepare(
+        "UPDATE leads SET pipeline_stage = 'hot' WHERE pipeline_stage IN ('tier_1', 'tier_2')",
+      ).run();
+      const pulse = db.prepare(
+        "UPDATE leads SET pipeline_stage = 'pulse' WHERE pipeline_stage = 'tier_3'",
+      ).run();
+      db.prepare(
+        "INSERT INTO settings (key, value, updated_at) VALUES ('pipeline_stages_v3', 'done', datetime('now'))",
+      ).run();
+      return { hot: hot.changes, pulse: pulse.changes };
+    });
+    const c = migrateStages();
+    if (c.hot || c.pulse) {
+      console.log(`[schema] pipeline stages: ${c.hot} tier_1/2 -> hot, ${c.pulse} tier_3 -> pulse`);
+    }
+  }
+
   // ============================================================
   // Suppression list — contacts deliberately removed.
   //

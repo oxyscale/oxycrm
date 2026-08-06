@@ -33,11 +33,10 @@ import type { ImportResult, DuplicateLead, Activity, Lead } from '../types';
 
 // ── Pipeline stage display config ────────────────────────────
 const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
-  tier_1: { label: 'Tier 1', color: '#0a9cd4' },
-  tier_2: { label: 'Tier 2', color: '#f59e0b' },
-  tier_3: { label: 'Tier 3', color: '#8a95a0' },
+  hot: { label: 'Hot', color: '#0a9cd4' },
   pulse: { label: 'Pulse', color: '#8b5cf6' },
-  proposal: { label: 'Proposals', color: '#5ec5e6' },
+  proposal: { label: 'Proposal sent', color: '#5ec5e6' },
+  meeting_booked: { label: 'Meeting booked', color: '#f59e0b' },
   won: { label: 'Won', color: '#10b981' },
   lost: { label: 'Lost', color: '#ef4444' },
 };
@@ -331,8 +330,8 @@ export default function HomePage() {
         category: newLead.category.trim() || undefined,
         leadSource: newLead.leadSource.trim() || undefined,
         campaign: newLead.campaign.trim() || undefined,
-        // No auto-stage on create — defaults to tier_3 server-side. The user
-        // moves leads to tier_2 / tier_1 manually as the conversation matures.
+        // No auto-stage on create — the lead starts off the kanban. Jordan
+        // places it into Pulse or Hot manually as the conversation matures.
         pipelineStage: undefined,
       });
 

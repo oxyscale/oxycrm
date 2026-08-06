@@ -170,14 +170,15 @@ Phosphor Icons (regular for UI, bold for small sizes, fill for emphasis). Sky In
 
 ### Pipeline stages (canonical values)
 ```
-'tier_1' | 'tier_2' | 'tier_3' | 'pulse' | 'proposal' | 'won' | 'lost'
+'hot' | 'pulse' | 'proposal' | 'meeting_booked' | 'won' | 'lost'
 ```
-Listed in board order, left to right — Proposals sits after Pulse, just
-before the two closed states.
+Listed in board order, left to right. Labels: Hot, Pulse, Proposal sent,
+Meeting booked, Won, Lost.
 
-Plus `NULL` = not placed on the kanban. The legacy names
-(new_lead / follow_up / call_booked / negotiation / not_interested) are
-migrated away at boot in `server/src/db/schema.ts`.
+Plus `NULL` = not placed on the kanban. Retired names are migrated away
+at boot in `server/src/db/schema.ts`: new_lead / follow_up / call_booked
+/ negotiation / not_interested, then tier_1 + tier_2 -> hot and
+tier_3 -> pulse (Aug 2026).
 
 Adding a stage means updating ELEVEN places. Miss one and you get
 silent 400s or a stage that's invisible in reports:

@@ -278,7 +278,7 @@ const createLeadSchema = z.object({
   campaignContent: z.string().nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
-  pipelineStage: z.enum(['pulse', 'tier_1', 'tier_2', 'tier_3', 'proposal', 'won', 'lost']).nullable().optional(),
+  pipelineStage: z.enum(['hot', 'pulse', 'proposal', 'meeting_booked', 'won', 'lost']).nullable().optional(),
 });
 
 const updateLeadSchema = z.object({
@@ -295,7 +295,7 @@ const updateLeadSchema = z.object({
   consolidatedSummary: z.string().nullable().optional(),
   companyInfo: z.string().nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
-  pipelineStage: z.enum(['pulse', 'tier_1', 'tier_2', 'tier_3', 'proposal', 'won', 'lost']).nullable().optional(),
+  pipelineStage: z.enum(['hot', 'pulse', 'proposal', 'meeting_booked', 'won', 'lost']).nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   followUpDate: z.string().nullable().optional(),
   dealValue: z.number().min(0).optional(),
@@ -1071,7 +1071,7 @@ router.post('/undo-import', upload.single('file'), (req, res, next) => {
     // schema migration converts them to NULL at boot, but new INSERTs
     // can still pick up the column default before the explicit NULL
     // assignment lands everywhere.
-    const REAL_TIER_STAGES = new Set(['tier_1', 'tier_2', 'tier_3', 'pulse', 'proposal', 'won', 'lost']);
+    const REAL_TIER_STAGES = new Set(['hot', 'pulse', 'proposal', 'meeting_booked', 'won', 'lost']);
 
     function protectionReason(lead: typeof allLeads[number]): string | null {
       // Lead is in any REAL pipeline tier = intentional placement by Jordan.
@@ -2952,11 +2952,11 @@ interface ScanLead {
  * Activity score — higher = more "worked." Drives suspect vs target
  * assignment (target stays, suspect folds into it).
  *
- * Only counts REAL tier placements (tier_1/2/3, pulse, proposal, won, lost) as
+ * Only counts REAL tier placements (hot, pulse, proposal, meeting_booked, won, lost) as
  * activity. Legacy 'new_lead' or 'follow_up' values are equivalent to
  * NULL — they don't represent intentional placement.
  */
-const REAL_TIER_STAGES_SCORE = new Set(['tier_1', 'tier_2', 'tier_3', 'pulse', 'proposal', 'won', 'lost']);
+const REAL_TIER_STAGES_SCORE = new Set(['hot', 'pulse', 'proposal', 'meeting_booked', 'won', 'lost']);
 function activityScore(lead: ScanLead): number {
   return (
     lead.notes_count
