@@ -821,6 +821,7 @@ export default function LeadProfilePage() {
       content,
       createdBy: 'Jordan',
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     setNotes((prev) => [optimisticNote, ...prev]);
     setNewNote('');
@@ -901,7 +902,6 @@ export default function LeadProfilePage() {
 
   // ── Stats for sidebar ──────────────────────────────────────
 
-  const totalCallsCount = callLogs.length || 0;
   const totalNotesCount = notes.length || 0;
   const totalEmailsCount = emails.length || 0;
 
@@ -2354,6 +2354,13 @@ function ClientPanel({
   const [error, setError] = useState<string | null>(null);
   const [busyProjectId, setBusyProjectId] = useState<number | null>(null);
 
+  // Retainer editing. Changing what a client pays should never require
+  // opening a project — extra work is one thing, a price change another.
+  const [editingRetainer, setEditingRetainer] = useState(false);
+  const [retainerDraft, setRetainerDraft] = useState('');
+  const [savingRetainer, setSavingRetainer] = useState(false);
+  const [retainerError, setRetainerError] = useState<string | null>(null);
+
   const isFirst = projects.length === 0;
   const isClient = projects.some((p) => p.status === 'live');
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -2393,6 +2400,33 @@ function ClientPanel({
     }
   };
 
+  const saveRetainer = async () => {
+    const amount = Number(retainerDraft);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setRetainerError('Enter a number, or 0 if they are not paying a retainer.');
+      return;
+    }
+    if (amount === currentAmount) {
+      setEditingRetainer(false);
+      return;
+    }
+    setSavingRetainer(true);
+    setRetainerError(null);
+    try {
+      await api.addRetainer(lead.id, {
+        monthlyAmount: amount,
+        effectiveFrom: todayInSydney(),
+        note: 'Updated on client record',
+      });
+      setEditingRetainer(false);
+      await onChanged();
+    } catch (err) {
+      setRetainerError(err instanceof Error ? err.message : 'Could not save that amount.');
+    } finally {
+      setSavingRetainer(false);
+    }
+  };
+
   const setProjectStatus = async (projectId: number, status: ProjectStatus) => {
     setBusyProjectId(projectId);
     try {
@@ -2425,15 +2459,76 @@ function ClientPanel({
       {/* Retainer — the client's single monthly figure */}
       {(isClient || retainers.length > 0) && (
         <div className="mb-4 pb-4 border-b border-hair-soft">
-          <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-1">Monthly Revenue</p>
-          <p className="text-ink text-xl font-bold">
-            ${currentAmount.toLocaleString('en-AU')}
-            <span className="text-ink-dim text-sm font-normal">/mo</span>
-          </p>
-          <p className="text-ink-dim text-xs mt-0.5">
-            ${(currentAmount * 12).toLocaleString('en-AU')} a year
-            {current?.effectiveFrom && ` · since ${current.effectiveFrom}`}
-          </p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-ink-dim text-[11px] uppercase tracking-wider">Monthly Revenue</p>
+            {!editingRetainer && (
+              <button
+                onClick={() => {
+                  setRetainerDraft(currentAmount ? String(currentAmount) : '');
+                  setEditingRetainer(true);
+                  setRetainerError(null);
+                }}
+                className="text-ink-dim hover:text-sky-ink transition-colors p-0.5"
+                title="Change monthly revenue"
+              >
+                <Pencil size={11} />
+              </button>
+            )}
+          </div>
+          {editingRetainer ? (
+            /* Saves a new dated row rather than editing the old one, so
+               what they paid before this change stays on the record. */
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-ink-dim text-sm">$</span>
+                <input
+                  autoFocus
+                  type="number"
+                  value={retainerDraft}
+                  onChange={(e) => setRetainerDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveRetainer();
+                    if (e.key === 'Escape') setEditingRetainer(false);
+                  }}
+                  placeholder="0"
+                  className="flex-1 bg-cream border border-hair-soft rounded-lg px-3 py-1.5 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)]"
+                />
+                <span className="text-ink-dim text-xs">/mo</span>
+              </div>
+              {retainerError && <p className="text-risk text-xs">{retainerError}</p>}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={saveRetainer}
+                  disabled={savingRetainer}
+                  className="bg-ink text-white text-xs font-medium rounded-full px-3.5 py-1.5 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 flex items-center gap-1.5"
+                >
+                  {savingRetainer ? (
+                    <Loader2 size={11} className="animate-spin" />
+                  ) : (
+                    <Check size={11} />
+                  )}
+                  Save
+                </button>
+                <button
+                  onClick={() => setEditingRetainer(false)}
+                  className="text-ink-dim hover:text-ink-muted text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-ink text-xl font-bold">
+                ${currentAmount.toLocaleString('en-AU')}
+                <span className="text-ink-dim text-sm font-normal">/mo</span>
+              </p>
+              <p className="text-ink-dim text-xs mt-0.5">
+                ${(currentAmount * 12).toLocaleString('en-AU')} a year
+                {current?.effectiveFrom && ` · since ${current.effectiveFrom}`}
+              </p>
+            </>
+          )}
           {retainers.length > 1 && (
             <details className="mt-2">
               <summary className="text-ink-dim text-xs cursor-pointer hover:text-ink-muted">

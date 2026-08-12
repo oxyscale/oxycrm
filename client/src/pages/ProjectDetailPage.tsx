@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -6,15 +6,14 @@ import {
   DollarSign,
   ExternalLink,
   FolderKanban,
-  Plus,
-  Trash2,
-  Check,
   Loader2,
   Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import * as api from '../services/api';
-import { parseTimestamp } from '../utils/dates';
-import type { Project, ProjectTask, ProjectStatus } from '../types';
+import { parseTimestamp, todayInSydney } from '../utils/dates';
+import type { Project, ProjectStatus } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 
 const STATUS_CONFIG: Record<
@@ -43,23 +42,32 @@ const STATUS_CONFIG: Record<
 
 const STATUS_ORDER: ProjectStatus[] = ['building', 'live', 'ended'];
 
+/** Date-only maths on YYYY-MM-DD strings, no timezone drift. */
+function addDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) + days * 86400000).toISOString().slice(0, 10);
+}
+
+function daysBetween(from: string, to: string): number {
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000);
+}
+
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   const [project, setProject] = useState<Project | null>(null);
-  const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Surfaces a failed inline save. Silent failures on this page used to
+   *  look identical to successful ones. */
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // New task input
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [addingTask, setAddingTask] = useState(false);
-
-  // Inline task editing
-  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
-  const [editingTaskTitle, setEditingTaskTitle] = useState('');
-  const editInputRef = useRef<HTMLInputElement>(null);
+  // Name editing
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
 
   // Description editing
   const [description, setDescription] = useState('');
@@ -76,22 +84,14 @@ export default function ProjectDetailPage() {
     if (id) loadProject(parseInt(id));
   }, [id]);
 
-  useEffect(() => {
-    if (editingTaskId !== null && editInputRef.current) {
-      editInputRef.current.focus();
-      editInputRef.current.select();
-    }
-  }, [editingTaskId]);
-
   const loadProject = async (projectId: number) => {
     setLoading(true);
     setError(null);
     try {
       const data = await api.getProject(projectId);
       setProject(data);
-      setTasks(data.tasks || []);
       setDescription(data.description || '');
-      setNotes((data as Project & { notes?: string }).notes || '');
+      setNotes(data.notes || '');
     } catch (err) {
       console.error('Failed to load project:', err);
       setError('Failed to load project');
@@ -103,91 +103,60 @@ export default function ProjectDetailPage() {
   const handleStatusChange = async (newStatus: ProjectStatus) => {
     if (!project || newStatus === project.status) return;
     setUpdatingStatus(true);
+    setSaveError(null);
     try {
-      const updated = await api.updateProject(project.id, { status: newStatus });
-      setProject(updated);
+      setProject(await api.updateProject(project.id, { status: newStatus }));
     } catch (err) {
       console.error('Failed to update status:', err);
+      setSaveError('Could not change the status. Please try again.');
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  const startRename = () => {
+    if (!project) return;
+    setNameDraft(project.name);
+    setEditingName(true);
+  };
+
+  const commitRename = async () => {
+    if (!project) return;
+    const next = nameDraft.trim();
+    setEditingName(false);
+    if (!next || next === project.name) return;
+    setSaveError(null);
+    try {
+      setProject(await api.updateProject(project.id, { name: next }));
+    } catch (err) {
+      console.error('Failed to rename project:', err);
+      setSaveError('Could not save that name. Please try again.');
     }
   };
 
   const handleDescriptionBlur = async () => {
     if (!project || !descriptionDirty) return;
     setDescriptionDirty(false);
+    setSaveError(null);
     try {
       await api.updateProject(project.id, { description: description || null });
     } catch (err) {
       console.error('Failed to save description:', err);
+      setSaveError('Could not save the description. Copy it somewhere safe and try again.');
+      setDescriptionDirty(true);
     }
   };
 
   const handleNotesBlur = async () => {
     if (!project || !notesDirty) return;
     setNotesDirty(false);
+    setSaveError(null);
     try {
-      await api.updateProject(project.id, { notes } as Partial<Project>);
+      await api.updateProject(project.id, { notes });
     } catch (err) {
       console.error('Failed to save notes:', err);
-    }
-  };
-
-  const handleAddTask = async () => {
-    if (!project || !newTaskTitle.trim()) return;
-    setAddingTask(true);
-    try {
-      const task = await api.addProjectTask(project.id, newTaskTitle.trim());
-      setTasks((prev) => [...prev, task]);
-      setNewTaskTitle('');
-    } catch (err) {
-      console.error('Failed to add task:', err);
-    } finally {
-      setAddingTask(false);
-    }
-  };
-
-  const handleToggleTask = async (task: ProjectTask) => {
-    if (!project) return;
-    try {
-      const updated = await api.updateProjectTask(project.id, task.id, {
-        completed: !task.completed,
-      });
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
-    } catch (err) {
-      console.error('Failed to toggle task:', err);
-    }
-  };
-
-  const handleStartEditTask = (task: ProjectTask) => {
-    setEditingTaskId(task.id);
-    setEditingTaskTitle(task.title);
-  };
-
-  const handleSaveEditTask = async () => {
-    if (!project || editingTaskId === null || !editingTaskTitle.trim()) {
-      setEditingTaskId(null);
-      return;
-    }
-    try {
-      const updated = await api.updateProjectTask(project.id, editingTaskId, {
-        title: editingTaskTitle.trim(),
-      });
-      setTasks((prev) => prev.map((t) => (t.id === editingTaskId ? updated : t)));
-    } catch (err) {
-      console.error('Failed to update task:', err);
-    } finally {
-      setEditingTaskId(null);
-    }
-  };
-
-  const handleDeleteTask = async (taskId: number) => {
-    if (!project) return;
-    try {
-      await api.deleteProjectTask(project.id, taskId);
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
-    } catch (err) {
-      console.error('Failed to delete task:', err);
+      setSaveError('Could not save those notes. Copy them somewhere safe and try again.');
+      setNotesDirty(true);
     }
   };
 
@@ -200,14 +169,13 @@ export default function ProjectDetailPage() {
     });
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-AU', {
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('en-AU', {
       style: 'currency',
       currency: 'AUD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value);
-  };
 
   if (loading) {
     return (
@@ -225,13 +193,15 @@ export default function ProjectDetailPage() {
           className="flex items-center gap-2 text-ink-muted hover:text-ink transition-colors mb-6"
         >
           <ArrowLeft size={16} />
-          <span className="text-sm">Back to Projects</span>
+          <span className="text-sm">Back to Active</span>
         </button>
         <div className="text-center py-16">
           <FolderKanban size={32} className="text-ink-dim mx-auto mb-3" />
-          <p className="text-red-400 text-sm mb-1">{error || 'Project not found'}</p>
+          <p className="text-risk text-sm mb-1">{error || 'Project not found'}</p>
           <p className="text-ink-dim text-xs mb-4">
-            {error ? 'Something went wrong loading this project.' : 'This project may have been deleted or the link is invalid.'}
+            {error
+              ? 'Something went wrong loading this project.'
+              : 'This project may have been deleted or the link is invalid.'}
           </p>
           <div className="flex items-center justify-center gap-3">
             {error && (
@@ -246,7 +216,7 @@ export default function ProjectDetailPage() {
               onClick={() => navigate('/projects')}
               className="bg-transparent text-ink-muted border border-hair-soft rounded-lg px-5 py-2.5 text-sm hover:bg-[rgba(11,13,14,0.03)] hover:text-ink transition-all"
             >
-              Back to Projects
+              Back to Active
             </button>
           </div>
         </div>
@@ -255,11 +225,16 @@ export default function ProjectDetailPage() {
   }
 
   const cfg = STATUS_CONFIG[project.status];
-  const incompleteTasks = tasks.filter((t) => !t.completed);
-  const completedTasks = tasks.filter((t) => t.completed);
-  const completedCount = completedTasks.length;
-  const totalCount = tasks.length;
-  const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const retainer = project.currentRetainer || 0;
+
+  // Free period runs from go-live. Only meaningful once they're live.
+  const free =
+    project.status === 'live' && project.liveFrom
+      ? (() => {
+          const endsOn = addDays(project.liveFrom, project.freeDays ?? 30);
+          return { endsOn, remaining: daysBetween(todayInSydney(), endsOn) };
+        })()
+      : null;
 
   return (
     <div className="p-10 max-w-4xl min-h-full bg-cream">
@@ -269,7 +244,7 @@ export default function ProjectDetailPage() {
         className="flex items-center gap-2 text-ink-muted hover:text-sky-ink transition-colors mb-6"
       >
         <ArrowLeft size={16} />
-        <span className="text-sm">Back to Projects</span>
+        <span className="text-sm">Back to Active</span>
       </button>
 
       {/* Header */}
@@ -278,23 +253,76 @@ export default function ProjectDetailPage() {
           DELIVERY · PROJECT
         </EyebrowLabel>
         <div className="flex items-center gap-3 mb-1">
-          <h1 className="text-sky-ink text-[34px] font-semibold tracking-section">{project.name}</h1>
-          <span
-            className={`${cfg.bg} ${cfg.color} text-xs font-medium px-2.5 py-0.5 rounded-full`}
-          >
-            {cfg.label}
-          </span>
+          {editingName ? (
+            <div className="flex items-center gap-2 flex-1">
+              <input
+                autoFocus
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename();
+                  if (e.key === 'Escape') setEditingName(false);
+                }}
+                className="flex-1 bg-paper border border-hair rounded-lg px-3 py-1.5 text-[28px] font-semibold tracking-section text-ink focus:outline-none focus:border-[rgba(10,156,212,0.4)]"
+              />
+              <button
+                onClick={commitRename}
+                className="text-sky-ink hover:text-ink transition-colors p-1.5"
+                title="Save"
+              >
+                <Check size={18} />
+              </button>
+              <button
+                onClick={() => setEditingName(false)}
+                className="text-ink-dim hover:text-ink-muted transition-colors p-1.5"
+                title="Cancel"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-sky-ink text-[34px] font-semibold tracking-section">
+                {project.name}
+              </h1>
+              <button
+                onClick={startRename}
+                className="text-ink-dim hover:text-sky-ink transition-colors p-1.5"
+                title="Rename project"
+              >
+                <Pencil size={15} />
+              </button>
+              <span
+                className={`${cfg.bg} ${cfg.color} text-xs font-medium px-2.5 py-0.5 rounded-full`}
+              >
+                {cfg.label}
+              </span>
+            </>
+          )}
         </div>
         <p className="text-ink-muted text-sm">{project.clientName}</p>
       </div>
 
+      {saveError && (
+        <div className="mb-6 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] rounded-xl px-4 py-3">
+          <p className="text-risk text-sm">{saveError}</p>
+        </div>
+      )}
+
       {/* Info bar */}
-      <div className="flex items-center gap-6 mb-6 bg-paper border border-hair-soft rounded-xl px-5 py-3">
+      <div className="flex items-center flex-wrap gap-x-6 gap-y-2 mb-6 bg-paper border border-hair-soft rounded-xl px-5 py-3">
+        {/* Money comes from the client's retainer history, not the legacy
+            one-off value field that was showing $0 for everyone. */}
         <div className="flex items-center gap-1.5">
           <DollarSign size={14} className="text-ink-dim" />
           <span className="text-ink text-sm font-medium">
-            {formatCurrency(project.value)} AUD
+            {retainer > 0 ? `${formatCurrency(retainer)}/mo` : 'No retainer set'}
           </span>
+          {project.retainerSince && (
+            <span className="text-ink-dim text-xs">
+              since {formatDate(project.retainerSince)}
+            </span>
+          )}
         </div>
         <div className="w-px h-4 bg-hair-soft" />
         <div className="flex items-center gap-1.5">
@@ -303,26 +331,75 @@ export default function ProjectDetailPage() {
             Start: {formatDate(project.startDate)}
           </span>
         </div>
-        <div className="w-px h-4 bg-hair-soft" />
-        <div className="flex items-center gap-1.5">
-          <Calendar size={14} className="text-ink-dim" />
-          <span className="text-ink-muted text-sm">
-            End: {formatDate(project.endDate)}
-          </span>
-        </div>
+        {/* Only one of these ever applies: live shows when it went live,
+            ended shows when it stopped. The old page showed "End" for
+            everyone using the go-live date, which read as finished. */}
+        {project.status === 'live' && project.liveFrom && (
+          <>
+            <div className="w-px h-4 bg-hair-soft" />
+            <div className="flex items-center gap-1.5">
+              <Calendar size={14} className="text-ink-dim" />
+              <span className="text-ink-muted text-sm">
+                Live: {formatDate(project.liveFrom)}
+              </span>
+            </div>
+          </>
+        )}
+        {project.status === 'ended' && project.endDate && (
+          <>
+            <div className="w-px h-4 bg-hair-soft" />
+            <div className="flex items-center gap-1.5">
+              <Calendar size={14} className="text-ink-dim" />
+              <span className="text-ink-muted text-sm">
+                Ended: {formatDate(project.endDate)}
+              </span>
+            </div>
+          </>
+        )}
         {project.leadId && (
           <>
             <div className="w-px h-4 bg-hair-soft" />
+            {/* Straight to the client record. The old link went to the
+                leads list, which filters clients out by default. */}
             <button
-              onClick={() => navigate(`/leads?highlight=${project.leadId}`)}
+              onClick={() => navigate(`/leads/${project.leadId}`)}
               className="flex items-center gap-1.5 text-sky-ink text-sm hover:underline"
             >
               <ExternalLink size={12} />
-              View Lead
+              Client record
             </button>
           </>
         )}
       </div>
+
+      {/* Free period */}
+      {free && (
+        <div
+          className={`mb-8 rounded-xl px-5 py-3 flex items-center justify-between gap-4 ${
+            free.remaining > 7
+              ? 'bg-[rgba(16,185,129,0.08)] border border-[rgba(16,185,129,0.2)]'
+              : free.remaining >= 0
+                ? 'bg-[rgba(245,158,11,0.10)] border border-[rgba(245,158,11,0.25)]'
+                : 'bg-paper border border-hair-soft'
+          }`}
+        >
+          <div>
+            <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-0.5">
+              Free period
+            </p>
+            <p className="text-ink text-sm">
+              {free.remaining > 0
+                ? `${free.remaining} ${free.remaining === 1 ? 'day' : 'days'} left — review on ${formatDate(free.endsOn)}`
+                : free.remaining === 0
+                  ? 'Ends today — review due'
+                  : `Ended ${formatDate(free.endsOn)} — billing`}
+            </p>
+          </div>
+          <p className="text-ink-dim text-xs whitespace-nowrap">
+            {project.freeDays ?? 30} days from {formatDate(project.liveFrom)}
+          </p>
+        </div>
+      )}
 
       {/* Status selector */}
       <div className="mb-8">
@@ -337,11 +414,7 @@ export default function ProjectDetailPage() {
             return (
               <div key={status} className="flex items-center gap-2">
                 {index > 0 && (
-                  <div
-                    className={`w-8 h-px ${
-                      isPast ? 'bg-ink/40' : 'bg-hair-soft'
-                    }`}
-                  />
+                  <div className={`w-8 h-px ${isPast ? 'bg-ink/40' : 'bg-hair-soft'}`} />
                 )}
                 <button
                   onClick={() => handleStatusChange(status)}
@@ -359,10 +432,11 @@ export default function ProjectDetailPage() {
               </div>
             );
           })}
-          {updatingStatus && (
-            <Loader2 size={14} className="animate-spin text-ink-dim ml-2" />
-          )}
+          {updatingStatus && <Loader2 size={14} className="animate-spin text-ink-dim ml-2" />}
         </div>
+        <p className="text-ink-dim text-xs mt-2">
+          Marking it live starts the {project.freeDays ?? 30}-day free period.
+        </p>
       </div>
 
       {/* Description */}
@@ -378,186 +452,26 @@ export default function ProjectDetailPage() {
           }}
           onBlur={handleDescriptionBlur}
           rows={3}
-          placeholder="Add a project description..."
+          placeholder="What are we building for them?"
           className="w-full bg-paper border border-hair-soft rounded-xl px-4 py-3 text-sm text-ink-muted placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
         />
       </div>
 
-      {/* Tasks */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-ink-dim text-xs font-medium uppercase tracking-wider">Tasks</p>
-          <span className="text-ink-dim text-xs">
-            {completedCount} of {totalCount} tasks complete
-          </span>
-        </div>
-
-        {/* Progress bar */}
-        {totalCount > 0 && (
-          <div className="w-full h-1.5 bg-tray rounded-full overflow-hidden mb-4">
-            <div
-              className="h-full bg-ink rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        )}
-
-        {/* Add task input */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddTask();
-              }}
-              placeholder="Add a task and press Enter..."
-              className="w-full bg-paper border border-hair-soft rounded-lg px-4 py-2.5 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all pr-10"
-            />
-            {addingTask && (
-              <Loader2
-                size={14}
-                className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-ink-dim"
-              />
-            )}
-          </div>
-          <button
-            onClick={handleAddTask}
-            disabled={!newTaskTitle.trim() || addingTask}
-            className="bg-ink text-white rounded-lg p-2.5 hover:bg-ink/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
-
-        {/* Incomplete tasks */}
-        {incompleteTasks.length > 0 && (
-          <div className="space-y-1 mb-3">
-            {incompleteTasks.map((task) => (
-              <div
-                key={task.id}
-                className="flex items-center gap-3 bg-paper border border-hair-soft rounded-lg px-4 py-2.5 group hover:bg-[rgba(10,156,212,0.04)] transition-all"
-              >
-                {/* Checkbox */}
-                <button
-                  onClick={() => handleToggleTask(task)}
-                  className="w-5 h-5 rounded border border-hair-strong flex-shrink-0 flex items-center justify-center hover:border-sky-ink transition-colors"
-                >
-                  {/* empty */}
-                </button>
-
-                {/* Title (editable) */}
-                {editingTaskId === task.id ? (
-                  <input
-                    ref={editInputRef}
-                    type="text"
-                    value={editingTaskTitle}
-                    onChange={(e) => setEditingTaskTitle(e.target.value)}
-                    onBlur={handleSaveEditTask}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveEditTask();
-                      if (e.key === 'Escape') setEditingTaskId(null);
-                    }}
-                    className="flex-1 bg-transparent text-sm text-ink focus:outline-none border-b border-[rgba(10,156,212,0.3)]"
-                  />
-                ) : (
-                  <span
-                    onClick={() => handleStartEditTask(task)}
-                    className="flex-1 text-sm text-ink cursor-text hover:text-sky-ink transition-colors"
-                  >
-                    {task.title}
-                  </span>
-                )}
-
-                {/* Actions */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => handleStartEditTask(task)}
-                    className="text-ink-dim hover:text-ink-muted transition-colors p-1"
-                  >
-                    <Pencil size={12} />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteTask(task.id)}
-                    className="text-ink-dim hover:text-red-400 transition-colors p-1"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Completed tasks */}
-        {completedTasks.length > 0 && (
-          <div className="space-y-1">
-            {incompleteTasks.length > 0 && (
-              <div className="border-t border-hair-soft my-3" />
-            )}
-            {completedTasks.map((task) => (
-              <div
-                key={task.id}
-                className="flex items-center gap-3 bg-paper/50 border border-hair-soft rounded-lg px-4 py-2.5 group hover:bg-[rgba(10,156,212,0.04)] transition-all opacity-60"
-              >
-                {/* Checkbox (checked) */}
-                <button
-                  onClick={() => handleToggleTask(task)}
-                  className="w-5 h-5 rounded border border-sky-ink/40 bg-[rgba(10,156,212,0.15)] flex-shrink-0 flex items-center justify-center hover:border-sky-ink transition-colors"
-                >
-                  <Check size={12} className="text-sky-ink" />
-                </button>
-
-                {/* Title (strikethrough) */}
-                {editingTaskId === task.id ? (
-                  <input
-                    ref={editInputRef}
-                    type="text"
-                    value={editingTaskTitle}
-                    onChange={(e) => setEditingTaskTitle(e.target.value)}
-                    onBlur={handleSaveEditTask}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveEditTask();
-                      if (e.key === 'Escape') setEditingTaskId(null);
-                    }}
-                    className="flex-1 bg-transparent text-sm text-ink-muted focus:outline-none border-b border-[rgba(10,156,212,0.3)]"
-                  />
-                ) : (
-                  <span
-                    onClick={() => handleStartEditTask(task)}
-                    className="flex-1 text-sm text-ink-muted line-through cursor-text"
-                  >
-                    {task.title}
-                  </span>
-                )}
-
-                {/* Actions */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => handleDeleteTask(task.id)}
-                    className="text-ink-dim hover:text-red-400 transition-colors p-1"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {totalCount === 0 && (
-          <div className="text-center py-8 bg-paper border border-hair-soft rounded-xl">
-            <p className="text-ink-dim text-sm">No tasks yet</p>
-            <p className="text-ink-dim text-xs mt-1">Add your first task above</p>
-          </div>
-        )}
-      </div>
-
       {/* Notes */}
       <div className="mb-8">
-        <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-2">Notes</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-ink-dim text-xs font-medium uppercase tracking-wider">
+            Delivery notes
+          </p>
+          {project.leadId && (
+            <button
+              onClick={() => navigate(`/leads/${project.leadId}`)}
+              className="text-ink-dim hover:text-sky-ink text-xs transition-colors"
+            >
+              Account notes live on the client record
+            </button>
+          )}
+        </div>
         <textarea
           value={notes}
           onChange={(e) => {
@@ -566,7 +480,7 @@ export default function ProjectDetailPage() {
           }}
           onBlur={handleNotesBlur}
           rows={5}
-          placeholder="Add notes about this project..."
+          placeholder="Scratchpad for this build..."
           className="w-full bg-paper border border-hair-soft rounded-xl px-4 py-3 text-sm text-ink-muted placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
         />
       </div>

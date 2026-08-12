@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { Home, Users, Kanban, FolderKanban, HelpCircle, Settings, Inbox, LogOut, FileText, ListChecks } from 'lucide-react';
+import { Home, Users, Kanban, Briefcase, HelpCircle, Settings, Inbox, LogOut, FileText, ListChecks } from 'lucide-react';
 import SearchBar from './SearchBar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -15,7 +15,7 @@ const navItems = [
   { path: '/tasks', icon: ListChecks, label: 'Tasks' },
   { path: '/leads', icon: Users, label: 'Leads' },
   { path: '/email-bank', icon: Inbox, label: 'Email Bank' },
-  { path: '/projects', icon: FolderKanban, label: 'Projects' },
+  { path: '/projects', icon: Briefcase, label: 'Active' },
   { path: '/reports', icon: FileText, label: 'Reports' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
@@ -29,7 +29,7 @@ const shortcutEntries = [
   { label: '3', description: 'Go to Tasks' },
   { label: '4', description: 'Go to Leads' },
   { label: '5', description: 'Go to Email Bank' },
-  { label: '6', description: 'Go to Projects' },
+  { label: '6', description: 'Go to Active' },
   { label: '7', description: 'Go to Reports' },
   { label: '8', description: 'Go to Settings' },
 ];
@@ -77,7 +77,7 @@ export default function Layout() {
       { key: '3', handler: () => navigate('/tasks'), description: 'Go to Tasks' },
       { key: '4', handler: () => navigate('/leads'), description: 'Go to Leads' },
       { key: '5', handler: () => navigate('/email-bank'), description: 'Go to Email Bank' },
-      { key: '6', handler: () => navigate('/projects'), description: 'Go to Projects' },
+      { key: '6', handler: () => navigate('/projects'), description: 'Go to Active' },
       { key: '7', handler: () => navigate('/reports'), description: 'Go to Reports' },
       { key: '8', handler: () => navigate('/settings'), description: 'Go to Settings' },
     ],

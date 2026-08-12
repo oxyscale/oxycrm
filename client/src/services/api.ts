@@ -74,6 +74,8 @@ export async function getLeads(params?: {
   status?: string;
   category?: string;
   contacted?: 'true' | 'false';
+  /** Filter to a single pipeline stage server-side. */
+  stage?: string;
 }): Promise<Lead[]> {
   const searchParams = new URLSearchParams();
   if (params?.leadType) searchParams.set('leadType', params.leadType);

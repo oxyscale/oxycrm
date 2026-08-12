@@ -28,6 +28,8 @@ interface ProjectRow {
   notes: string | null;
   start_date: string | null;
   end_date: string | null;
+  live_from: string | null;
+  free_days: number;
   created_at: string;
   updated_at: string;
 }
@@ -52,6 +54,8 @@ function mapProjectRow(row: ProjectRow): Project {
     notes: row.notes,
     startDate: row.start_date,
     endDate: row.end_date,
+    liveFrom: row.live_from,
+    freeDays: row.free_days ?? 30,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -87,6 +91,8 @@ const updateProjectSchema = z.object({
   name: z.string().min(1).optional(),
   clientName: z.string().min(1).optional(),
   status: z.enum(['building', 'live', 'ended']).optional(),
+  freeDays: z.number().int().min(0).max(365).optional(),
+  liveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   notes: z.string().nullable().optional(),
   value: z.number().min(0).optional(),
   description: z.string().nullable().optional(),
@@ -313,12 +319,26 @@ router.patch('/:id', (req, res, next) => {
     if (updates.status !== undefined) {
       setClauses.push('status = @status');
       params.status = updates.status;
-      // Going live ends the build. Stamp the completion date so the
-      // client's "live since" is a real value rather than always "--".
-      if (updates.status === 'live' && !existing.end_date) {
-        setClauses.push("end_date = COALESCE(@endDateNow, end_date)");
-        params.endDateNow = new Date().toISOString().slice(0, 10);
+      // Going live starts the free period. Stamped into its own column —
+      // end_date was previously overloaded for this, so an active client
+      // showed an "End" date, which read as though they'd finished.
+      if (updates.status === 'live' && !existing.live_from) {
+        setClauses.push('live_from = @liveFromNow');
+        params.liveFromNow = new Date().toISOString().slice(0, 10);
       }
+      // Ending a client is what actually sets an end date.
+      if (updates.status === 'ended' && !existing.end_date) {
+        setClauses.push('end_date = @endedNow');
+        params.endedNow = new Date().toISOString().slice(0, 10);
+      }
+    }
+    if (updates.freeDays !== undefined) {
+      setClauses.push('free_days = @freeDays');
+      params.freeDays = updates.freeDays;
+    }
+    if (updates.liveFrom !== undefined) {
+      setClauses.push('live_from = @liveFrom');
+      params.liveFrom = updates.liveFrom;
     }
     if (updates.notes !== undefined) {
       setClauses.push('notes = @notes');

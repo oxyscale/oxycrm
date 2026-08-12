@@ -240,6 +240,11 @@ export interface Project {
   notes: string | null;
   startDate: string | null;
   endDate: string | null;
+  /** When the build went live — the start of the free period. Distinct
+   *  from endDate, which used to be overloaded for this. */
+  liveFrom: string | null;
+  /** Length of the complimentary period after go-live, in days. */
+  freeDays: number;
   createdAt: string;
   updatedAt: string;
   tasks?: ProjectTask[];

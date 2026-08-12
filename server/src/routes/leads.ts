@@ -330,7 +330,7 @@ router.get('/', (req, res, next) => {
     res.setHeader('Pragma', 'no-cache');
 
     const db = getDb();
-    const { status, leadType, category, contacted, leadSource, campaign } = req.query;
+    const { status, leadType, category, contacted, leadSource, campaign, stage } = req.query;
 
     let query = 'SELECT * FROM leads WHERE 1=1';
     const params: Record<string, string> = {};
@@ -355,6 +355,13 @@ router.get('/', (req, res, next) => {
     if (category && typeof category === 'string') {
       query += ' AND category = @category';
       params.category = category;
+    }
+    // Lets callers ask for just the won leads (the project-linking
+    // dropdown) instead of pulling the whole table and filtering in
+    // the browser.
+    if (stage && typeof stage === 'string') {
+      query += ' AND pipeline_stage = @stage';
+      params.stage = stage;
     }
 
     // Contacted filter: a lead is "contacted" if it has any notes,

@@ -267,13 +267,25 @@ export function initializeDatabase(db: Database.Database): void {
   // incorrectly auto-tiered to tier_3. A lead is "uncontacted" if it
   // has no notes, emails, or call logs — those are the CSV imports.
   // ─────────────────────────────────────────────────────────────────
-  db.exec(`
-    UPDATE leads SET pipeline_stage = NULL
-    WHERE pipeline_stage = 'tier_3'
-      AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
-      AND NOT EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
-      AND NOT EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id);
-  `);
+  // Guarded on the tables existing: notes and emails_sent are created
+  // further down this function, so on a brand-new database (empty
+  // volume, fresh deploy) this ran before they existed and threw,
+  // stopping the server from booting at all.
+  const cleanupTables = db
+    .prepare(
+      "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('notes','emails_sent','call_logs')"
+    )
+    .get() as { n: number };
+
+  if (cleanupTables.n === 3) {
+    db.exec(`
+      UPDATE leads SET pipeline_stage = NULL
+      WHERE pipeline_stage = 'tier_3'
+        AND NOT EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = leads.id)
+        AND NOT EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = leads.id)
+        AND NOT EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = leads.id);
+    `);
+  }
 
   // Add temperature column
   if (!columns.some((c) => c.name === 'temperature')) {
@@ -891,6 +903,44 @@ export function initializeDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_client_retainers_lead
       ON client_retainers(lead_id, effective_from DESC);
   `);
+
+  // When the build went live. `end_date` was being (mis)used for this,
+  // which meant an active client displayed an "End" date. Separate column
+  // so the two can't be confused, and so the free-period countdown has
+  // something honest to count from.
+  addColumnIfMissing(db, 'projects', 'live_from', 'TEXT');
+  // Delivered dashboards get 30 free days, then a review and billing
+  // starts. Stored per project so the length can vary if a deal needs it.
+  addColumnIfMissing(db, 'projects', 'free_days', 'INTEGER NOT NULL DEFAULT 30');
+
+  // Backfill go-live dates for clients who were already live before the
+  // column existed. Until Aug 2026 the go-live handler stamped end_date,
+  // so that value IS the go-live date for anything currently live —
+  // move it across and clear it, since a live client has not ended.
+  // Anything with no date at all falls back to the project start.
+  const liveFromBackfill = db
+    .prepare("SELECT value FROM settings WHERE key = 'project_live_from_v1'")
+    .get() as { value: string } | undefined;
+
+  if (!liveFromBackfill) {
+    try {
+      db.exec(`
+        UPDATE projects
+           SET live_from = COALESCE(end_date, start_date, DATE(created_at)),
+               end_date = NULL
+         WHERE status = 'live' AND live_from IS NULL;
+      `);
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('project_live_from_v1', ?)"
+      ).run(new Date().toISOString());
+      // eslint-disable-next-line no-console
+      console.log('[schema] Backfilled projects.live_from for live clients');
+    } catch (err) {
+      // A failed backfill must never stop the server booting.
+      // eslint-disable-next-line no-console
+      console.error('[schema] live_from backfill failed:', err);
+    }
+  }
 
   // Project notes. The detail page has always POSTed a `notes` field
   // with nowhere to store it — the update schema stripped it, the
