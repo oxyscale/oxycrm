@@ -161,6 +161,20 @@ const EMPTY_ANSWERS = new Set(['', '-', 'n/a', 'na', 'none', 'not given', 'not p
 function buildImportNote(row: Record<string, string>): string {
   const parts: string[] = [];
 
+  // A note Jordan typed himself leads — it's the human judgement on this
+  // lead ("Timing not right", "Not the right fit"), and it's what he'll
+  // scan for. The form metadata is supporting detail and follows.
+  // Previously the enquiry date came first and the note was spliced in
+  // mid-string with no separator: "Enquired 2026-07-24. Timing not right
+  // Revenue: $5M to $20M."
+  const explicit = (
+    row.notes || row.note || row.context || row.summary || row.description || ''
+  ).trim();
+  if (explicit && !EMPTY_ANSWERS.has(explicit.toLowerCase())) {
+    // Punctuate so it can't run into whatever follows.
+    parts.push(/[.!?]$/.test(explicit) ? explicit : `${explicit}.`);
+  }
+
   const submitted = (row.submitted_at || row.submission_date || row.date || '').trim();
   if (submitted) {
     // ISO timestamps carry a time we don't need; date is enough.
@@ -168,15 +182,10 @@ function buildImportNote(row: Record<string, string>): string {
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) parts.push(`Enquired ${dateOnly}.`);
   }
 
-  const explicit = (
-    row.notes || row.note || row.context || row.summary || row.description || ''
-  ).trim();
-  if (explicit) parts.push(explicit);
-
   for (const [key, label] of CONTEXT_COLUMNS) {
     const raw = (row[key] || '').trim();
     if (!raw || EMPTY_ANSWERS.has(raw.toLowerCase())) continue;
-    parts.push(`${label}: ${raw}`);
+    parts.push(`${label}: ${raw}${/[.!?]$/.test(raw) ? '' : '.'}`);
   }
 
   return parts.join(' ').trim();
@@ -1972,8 +1981,8 @@ router.post('/import', upload.single('file'), (req, res, next) => {
     // want CSV imports to silently inherit that — new leads must start
     // unplaced on the kanban.
     const insertStmt = db.prepare(`
-      INSERT INTO leads (name, company, phone, email, website, lead_type, category, lead_source, campaign, campaign_content, external_id, status, pipeline_stage, queue_position)
-      VALUES (@name, @company, @phone, @email, @website, @leadType, @category, @leadSource, @campaign, @campaignContent, @externalId, 'not_called', NULL, @queuePosition)
+      INSERT INTO leads (name, company, phone, email, website, lead_type, category, lead_source, campaign, campaign_content, external_id, deal_value, status, pipeline_stage, queue_position)
+      VALUES (@name, @company, @phone, @email, @website, @leadType, @category, @leadSource, @campaign, @campaignContent, @externalId, @dealValue, 'not_called', NULL, @queuePosition)
     `);
 
     // Optional per-row note. If the CSV row has a `notes` column, we
@@ -2228,6 +2237,16 @@ router.post('/import', upload.single('file'), (req, res, next) => {
         // Campaign attribution — which offer/creative produced this lead.
         const { campaign: campaignValue, content: campaignContentValue } = extractCampaign(row);
 
+        // Estimated monthly revenue, when the sheet carries a fee column.
+        // Deliberately NOT `revenue` — that's the prospect's own turnover
+        // band ("$5M to $20M"), which is a context note, not our fee.
+        const feeRaw = (
+          row.$ || row.monthly || row.monthly_revenue || row.monthly_fee
+          || row.deal_value || row.fee || row.retainer || ''
+        ).replace(/[$,\s]/g, '');
+        const feeParsed = parseFloat(feeRaw);
+        const dealValue = Number.isFinite(feeParsed) && feeParsed > 0 ? feeParsed : 0;
+
         const insertResult = insertStmt.run({
           name,
           company: companyValue,
@@ -2240,6 +2259,7 @@ router.post('/import', upload.single('file'), (req, res, next) => {
           campaign: campaignValue,
           campaignContent: campaignContentValue,
           externalId: externalId || null,
+          dealValue,
           queuePosition: currentPos,
         });
 
