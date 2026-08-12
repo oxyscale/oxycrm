@@ -1902,24 +1902,35 @@ router.post('/import', upload.single('file'), (req, res, next) => {
     // keysets of everything already in the CRM; any row matching one is
     // skipped rather than inserted a second time.
     //
-    // Rows are also added to these sets as they're inserted, so
+    // Rows are also added to these maps as they're inserted, so
     // duplicates WITHIN a single file are caught too.
-    const seenExternalIds = new Set(
-      (db.prepare("SELECT external_id FROM leads WHERE external_id IS NOT NULL AND external_id != ''")
-        .all() as { external_id: string }[]).map((r) => r.external_id.toLowerCase()),
-    );
-    const seenEmails = new Set(
-      (db.prepare("SELECT LOWER(TRIM(email)) AS e FROM leads WHERE email IS NOT NULL AND TRIM(email) != ''")
-        .all() as { e: string }[]).map((r) => r.e),
-    );
+    //
+    // Maps rather than Sets: the lead id is needed so a row that's
+    // already in the CRM can still contribute a NEW note (Jordan adds
+    // notes to the sheet after the first upload).
+    const seenExternalIds = new Map<string, number>();
+    for (const r of db.prepare(
+      "SELECT id, external_id FROM leads WHERE external_id IS NOT NULL AND external_id != ''",
+    ).all() as { id: number; external_id: string }[]) {
+      seenExternalIds.set(r.external_id.toLowerCase(), r.id);
+    }
+    const seenEmails = new Map<string, number>();
+    for (const r of db.prepare(
+      "SELECT id, LOWER(TRIM(email)) AS e FROM leads WHERE email IS NOT NULL AND TRIM(email) != ''",
+    ).all() as { id: number; e: string }[]) {
+      if (!seenEmails.has(r.e)) seenEmails.set(r.e, r.id);
+    }
     // Reuses the same phoneKey the dedupe scan uses (digits only, last
     // 9) so "+61404396193" and "0404396193" resolve to one key.
-    const seenPhones = new Set(
-      (db.prepare("SELECT phone FROM leads WHERE phone IS NOT NULL AND TRIM(phone) != ''")
-        .all() as { phone: string }[])
-        .map((r) => phoneKey(r.phone))
-        .filter((k): k is string => !!k),
-    );
+    const seenPhones = new Map<string, number>();
+    for (const r of db.prepare(
+      "SELECT id, phone FROM leads WHERE phone IS NOT NULL AND TRIM(phone) != ''",
+    ).all() as { id: number; phone: string }[]) {
+      const k = phoneKey(r.phone);
+      if (k && !seenPhones.has(k)) seenPhones.set(k, r.id);
+    }
+    // Notes added to already-present leads on this run.
+    let notesAdded = 0;
 
     // Contacts Jordan has deliberately deleted. The master sheet still
     // lists them, so without this they'd be re-added on every upload.
@@ -2158,13 +2169,35 @@ router.post('/import', upload.single('file'), (req, res, next) => {
           continue;
         }
 
-        const alreadyPresent =
-          (externalId && seenExternalIds.has(externalId.toLowerCase()))
-          || (emailKey && seenEmails.has(emailKey))
-          || (pKey && seenPhones.has(pKey));
+        const existingLeadId =
+          (externalId ? seenExternalIds.get(externalId.toLowerCase()) : undefined)
+          ?? (emailKey ? seenEmails.get(emailKey) : undefined)
+          ?? (pKey ? seenPhones.get(pKey) : undefined);
 
-        if (alreadyPresent) {
+        if (existingLeadId !== undefined) {
           result.duplicates++;
+
+          // Already in the CRM, but the sheet may have gained a note
+          // since. Add just the typed note — NOT the composed string
+          // with the enquiry date and form answers, which were already
+          // captured on the first import and would be duplicated.
+          const sheetNote = (
+            row.notes || row.note || row.context || row.summary || row.description || ''
+          ).trim();
+          if (sheetNote && !EMPTY_ANSWERS.has(sheetNote.toLowerCase())) {
+            // Skip if any existing note already carries this text. Covers
+            // both a prior top-up and a first import that included it as
+            // part of the composed note.
+            const dupNote = db.prepare(
+              "SELECT 1 FROM notes WHERE lead_id = ? AND instr(content, ?) > 0 LIMIT 1",
+            ).get(existingLeadId, sheetNote) as { 1: number } | undefined;
+            if (!dupNote) {
+              const nowIso = new Date().toISOString();
+              insertNoteStmt.run(existingLeadId, sheetNote, noteAuthor, nowIso, nowIso);
+              insertNoteActivityStmt.run(existingLeadId, sheetNote, nowIso, noteAuthor);
+              notesAdded++;
+            }
+          }
           // Surface which existing lead it matched, so the summary can
           // show what was skipped rather than a bare number.
           const existing = pKey
@@ -2183,11 +2216,8 @@ router.post('/import', upload.single('file'), (req, res, next) => {
           continue;
         }
 
-        // Claim these keys immediately so a repeat later in the SAME
-        // file is caught too, not just repeats across uploads.
-        if (externalId) seenExternalIds.add(externalId.toLowerCase());
-        if (emailKey) seenEmails.add(emailKey);
-        if (pKey) seenPhones.add(pKey);
+        // Claimed below once the row is inserted and we have its id, so
+        // a repeat later in the SAME file is caught too.
 
         currentPos++;
 
@@ -2265,6 +2295,13 @@ router.post('/import', upload.single('file'), (req, res, next) => {
 
         const insertedId = Number(insertResult.lastInsertRowid);
 
+        // Claim the identity keys now the row exists, so a repeat later in
+        // the SAME file resolves to this lead and tops up its note rather
+        // than inserting a second copy.
+        if (externalId) seenExternalIds.set(externalId.toLowerCase(), insertedId);
+        if (emailKey && !seenEmails.has(emailKey)) seenEmails.set(emailKey, insertedId);
+        if (pKey && !seenPhones.has(pKey)) seenPhones.set(pKey, insertedId);
+
         // Per-row note built from an explicit note column plus any
         // capture-form answers (revenue, struggle, timeline...). Lands as
         // the lead's first note + activity so the profile opens with
@@ -2319,7 +2356,7 @@ router.post('/import', upload.single('file'), (req, res, next) => {
     insertAll();
 
     logger.info(
-      { imported: result.imported, skipped: result.skipped, duplicates: result.duplicates, suppressedSkipped, flagsInserted },
+      { imported: result.imported, skipped: result.skipped, duplicates: result.duplicates, suppressedSkipped, notesAdded, flagsInserted },
       'CSV import complete',
     );
     res.status(201).json({
@@ -2327,6 +2364,7 @@ router.post('/import', upload.single('file'), (req, res, next) => {
       duplicateLeads,
       flaggedAsDuplicate: flagsInserted,
       suppressedSkipped,
+      notesAdded,
     });
   } catch (err) {
     const msg = (err as Error).message || 'Unknown error';

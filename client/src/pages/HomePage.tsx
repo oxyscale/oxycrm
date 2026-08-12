@@ -75,7 +75,7 @@ export default function HomePage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<
-    (ImportResult & { duplicateLeads?: DuplicateLead[]; suppressedSkipped?: number }) | null
+    (ImportResult & { duplicateLeads?: DuplicateLead[]; suppressedSkipped?: number; notesAdded?: number }) | null
   >(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -844,6 +844,11 @@ export default function HomePage() {
                 {importResult.duplicates > 0 && (
                   <p className="text-ink-muted text-xs mt-1">
                     {importResult.duplicates} already in the CRM, not re-imported
+                  </p>
+                )}
+                {(importResult.notesAdded ?? 0) > 0 && (
+                  <p className="text-sky-ink text-xs mt-1">
+                    {importResult.notesAdded} new note{importResult.notesAdded === 1 ? '' : 's'} added to existing leads
                   </p>
                 )}
                 {(importResult.suppressedSkipped ?? 0) > 0 && (
