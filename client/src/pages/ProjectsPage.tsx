@@ -8,6 +8,7 @@ import {
   Check,
   Pencil,
   ArrowUpRight,
+  ChevronDown,
 } from 'lucide-react';
 import * as api from '../services/api';
 import { parseTimestamp, todayInSydney } from '../utils/dates';
@@ -67,6 +68,7 @@ export default function ProjectsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [showModal, setShowModal] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   // Inline editors — one project name / one client retainer at a time.
   const [editingName, setEditingName] = useState<number | null>(null);
@@ -250,13 +252,39 @@ export default function ProjectsPage() {
     });
   }, [projects]);
 
+  /** Where a live client sits in their complimentary period. */
+  const freePeriod = (group: ClientGroup) => {
+    if (group.status !== 'live' || !group.liveFrom) return null;
+    const endsOn = addDays(group.liveFrom, group.freeDays);
+    return { endsOn, remaining: daysBetween(todayInSydney(), endsOn) };
+  };
+
   // Headline numbers always read across every client, whatever tab is
   // selected. Counted per client, not per project.
+  const liveGroups = groups.filter((g) => g.status === 'live');
   const inBuild = groups.filter((g) => g.status === 'building').length;
-  const activeClients = groups.filter((g) => g.status === 'live').length;
-  const monthlyRecurring = groups
-    .filter((g) => g.status === 'live')
-    .reduce((sum, g) => sum + g.retainer, 0);
+  const activeClients = liveGroups.length;
+  const monthlyRecurring = liveGroups.reduce((sum, g) => sum + g.retainer, 0);
+
+  // A client inside their free 30 days has a retainer agreed but isn't
+  // paying it yet, so the headline figure is what's contracted, not what
+  // is landing in the bank this month. Split so both are readable.
+  const inFreePeriod = liveGroups.filter((g) => {
+    const f = freePeriod(g);
+    return f !== null && f.remaining >= 0;
+  });
+  const notYetBilling = inFreePeriod.reduce((sum, g) => sum + g.retainer, 0);
+  const billingNow = monthlyRecurring - notYetBilling;
+
+  // Free periods landing in the next fortnight, plus any that went past
+  // in the last week. Bounded on both sides deliberately: there's no
+  // "review done" flag, so an open-ended "anything in the past" would
+  // leave every long-standing client sitting here forever and the tile
+  // would stop meaning anything.
+  const reviewsDue = liveGroups.filter((g) => {
+    const f = freePeriod(g);
+    return f !== null && f.remaining <= 14 && f.remaining >= -7;
+  });
 
   const visible = filter === 'all' ? groups : groups.filter((g) => g.status === filter);
 
@@ -275,14 +303,6 @@ export default function ProjectsPage() {
       month: 'short',
       year: 'numeric',
     });
-  };
-
-  /** Where a live client sits in their complimentary period. */
-  const freePeriod = (group: ClientGroup) => {
-    if (group.status !== 'live' || !group.liveFrom) return null;
-    const endsOn = addDays(group.liveFrom, group.freeDays);
-    const remaining = daysBetween(todayInSydney(), endsOn);
-    return { endsOn, remaining };
   };
 
   return (
@@ -309,33 +329,127 @@ export default function ProjectsPage() {
         </PillButton>
       </div>
 
-      {/* Operations overview — reads across all clients regardless of tab */}
+      {/* Operations overview. Reads across every client regardless of the
+          tab below, and each tile answers a different question — annual
+          recurring sits under monthly rather than taking its own tile,
+          because it is only ever monthly x 12. */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-paper border border-hair-soft rounded-xl p-4">
           <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1">
             In Build
           </p>
           <p className="text-ink text-2xl font-bold">{inBuild}</p>
+          <p className="text-ink-dim text-xs mt-0.5">not yet delivered</p>
         </div>
+
         <div className="bg-paper border border-hair-soft rounded-xl p-4">
           <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1">
             Active Clients
           </p>
           <p className="text-ink text-2xl font-bold">{activeClients}</p>
+          <p className="text-ink-dim text-xs mt-0.5">live and on a retainer</p>
         </div>
-        <div className="bg-paper border border-hair-soft rounded-xl p-4">
-          <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1">
+
+        {/* Click to see the working — every client and their figure,
+            adding up to the total. */}
+        <button
+          onClick={() => setShowBreakdown((v) => !v)}
+          className="bg-paper border border-hair-soft rounded-xl p-4 text-left hover:border-hair transition-all"
+        >
+          <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1 flex items-center gap-1">
             Monthly Recurring
+            <ChevronDown
+              size={11}
+              className={`transition-transform ${showBreakdown ? 'rotate-180' : ''}`}
+            />
           </p>
           <p className="text-sky-ink text-2xl font-bold">{formatCurrency(monthlyRecurring)}</p>
-        </div>
-        <div className="bg-paper border border-hair-soft rounded-xl p-4">
-          <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1">
-            Annual Recurring
+          <p className="text-ink-dim text-xs mt-0.5">
+            {formatCurrency(monthlyRecurring * 12)} a year
           </p>
-          <p className="text-ink text-2xl font-bold">{formatCurrency(monthlyRecurring * 12)}</p>
+        </button>
+
+        {/* The one number that is a to-do rather than a readout. */}
+        <div
+          className={`rounded-xl p-4 border ${
+            reviewsDue.length > 0
+              ? 'bg-[rgba(245,158,11,0.08)] border-[rgba(245,158,11,0.25)]'
+              : 'bg-paper border-hair-soft'
+          }`}
+        >
+          <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1">
+            Reviews Due
+          </p>
+          <p className="text-ink text-2xl font-bold">{reviewsDue.length}</p>
+          <p className="text-ink-dim text-xs mt-0.5">
+            {notYetBilling > 0
+              ? `${formatCurrency(notYetBilling)} not billing yet`
+              : 'free periods up within 14 days'}
+          </p>
         </div>
       </div>
+
+      {/* Working behind Monthly Recurring */}
+      {showBreakdown && (
+        <div className="bg-paper border border-hair-soft rounded-xl p-5 mb-6">
+          <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-3">
+            What makes up {formatCurrency(monthlyRecurring)}
+          </p>
+          {liveGroups.length === 0 ? (
+            <p className="text-ink-dim text-sm">No live clients yet.</p>
+          ) : (
+            <>
+              <div className="space-y-1.5">
+                {liveGroups.map((g) => {
+                  const f = freePeriod(g);
+                  const free = f !== null && f.remaining >= 0;
+                  return (
+                    <div
+                      key={g.key}
+                      className="flex items-baseline justify-between gap-3 text-sm"
+                    >
+                      <span className="text-ink-muted truncate">
+                        {g.clientName}
+                        {free && (
+                          <span className="text-warn text-xs ml-2">
+                            free for {f!.remaining} more {f!.remaining === 1 ? 'day' : 'days'}
+                          </span>
+                        )}
+                        {g.retainer === 0 && (
+                          <span className="text-ink-faint text-xs ml-2">no retainer set</span>
+                        )}
+                      </span>
+                      <span className="text-ink font-medium whitespace-nowrap">
+                        {formatCurrency(g.retainer)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="border-t border-hair-soft mt-3 pt-3 space-y-1">
+                <div className="flex items-baseline justify-between text-sm">
+                  <span className="text-ink font-medium">Total contracted</span>
+                  <span className="text-ink font-bold">{formatCurrency(monthlyRecurring)}</span>
+                </div>
+                {notYetBilling > 0 && (
+                  <>
+                    <div className="flex items-baseline justify-between text-xs">
+                      <span className="text-ink-dim">Still inside a free period</span>
+                      <span className="text-ink-dim">-{formatCurrency(notYetBilling)}</span>
+                    </div>
+                    <div className="flex items-baseline justify-between text-sm">
+                      <span className="text-ink-muted">Actually billing this month</span>
+                      <span className="text-ink-muted font-medium">
+                        {formatCurrency(billingNow)}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="flex items-center gap-1 mb-6 bg-paper border border-hair-soft rounded-lg p-1 w-fit">
