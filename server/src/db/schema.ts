@@ -904,6 +904,34 @@ export function initializeDatabase(db: Database.Database): void {
       ON client_retainers(lead_id, effective_from DESC);
   `);
 
+  // ─────────────────────────────────────────────────────────────────
+  // A single definition of "what is this client paying today".
+  //
+  // The rule (latest row effective on or before today, ties broken by id)
+  // had been copy-pasted into the leads list route and nowhere else, so
+  // the Pipeline, Reports and Home pages had no access to retainers at
+  // all and silently fell back to leads.deal_value — which is 0 for
+  // anyone who became a client, since the conversion flow never writes
+  // it. A client on $3,100/mo showed no money anywhere but the Active
+  // and Leads pages.
+  //
+  // As a view, every query joins the same rule and they cannot drift.
+  // ─────────────────────────────────────────────────────────────────
+  db.exec(`
+    DROP VIEW IF EXISTS current_retainers;
+    CREATE VIEW current_retainers AS
+      SELECT cr.lead_id, cr.monthly_amount, cr.effective_from
+        FROM client_retainers cr
+       WHERE cr.effective_from <= DATE('now')
+         AND cr.id = (
+              SELECT x.id FROM client_retainers x
+               WHERE x.lead_id = cr.lead_id
+                 AND x.effective_from <= DATE('now')
+               ORDER BY x.effective_from DESC, x.id DESC
+               LIMIT 1
+         );
+  `);
+
   // When the build went live. `end_date` was being (mis)used for this,
   // which meant an active client displayed an "End" date. Separate column
   // so the two can't be confused, and so the free-period countdown has

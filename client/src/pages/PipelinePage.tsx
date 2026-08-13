@@ -257,10 +257,16 @@ export default function PipelinePage() {
   // Surface the count from /api/pipeline/stats so Jordan knows where they went.
   const unplacedCount = stats?.unplaced ?? 0;
 
-  // Sum deal values across active tiers (Pulse/Tier 1/2/3 — Won/Lost are closed)
+  // What a lead is worth per month. Once someone is a client the agreed
+  // retainer is the real figure; deal_value is only ever the estimate we
+  // put on them beforehand, and the conversion flow never updates it —
+  // so a paying client read as $0 here until the retainer was wired in.
+  const monthlyValue = (lead: Lead) => lead.currentRetainer || lead.dealValue || 0;
+
+  // Sum across the active tiers (Won/Lost are closed)
   const activePipelineValue = (['hot', 'pulse', 'proposal', 'meeting_booked'] as const).reduce((sum, key) => {
     const list = pipeline[key] || [];
-    return sum + list.reduce((s, l) => s + (l.dealValue || 0), 0);
+    return sum + list.reduce((s, l) => s + monthlyValue(l), 0);
   }, 0);
   const formatAUD = (n: number) => n
     ? `$${n.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`
@@ -376,7 +382,7 @@ export default function PipelinePage() {
           <div className="flex gap-4 min-w-max items-start">
             {STAGES.map((stage) => {
               const leads = pipeline[stage.key] || [];
-              const columnValue = leads.reduce((sum, l) => sum + (l.dealValue || 0), 0);
+              const columnValue = leads.reduce((sum, l) => sum + monthlyValue(l), 0);
               return (
                 <div
                   key={stage.key}
@@ -464,11 +470,23 @@ export default function PipelinePage() {
 
                           {/* Badges row */}
                           <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-                            {/* Deal value badge */}
-                            {lead.dealValue > 0 && (
-                              <span className="bg-[rgba(11,13,14,0.05)] text-ink text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                            {/* Monthly value badge — retainer if they're a
+                                client, estimate otherwise. */}
+                            {monthlyValue(lead) > 0 && (
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium ${
+                                  lead.currentRetainer
+                                    ? 'bg-sky-wash text-sky-ink'
+                                    : 'bg-[rgba(11,13,14,0.05)] text-ink'
+                                }`}
+                                title={
+                                  lead.currentRetainer
+                                    ? 'Agreed monthly retainer'
+                                    : 'Estimated monthly revenue'
+                                }
+                              >
                                 <DollarSign size={8} />
-                                {lead.dealValue.toLocaleString('en-AU', { maximumFractionDigits: 0 })}
+                                {monthlyValue(lead).toLocaleString('en-AU', { maximumFractionDigits: 0 })}
                               </span>
                             )}
 

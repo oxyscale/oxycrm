@@ -75,7 +75,7 @@ interface CallLogRow {
 }
 
 /** Maps a raw DB lead row to the camelCase Lead type */
-function mapLeadRow(row: LeadRow): Lead {
+function mapLeadRow(row: LeadRow & { current_retainer?: number | null }): Lead {
   return {
     id: row.id,
     name: row.name,
@@ -100,6 +100,8 @@ function mapLeadRow(row: LeadRow): Lead {
     convertedToProject: row.converted_to_project === 1,
     followUpDate: row.follow_up_date,
     dealValue: row.deal_value ?? 0,
+    // Present when the query joined current_retainers; 0 otherwise.
+    currentRetainer: row.current_retainer ?? 0,
     manuallyContacted: row.manually_contacted === 1,
     queuePosition: row.queue_position,
     lastCalledAt: row.last_called_at,
@@ -1637,7 +1639,15 @@ router.get('/:id', (req, res, next) => {
 
     const db = getDb();
 
-    const leadRow = db.prepare('SELECT * FROM leads WHERE id = ?').get(id) as LeadRow | undefined;
+    // Joins the shared current_retainers view so a single lead carries
+    // the same money figure the list and kanban show. The profile used
+    // to fetch the retainer history separately and work it out itself.
+    const leadRow = db.prepare(`
+      SELECT leads.*, r.monthly_amount AS current_retainer
+        FROM leads
+        LEFT JOIN current_retainers r ON r.lead_id = leads.id
+       WHERE leads.id = ?
+    `).get(id) as (LeadRow & { current_retainer: number | null }) | undefined;
     if (!leadRow) {
       throw new ApiError(404, 'Lead not found');
     }

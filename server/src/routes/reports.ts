@@ -65,8 +65,8 @@ router.get('/', (req, res, next) => {
     const tierRows = db.prepare(`
       SELECT pipeline_stage AS tier,
              COUNT(*) AS count,
-             COALESCE(SUM(deal_value), 0) AS total_value
-      FROM leads
+             COALESCE(SUM(COALESCE(r.monthly_amount, leads.deal_value)), 0) AS total_value
+      FROM leads LEFT JOIN current_retainers r ON r.lead_id = leads.id
       WHERE pipeline_stage IN ('hot','pulse','proposal','meeting_booked','won','lost')
         ${catFilter}
       GROUP BY pipeline_stage
@@ -87,8 +87,9 @@ router.get('/', (req, res, next) => {
 
     // ── New leads in the window ─────────────────────────────
     const newLeads = db.prepare(`
-      SELECT id, name, company, category, pipeline_stage AS tier, deal_value AS dealValue, created_at AS createdAt
-      FROM leads
+      SELECT leads.id, name, company, category, pipeline_stage AS tier,
+             COALESCE(r.monthly_amount, leads.deal_value) AS dealValue, created_at AS createdAt
+      FROM leads LEFT JOIN current_retainers r ON r.lead_id = leads.id
       WHERE DATE(created_at) >= @fromDate
         AND DATE(created_at) <= @toDate
         ${catFilter}
@@ -104,8 +105,9 @@ router.get('/', (req, res, next) => {
     // updated_at. Not perfect (any subsequent edit would shift it) but
     // good enough for fortnightly pulse-check reporting.
     const wonLost = db.prepare(`
-      SELECT id, name, company, category, pipeline_stage AS tier, deal_value AS dealValue, updated_at AS closedAt
-      FROM leads
+      SELECT leads.id, name, company, category, pipeline_stage AS tier,
+             COALESCE(r.monthly_amount, leads.deal_value) AS dealValue, updated_at AS closedAt
+      FROM leads LEFT JOIN current_retainers r ON r.lead_id = leads.id
       WHERE pipeline_stage IN ('won','lost')
         AND DATE(updated_at) >= @fromDate
         AND DATE(updated_at) <= @toDate
@@ -183,15 +185,15 @@ router.get('/', (req, res, next) => {
     // ── Pipeline leads (Tier 1/2/3) with details ───────────
     // Full list of active pipeline leads for the meeting table
     const pipelineLeads = db.prepare(`
-      SELECT id, name, company, category, pipeline_stage AS tier,
-             deal_value AS dealValue, follow_up_date AS followUpDate,
+      SELECT leads.id, name, company, category, pipeline_stage AS tier,
+             COALESCE(r.monthly_amount, leads.deal_value) AS dealValue, follow_up_date AS followUpDate,
              manually_contacted AS manuallyContacted
-      FROM leads
+      FROM leads LEFT JOIN current_retainers r ON r.lead_id = leads.id
       WHERE pipeline_stage IN ('hot','pulse','proposal','meeting_booked')
         ${catFilter}
       ORDER BY
         CASE pipeline_stage WHEN 'hot' THEN 1 WHEN 'pulse' THEN 2 WHEN 'proposal' THEN 3 WHEN 'meeting_booked' THEN 4 END,
-        deal_value DESC
+        COALESCE(r.monthly_amount, leads.deal_value) DESC
     `).all(catParam) as Array<{
       id: number; name: string; company: string | null; category: string | null;
       tier: string; dealValue: number; followUpDate: string | null; manuallyContacted: number;

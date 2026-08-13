@@ -49,7 +49,7 @@ interface LeadRow {
   updated_at: string;
 }
 
-function mapLeadRow(row: LeadRow): Lead {
+function mapLeadRow(row: LeadRow & { current_retainer?: number | null }): Lead {
   return {
     id: row.id,
     name: row.name,
@@ -74,6 +74,9 @@ function mapLeadRow(row: LeadRow): Lead {
     convertedToProject: row.converted_to_project === 1,
     followUpDate: row.follow_up_date,
     dealValue: row.deal_value ?? 0,
+    // What a client actually pays, when they are one. The kanban shows
+    // this in preference to deal_value, which is only ever an estimate.
+    currentRetainer: row.current_retainer ?? 0,
     queuePosition: row.queue_position,
     lastCalledAt: row.last_called_at,
     lastViewedAt: row.last_viewed_at,
@@ -154,9 +157,12 @@ router.get('/', (req, res, next) => {
 
     // Get leads grouped by stage
     const leadRows = db.prepare(`
-      SELECT * FROM leads ${whereClause}
+      SELECT leads.*, r.monthly_amount AS current_retainer
+        FROM leads
+        LEFT JOIN current_retainers r ON r.lead_id = leads.id
+      ${whereClause}
       ORDER BY pipeline_stage ASC, updated_at DESC
-    `).all(params) as LeadRow[];
+    `).all(params) as (LeadRow & { current_retainer: number | null })[];
 
     const stages: Record<string, Lead[]> = {};
     for (const stage of PIPELINE_STAGES) {
@@ -355,12 +361,14 @@ router.get('/stats', (req, res, next) => {
     const closedTotal = wonCount + lostCount;
     const conversionRate = closedTotal > 0 ? Math.round((wonCount / closedTotal) * 100) : 0;
 
-    // Total pipeline value — sum of project values for leads in the late
-    // to closing) or won. Tier 1 maps to the legacy 'negotiation' bucket.
+    // Total pipeline value across the late stages. Previously summed
+    // projects.value, which the lead-conversion flow hard-codes to 0, so
+    // this read $0 no matter how much was in play. Now the retainer when
+    // there is one, the estimate otherwise — matching the board.
     const valueRow = db.prepare(`
-      SELECT COALESCE(SUM(p.value), 0) AS total_value
-      FROM projects p
-      JOIN leads l ON l.id = p.lead_id
+      SELECT COALESCE(SUM(COALESCE(r.monthly_amount, l.deal_value)), 0) AS total_value
+      FROM leads l
+      LEFT JOIN current_retainers r ON r.lead_id = l.id
       WHERE l.pipeline_stage IN ('hot', 'proposal', 'meeting_booked', 'won')
     `).get() as { total_value: number };
 
