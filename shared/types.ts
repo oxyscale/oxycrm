@@ -243,8 +243,12 @@ export interface Project {
   /** When the build went live — the start of the free period. Distinct
    *  from endDate, which used to be overloaded for this. */
   liveFrom: string | null;
-  /** Length of the complimentary period after go-live, in days. */
+  /** Length of the complimentary period after go-live, in days.
+   *  Not surfaced yet — kept for a later revision. */
   freeDays: number;
+  /** Upfront one-off fee for building this, separate from the monthly
+   *  retainer. Together they are the full revenue picture. */
+  buildFee: number;
   createdAt: string;
   updatedAt: string;
   tasks?: ProjectTask[];

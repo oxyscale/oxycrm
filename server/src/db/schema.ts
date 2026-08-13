@@ -937,9 +937,15 @@ export function initializeDatabase(db: Database.Database): void {
   // so the two can't be confused, and so the free-period countdown has
   // something honest to count from.
   addColumnIfMissing(db, 'projects', 'live_from', 'TEXT');
-  // Delivered dashboards get 30 free days, then a review and billing
-  // starts. Stored per project so the length can vary if a deal needs it.
+  // Length of any complimentary period after go-live. Retained for a
+  // later revision — nothing reads it today.
   addColumnIfMissing(db, 'projects', 'free_days', 'INTEGER NOT NULL DEFAULT 30');
+  // Upfront fee charged to build the thing, separate from the monthly
+  // retainer. One-off, per project, so a client commissioning two builds
+  // records two fees. Deliberately NOT the legacy `value` column — an
+  // earlier migration seeded retainers from that, so reusing it would
+  // double-count anyone caught by it.
+  addColumnIfMissing(db, 'projects', 'build_fee', 'REAL NOT NULL DEFAULT 0');
 
   // Backfill go-live dates for clients who were already live before the
   // column existed. Until Aug 2026 the go-live handler stamped end_date,

@@ -12,7 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import * as api from '../services/api';
-import { parseTimestamp, todayInSydney } from '../utils/dates';
+import { parseTimestamp } from '../utils/dates';
 import type { Project, ProjectStatus } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 
@@ -42,18 +42,6 @@ const STATUS_CONFIG: Record<
 
 const STATUS_ORDER: ProjectStatus[] = ['building', 'live', 'ended'];
 
-/** Date-only maths on YYYY-MM-DD strings, no timezone drift. */
-function addDays(isoDate: string, days: number): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d) + days * 86400000).toISOString().slice(0, 10);
-}
-
-function daysBetween(from: string, to: string): number {
-  const [fy, fm, fd] = from.split('-').map(Number);
-  const [ty, tm, td] = to.split('-').map(Number);
-  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000);
-}
-
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -68,6 +56,10 @@ export default function ProjectDetailPage() {
   // Name editing
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+
+  // Build fee editing
+  const [editingFee, setEditingFee] = useState(false);
+  const [feeDraft, setFeeDraft] = useState('');
 
   // Description editing
   const [description, setDescription] = useState('');
@@ -131,6 +123,20 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error('Failed to rename project:', err);
       setSaveError('Could not save that name. Please try again.');
+    }
+  };
+
+  const commitFee = async () => {
+    if (!project) return;
+    const amount = Number(feeDraft);
+    setEditingFee(false);
+    if (!Number.isFinite(amount) || amount < 0 || amount === project.buildFee) return;
+    setSaveError(null);
+    try {
+      setProject(await api.updateProject(project.id, { buildFee: amount }));
+    } catch (err) {
+      console.error('Failed to save build fee:', err);
+      setSaveError('Could not save the build fee. Please try again.');
     }
   };
 
@@ -227,15 +233,6 @@ export default function ProjectDetailPage() {
   const cfg = STATUS_CONFIG[project.status];
   const retainer = project.currentRetainer || 0;
 
-  // Free period runs from go-live. Only meaningful once they're live.
-  const free =
-    project.status === 'live' && project.liveFrom
-      ? (() => {
-          const endsOn = addDays(project.liveFrom, project.freeDays ?? 30);
-          return { endsOn, remaining: daysBetween(todayInSydney(), endsOn) };
-        })()
-      : null;
-
   return (
     <div className="p-10 max-w-4xl min-h-full bg-cream">
       {/* Back button */}
@@ -325,6 +322,42 @@ export default function ProjectDetailPage() {
           )}
         </div>
         <div className="w-px h-4 bg-hair-soft" />
+        {/* One-off build fee. Kept separate from the monthly retainer —
+            they are different kinds of money and shouldn't be added up
+            into a single misleading figure. */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-ink-dim text-sm">Build fee</span>
+          {editingFee ? (
+            <>
+              <span className="text-ink-dim text-sm">$</span>
+              <input
+                autoFocus
+                type="number"
+                value={feeDraft}
+                onChange={(e) => setFeeDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitFee();
+                  if (e.key === 'Escape') setEditingFee(false);
+                }}
+                onBlur={commitFee}
+                className="w-24 bg-cream border border-hair rounded-md px-2 py-0.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.4)]"
+              />
+            </>
+          ) : (
+            <button
+              onClick={() => {
+                setFeeDraft(project.buildFee ? String(project.buildFee) : '');
+                setEditingFee(true);
+              }}
+              className="text-ink text-sm font-medium hover:text-sky-ink transition-colors flex items-center gap-1"
+              title="Set the upfront build fee"
+            >
+              {project.buildFee > 0 ? formatCurrency(project.buildFee) : 'not set'}
+              <Pencil size={10} className="text-ink-dim" />
+            </button>
+          )}
+        </div>
+        <div className="w-px h-4 bg-hair-soft" />
         <div className="flex items-center gap-1.5">
           <Calendar size={14} className="text-ink-dim" />
           <span className="text-ink-muted text-sm">
@@ -372,35 +405,6 @@ export default function ProjectDetailPage() {
         )}
       </div>
 
-      {/* Free period */}
-      {free && (
-        <div
-          className={`mb-8 rounded-xl px-5 py-3 flex items-center justify-between gap-4 ${
-            free.remaining > 7
-              ? 'bg-[rgba(16,185,129,0.08)] border border-[rgba(16,185,129,0.2)]'
-              : free.remaining >= 0
-                ? 'bg-[rgba(245,158,11,0.10)] border border-[rgba(245,158,11,0.25)]'
-                : 'bg-paper border border-hair-soft'
-          }`}
-        >
-          <div>
-            <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-0.5">
-              Free period
-            </p>
-            <p className="text-ink text-sm">
-              {free.remaining > 0
-                ? `${free.remaining} ${free.remaining === 1 ? 'day' : 'days'} left — review on ${formatDate(free.endsOn)}`
-                : free.remaining === 0
-                  ? 'Ends today — review due'
-                  : `Ended ${formatDate(free.endsOn)} — billing`}
-            </p>
-          </div>
-          <p className="text-ink-dim text-xs whitespace-nowrap">
-            {project.freeDays ?? 30} days from {formatDate(project.liveFrom)}
-          </p>
-        </div>
-      )}
-
       {/* Status selector */}
       <div className="mb-8">
         <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-2">Status</p>
@@ -434,9 +438,6 @@ export default function ProjectDetailPage() {
           })}
           {updatingStatus && <Loader2 size={14} className="animate-spin text-ink-dim ml-2" />}
         </div>
-        <p className="text-ink-dim text-xs mt-2">
-          Marking it live starts the {project.freeDays ?? 30}-day free period.
-        </p>
       </div>
 
       {/* Description */}

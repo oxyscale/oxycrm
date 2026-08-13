@@ -43,23 +43,9 @@ type ClientGroup = {
   status: ProjectStatus;
   retainer: number;
   retainerSince: string | null;
-  /** Earliest go-live across their projects — when the free period started. */
-  liveFrom: string | null;
-  freeDays: number;
+  /** One-off build fees summed across this client's projects. */
+  buildFee: number;
 };
-
-/** Date-only maths on YYYY-MM-DD strings, no timezone drift. */
-function addDays(isoDate: string, days: number): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  const t = Date.UTC(y, m - 1, d) + days * 86400000;
-  return new Date(t).toISOString().slice(0, 10);
-}
-
-function daysBetween(from: string, to: string): number {
-  const [fy, fm, fd] = from.split('-').map(Number);
-  const [ty, tm, td] = to.split('-').map(Number);
-  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000);
-}
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -229,8 +215,7 @@ export default function ProjectsPage() {
           status: p.status,
           retainer: p.currentRetainer || 0,
           retainerSince: p.retainerSince ?? null,
-          liveFrom: p.status === 'live' ? p.liveFrom : null,
-          freeDays: p.freeDays ?? 30,
+          buildFee: p.buildFee || 0,
         });
         continue;
       }
@@ -240,10 +225,8 @@ export default function ProjectsPage() {
       // that lead, so take it once rather than summing.
       existing.retainer = Math.max(existing.retainer, p.currentRetainer || 0);
       if (!existing.retainerSince) existing.retainerSince = p.retainerSince ?? null;
-      if (p.status === 'live' && p.liveFrom) {
-        existing.liveFrom =
-          !existing.liveFrom || p.liveFrom < existing.liveFrom ? p.liveFrom : existing.liveFrom;
-      }
+      // Build fees are per project, so a client with two builds owes two.
+      existing.buildFee += p.buildFee || 0;
     }
 
     return [...byClient.values()].sort((a, b) => {
@@ -252,13 +235,6 @@ export default function ProjectsPage() {
     });
   }, [projects]);
 
-  /** Where a live client sits in their complimentary period. */
-  const freePeriod = (group: ClientGroup) => {
-    if (group.status !== 'live' || !group.liveFrom) return null;
-    const endsOn = addDays(group.liveFrom, group.freeDays);
-    return { endsOn, remaining: daysBetween(todayInSydney(), endsOn) };
-  };
-
   // Headline numbers always read across every client, whatever tab is
   // selected. Counted per client, not per project.
   const liveGroups = groups.filter((g) => g.status === 'live');
@@ -266,25 +242,12 @@ export default function ProjectsPage() {
   const activeClients = liveGroups.length;
   const monthlyRecurring = liveGroups.reduce((sum, g) => sum + g.retainer, 0);
 
-  // A client inside their free 30 days has a retainer agreed but isn't
-  // paying it yet, so the headline figure is what's contracted, not what
-  // is landing in the bank this month. Split so both are readable.
-  const inFreePeriod = liveGroups.filter((g) => {
-    const f = freePeriod(g);
-    return f !== null && f.remaining >= 0;
-  });
-  const notYetBilling = inFreePeriod.reduce((sum, g) => sum + g.retainer, 0);
-  const billingNow = monthlyRecurring - notYetBilling;
-
-  // Free periods landing in the next fortnight, plus any that went past
-  // in the last week. Bounded on both sides deliberately: there's no
-  // "review done" flag, so an open-ended "anything in the past" would
-  // leave every long-standing client sitting here forever and the tile
-  // would stop meaning anything.
-  const reviewsDue = liveGroups.filter((g) => {
-    const f = freePeriod(g);
-    return f !== null && f.remaining <= 14 && f.remaining >= -7;
-  });
+  // One-off build fees, counted across every project that isn't ended.
+  // Recurring and one-off are tracked separately on purpose — adding
+  // them would make a monthly figure that isn't monthly.
+  const buildFees = groups
+    .filter((g) => g.status !== 'ended')
+    .reduce((sum, g) => sum + g.buildFee, 0);
 
   const visible = filter === 'all' ? groups : groups.filter((g) => g.status === filter);
 
@@ -369,23 +332,14 @@ export default function ProjectsPage() {
           </p>
         </button>
 
-        {/* The one number that is a to-do rather than a readout. */}
-        <div
-          className={`rounded-xl p-4 border ${
-            reviewsDue.length > 0
-              ? 'bg-[rgba(245,158,11,0.08)] border-[rgba(245,158,11,0.25)]'
-              : 'bg-paper border-hair-soft'
-          }`}
-        >
+        {/* One-off money, kept apart from the recurring figure so
+            neither total quietly absorbs the other. */}
+        <div className="bg-paper border border-hair-soft rounded-xl p-4">
           <p className="text-ink-dim text-xs font-medium uppercase tracking-wider mb-1">
-            Reviews Due
+            Build Fees
           </p>
-          <p className="text-ink text-2xl font-bold">{reviewsDue.length}</p>
-          <p className="text-ink-dim text-xs mt-0.5">
-            {notYetBilling > 0
-              ? `${formatCurrency(notYetBilling)} not billing yet`
-              : 'free periods up within 14 days'}
-          </p>
+          <p className="text-ink text-2xl font-bold">{formatCurrency(buildFees)}</p>
+          <p className="text-ink-dim text-xs mt-0.5">one-off, upfront</p>
         </div>
       </div>
 
@@ -400,47 +354,42 @@ export default function ProjectsPage() {
           ) : (
             <>
               <div className="space-y-1.5">
-                {liveGroups.map((g) => {
-                  const f = freePeriod(g);
-                  const free = f !== null && f.remaining >= 0;
-                  return (
-                    <div
-                      key={g.key}
-                      className="flex items-baseline justify-between gap-3 text-sm"
-                    >
-                      <span className="text-ink-muted truncate">
-                        {g.clientName}
-                        {free && (
-                          <span className="text-warn text-xs ml-2">
-                            free for {f!.remaining} more {f!.remaining === 1 ? 'day' : 'days'}
-                          </span>
-                        )}
-                        {g.retainer === 0 && (
-                          <span className="text-ink-faint text-xs ml-2">no retainer set</span>
-                        )}
-                      </span>
-                      <span className="text-ink font-medium whitespace-nowrap">
-                        {formatCurrency(g.retainer)}
-                      </span>
-                    </div>
-                  );
-                })}
+                {liveGroups.map((g) => (
+                  <div
+                    key={g.key}
+                    className="flex items-baseline justify-between gap-3 text-sm"
+                  >
+                    <span className="text-ink-muted truncate">
+                      {g.clientName}
+                      {g.retainer === 0 && (
+                        <span className="text-ink-faint text-xs ml-2">no retainer set</span>
+                      )}
+                    </span>
+                    <span className="text-ink font-medium whitespace-nowrap">
+                      {formatCurrency(g.retainer)}
+                    </span>
+                  </div>
+                ))}
               </div>
               <div className="border-t border-hair-soft mt-3 pt-3 space-y-1">
                 <div className="flex items-baseline justify-between text-sm">
-                  <span className="text-ink font-medium">Total contracted</span>
+                  <span className="text-ink font-medium">Monthly recurring</span>
                   <span className="text-ink font-bold">{formatCurrency(monthlyRecurring)}</span>
                 </div>
-                {notYetBilling > 0 && (
+                <div className="flex items-baseline justify-between text-xs">
+                  <span className="text-ink-dim">Over twelve months</span>
+                  <span className="text-ink-dim">{formatCurrency(monthlyRecurring * 12)}</span>
+                </div>
+                {buildFees > 0 && (
                   <>
                     <div className="flex items-baseline justify-between text-xs">
-                      <span className="text-ink-dim">Still inside a free period</span>
-                      <span className="text-ink-dim">-{formatCurrency(notYetBilling)}</span>
+                      <span className="text-ink-dim">Build fees (one-off)</span>
+                      <span className="text-ink-dim">{formatCurrency(buildFees)}</span>
                     </div>
-                    <div className="flex items-baseline justify-between text-sm">
-                      <span className="text-ink-muted">Actually billing this month</span>
+                    <div className="flex items-baseline justify-between text-sm pt-1">
+                      <span className="text-ink-muted">Twelve-month total</span>
                       <span className="text-ink-muted font-medium">
-                        {formatCurrency(billingNow)}
+                        {formatCurrency(monthlyRecurring * 12 + buildFees)}
                       </span>
                     </div>
                   </>
@@ -507,7 +456,6 @@ export default function ProjectsPage() {
         <div className="grid grid-cols-2 gap-4">
           {visible.map((group) => {
             const cfg = STATUS_CONFIG[group.status];
-            const free = freePeriod(group);
 
             return (
               <div
@@ -597,23 +545,10 @@ export default function ProjectsPage() {
                   </p>
                 )}
 
-                {/* Free period countdown */}
-                {free && (
-                  <div
-                    className={`rounded-lg px-3 py-2 mb-3 text-xs ${
-                      free.remaining > 7
-                        ? 'bg-[rgba(16,185,129,0.10)] text-[#0f9d70]'
-                        : free.remaining >= 0
-                          ? 'bg-[rgba(245,158,11,0.14)] text-warn'
-                          : 'bg-[rgba(11,13,14,0.04)] text-ink-muted'
-                    }`}
-                  >
-                    {free.remaining > 0
-                      ? `${free.remaining} ${free.remaining === 1 ? 'day' : 'days'} of the free period left — review ${formatDate(free.endsOn)}`
-                      : free.remaining === 0
-                        ? `Free period ends today — review due`
-                        : `Free period ended ${formatDate(free.endsOn)} — billing`}
-                  </div>
+                {group.buildFee > 0 && (
+                  <p className="text-ink-dim text-xs mb-3">
+                    plus {formatCurrency(group.buildFee)} build fee
+                  </p>
                 )}
 
                 {/* Projects — rename in place */}
