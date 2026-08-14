@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Trophy,
   Check,
+  AlertTriangle,
 } from 'lucide-react';
 
 // Today + N weeks as a YYYY-MM-DD string in local time.
@@ -44,6 +45,7 @@ export default function TasksPage() {
   const [recentlyScheduled, setRecentlyScheduled] = useState<Record<number, { weeks: number; ts: number }>>({});
 
   const today = todayInSydney();
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -61,8 +63,18 @@ export default function TasksPage() {
         else if (taskStats.upcoming > 0) setActiveTab('upcoming');
         else setActiveTab('completed');
       }
+      setLoadError(null);
     } catch (err) {
       console.error('Failed to load tasks:', err);
+      // Must never fall through to the empty state. An empty task list
+      // reads as "nothing to do", which is the opposite of what a failed
+      // load means, and this is the page Jordan trusts to tell him what
+      // is outstanding.
+      setLoadError(
+        err instanceof Error && /429|rate/i.test(err.message)
+          ? 'Too many requests just now. Wait a moment and retry.'
+          : 'Could not load your tasks. This is not an empty list — something went wrong.',
+      );
     } finally {
       setLoading(false);
     }
@@ -266,7 +278,24 @@ export default function TasksPage() {
 
         {/* Task list */}
         <PanelCard elevated>
-          {filteredTasks.length === 0 ? (
+          {loadError ? (
+            <div className="py-12 text-center">
+              <AlertTriangle size={22} className="text-risk mx-auto mb-3" />
+              <p className="text-risk text-sm mb-1">{loadError}</p>
+              <p className="text-ink-dim text-xs mb-4">
+                Your tasks are safe — this screen just could not fetch them.
+              </p>
+              <button
+                onClick={() => {
+                  setLoading(true);
+                  loadData();
+                }}
+                className="bg-ink text-white font-medium rounded-full px-5 py-2 text-sm hover:bg-[#1a1d1f] transition-all"
+              >
+                Retry
+              </button>
+            </div>
+          ) : filteredTasks.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-ink-dim text-sm">
                 {activeTab === 'overdue' && 'No overdue tasks. Nice work.'}

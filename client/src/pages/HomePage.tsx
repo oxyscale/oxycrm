@@ -65,6 +65,9 @@ export default function HomePage() {
     (Activity & { leadName: string; leadCompany: string | null })[]
   >([]);
   const [dashboardLoading, setDashboardLoading] = useState(true);
+  /** True when the dashboard rendered with missing data, so nothing on it
+   *  claims to be complete. */
+  const [dashboardError, setDashboardError] = useState(false);
   const [homeTasks, setHomeTasks] = useState<api.TaskWithLead[]>([]);
   const [queueFilter, setQueueFilter] = useState<'all' | 'overdue' | 'due_today' | 'upcoming'>('all');
   const [removingTaskId, setRemovingTaskId] = useState<number | null>(null);
@@ -208,8 +211,15 @@ export default function HomePage() {
           // Only incomplete tasks, sorted by due_date (server already sorts this way)
           setHomeTasks(tasksRes.value.filter((t) => !t.completed));
         }
+
+        // Partial data is fine to show, but it must not be presented as
+        // fact. If the task fetch failed, the stat card would otherwise
+        // read "All clear" — a reassuring lie.
+        setDashboardError(
+          tasksRes.status === 'rejected' || statsRes.status === 'rejected',
+        );
       } catch {
-        // Silently fail — dashboard still works with partial data
+        setDashboardError(true);
       } finally {
         setDashboardLoading(false);
       }
@@ -875,9 +885,13 @@ export default function HomePage() {
             eyebrow="Total Leads"
             value={totalPipelineLeads}
             sub={
-              highPriorityCount > 0 ? `${highPriorityCount} need attention` : 'All clear'
+              dashboardError
+                ? 'Could not load — retry'
+                : highPriorityCount > 0
+                  ? `${highPriorityCount} need attention`
+                  : 'All clear'
             }
-            subTone={highPriorityCount > 0 ? 'sky' : 'neutral'}
+            subTone={dashboardError ? 'risk' : highPriorityCount > 0 ? 'sky' : 'neutral'}
             icon={<Users size={16} />}
             onClick={() => navigate('/leads')}
             elevated
