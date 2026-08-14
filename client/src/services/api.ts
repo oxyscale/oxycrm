@@ -1022,6 +1022,8 @@ export async function getPipelineStats(category?: string): Promise<{
   totalPipelineValue: number;
   /** Closed and won, reported separately from the above. */
   wonValue: number;
+  /** Monthly recurring revenue from live clients, counted per client. */
+  activeClientMrr: number;
   /** Every lead, whether or not it sits on the kanban. */
   totalLeads: number;
   /** Only leads placed in a kanban column. */

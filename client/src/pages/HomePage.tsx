@@ -419,10 +419,10 @@ export default function HomePage() {
           <div className="flex items-start justify-between gap-8">
             <div className="min-w-0">
               <EyebrowLabel variant="pill" className="mb-5">
-                SALES · OVERVIEW
+                OXYSCALE · OVERVIEW
               </EyebrowLabel>
-              <SectionHeading size="hero" accent="pipeline.">
-                Your
+              <SectionHeading size="hero" accent="overview.">
+                OxyScale
               </SectionHeading>
               <p className="mt-4 text-ink text-[17px] max-w-xl leading-relaxed">
                 {highPriorityCount > 0
@@ -934,12 +934,17 @@ export default function HomePage() {
                 })}
               </div>
 
-              {pipelineStats && pipelineStats.totalPipelineValue > 0 && (
+              {pipelineStats && pipelineStats.activeClientMrr > 0 && (
                 <div className="mt-6 pt-5 border-t border-hair-soft flex items-center justify-between">
-                  <EyebrowLabel variant="bare">Still in play</EyebrowLabel>
-                  <span className="text-ink font-medium text-[22px] tracking-tight">
-                    ${pipelineStats.totalPipelineValue.toLocaleString('en-AU')}
-                  </span>
+                  <EyebrowLabel variant="bare">Active client monthly revenue</EyebrowLabel>
+                  <div className="text-right">
+                    <span className="text-ink font-medium text-[22px] tracking-tight">
+                      ${pipelineStats.activeClientMrr.toLocaleString('en-AU')}
+                    </span>
+                    <span className="block text-ink-dim text-xs mt-0.5">
+                      ${(pipelineStats.activeClientMrr * 12).toLocaleString('en-AU')} a year
+                    </span>
+                  </div>
                 </div>
               )}
             </PanelCard>

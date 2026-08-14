@@ -403,6 +403,20 @@ router.get('/stats', (req, res, next) => {
       WHERE pipeline_stage = 'won' ${catFilter}
     `).get(catParam) as { total_value: number };
 
+    // Active client monthly recurring revenue — what live clients pay us
+    // each month. Summed over the retainer view, which is keyed per
+    // CLIENT, so a client with two live projects is counted once.
+    // Deliberately separate from pipeline value: this is money landing,
+    // that is money hoped for.
+    const mrrRow = db.prepare(`
+      SELECT COALESCE(SUM(r.monthly_amount), 0) AS mrr
+      FROM current_retainers r
+      JOIN leads ON leads.id = r.lead_id
+      WHERE EXISTS (
+        SELECT 1 FROM projects p WHERE p.lead_id = r.lead_id AND p.status = 'live'
+      ) ${catFilter}
+    `).get(catParam) as { mrr: number };
+
     const tempCounts = db.prepare(`
       SELECT temperature, COUNT(*) AS count
       FROM leads
@@ -422,6 +436,8 @@ router.get('/stats', (req, res, next) => {
       totalPipelineValue: valueRow.total_value,
       /** Closed and won — deliberately not part of the above. */
       wonValue: wonRow.total_value,
+      /** What live clients pay per month. Counted once per client. */
+      activeClientMrr: mrrRow.mrr,
       byTemperature: temperatureBreakdown,
       /** Every lead, placed on the board or not. */
       totalLeads,

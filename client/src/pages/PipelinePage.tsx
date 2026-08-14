@@ -283,7 +283,7 @@ export default function PipelinePage() {
         <EyebrowLabel variant="pill" className="mb-5">
           OPERATIONS · PIPELINE
         </EyebrowLabel>
-        <SectionHeading size="section">Active pipeline.</SectionHeading>
+        <SectionHeading size="section">Your pipeline.</SectionHeading>
         <p className="text-ink-muted text-sm mt-3">
           Track leads through your sales pipeline.
         </p>

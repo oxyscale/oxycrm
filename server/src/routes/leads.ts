@@ -1494,7 +1494,13 @@ router.post('/dedupe', (req, res, next) => {
     // Execute the merge in a single transaction. For each plan: reassign all
     // FK children to survivor, then delete duplicates.
     const reassignAndDelete = db.transaction((planList: Plan[]) => {
-      const tables = ['call_logs', 'notes', 'activities', 'emails_sent', 'callbacks', 'projects'];
+      // Must match the fold-into list. tasks, email_drafts and
+      // client_retainers were absent, so bulk dedupe destroyed
+      // outstanding tasks, queued drafts and retainer history.
+      const tables = [
+        'call_logs', 'notes', 'activities', 'emails_sent', 'callbacks',
+        'projects', 'tasks', 'email_drafts', 'client_retainers',
+      ];
       let leadsDeleted = 0;
       let rowsReassigned = 0;
 
@@ -3008,6 +3014,37 @@ function emailDomainRoot(email: string | null | undefined): string | null {
   return m && m[1].length >= 3 ? m[1] : null;
 }
 
+/**
+ * Roots of the free-provider list, derived from it rather than typed out
+ * again so the two can never drift apart. 'gmail.com' -> 'gmail'.
+ */
+const PERSONAL_EMAIL_ROOTS = new Set(
+  [...PERSONAL_EMAIL_DOMAINS]
+    .map((d) => d.split('.')[0])
+    .filter((r) => r.length >= 3),
+);
+
+/**
+ * Domain root usable as an IDENTITY signal — i.e. one that actually says
+ * two records are the same organisation.
+ *
+ * A shared free-provider domain says nothing: two unrelated people on
+ * gmail both reduced to 'gmail' and were scored as a HIGH-confidence
+ * domain match, which is a one-click path to folding one real lead into
+ * another and destroying it. Inbound Meta lead forms are mostly personal
+ * addresses, so this fired constantly.
+ */
+function identityDomainRoot(
+  website: string | null | undefined,
+  email: string | null | undefined,
+): string | null {
+  const fromSite = domainRoot(website);
+  if (fromSite && !PERSONAL_EMAIL_ROOTS.has(fromSite)) return fromSite;
+  const fromEmail = emailDomainRoot(email);
+  if (fromEmail && !PERSONAL_EMAIL_ROOTS.has(fromEmail)) return fromEmail;
+  return null;
+}
+
 interface ScanLead {
   id: number;
   name: string;
@@ -3073,9 +3110,10 @@ function matchPair(a: ScanLead, b: ScanLead): { reasons: string[]; confidence: '
     highConfidence = true;
   }
 
-  // HIGH: website OR email domain root match.
-  const da = domainRoot(a.website) || emailDomainRoot(a.email);
-  const db = domainRoot(b.website) || emailDomainRoot(b.email);
+  // HIGH: website OR email domain root match. Free providers excluded —
+  // sharing gmail.com is not evidence of anything.
+  const da = identityDomainRoot(a.website, a.email);
+  const db = identityDomainRoot(b.website, b.email);
   if (da && db && da === db) {
     reasons.push(`Same domain (${da})`);
     highConfidence = true;
@@ -3196,7 +3234,7 @@ router.post('/scan-duplicates', (_req, res, next) => {
       const ek = lead.email?.trim().toLowerCase();
       if (ek) addToBucket(`email:${ek}`, lead.id);
 
-      const dk = domainRoot(lead.website) || emailDomainRoot(lead.email);
+      const dk = identityDomainRoot(lead.website, lead.email);
       if (dk) addToBucket(`domain:${dk}`, lead.id);
 
       const tokens = new Set<string>([
@@ -3407,18 +3445,47 @@ router.post('/:suspectId/fold-into/:targetId', (req, res, next) => {
     fillIfEmpty('category', suspect.category);
     fillIfEmpty('company_info', suspect.company_info);
 
+    // Every table keyed to a lead. All of these have ON DELETE CASCADE,
+    // so anything missing from this list is DESTROYED when the losing
+    // record is deleted, not merely detached. client_retainers was
+    // missing, which meant folding a duplicate silently wiped that
+    // client's billing history.
     const reassignTables = [
       'call_logs', 'notes', 'tasks', 'activities', 'emails_sent',
-      'projects', 'callbacks', 'email_drafts',
+      'projects', 'callbacks', 'email_drafts', 'client_retainers',
     ];
 
     let rowsReassigned = 0;
 
+    // What the surviving record is on today, so we can tell whether the
+    // merge moved it. Retainers are append-only, so a folded-in row with
+    // a later effective date legitimately becomes the current figure —
+    // but that must be visible, not silent.
+    const retainerBefore = db.prepare(
+      `SELECT monthly_amount FROM current_retainers WHERE lead_id = ?`,
+    ).get(targetId) as { monthly_amount: number } | undefined;
+
     const tx = db.transaction(() => {
       // 1) Reassign every child row.
+      const movedRetainerIds = (
+        db.prepare('SELECT id FROM client_retainers WHERE lead_id = ?').all(suspectId) as
+          { id: number }[]
+      ).map((r) => r.id);
+
       for (const table of reassignTables) {
         const r = db.prepare(`UPDATE ${table} SET lead_id = ? WHERE lead_id = ?`).run(targetId, suspectId);
         rowsReassigned += r.changes;
+      }
+
+      // Tag the retainer rows that came across, so the history panel
+      // shows where a figure originated rather than it appearing from
+      // nowhere on the surviving record.
+      for (const rid of movedRetainerIds) {
+        db.prepare(
+          `UPDATE client_retainers
+              SET note = TRIM(COALESCE(note, '') || ' (merged from lead #' || ? || ')')
+            WHERE id = ?`,
+        ).run(String(suspectId), rid);
       }
 
       // 2) Apply the field-level fills to target.
@@ -3441,7 +3508,24 @@ router.post('/:suspectId/fold-into/:targetId', (req, res, next) => {
       // 4) Delete the suspect row.
       db.prepare('DELETE FROM leads WHERE id = ?').run(suspectId);
     });
+
     tx();
+
+    const retainerAfter = db.prepare(
+      `SELECT monthly_amount FROM current_retainers WHERE lead_id = ?`,
+    ).get(targetId) as { monthly_amount: number } | undefined;
+
+    if ((retainerBefore?.monthly_amount ?? 0) !== (retainerAfter?.monthly_amount ?? 0)) {
+      logger.warn(
+        {
+          targetId,
+          suspectId,
+          before: retainerBefore?.monthly_amount ?? 0,
+          after: retainerAfter?.monthly_amount ?? 0,
+        },
+        'Fold changed the surviving lead current retainer',
+      );
+    }
 
     logger.info({ suspectId, targetId, fieldsFilled: Object.keys(updates), rowsReassigned }, 'Lead folded');
     res.json({
