@@ -130,8 +130,14 @@ router.get('/', (req, res, next) => {
     // effect. A correlated subquery keeps this to one statement while
     // still respecting future-dated changes (a rise scheduled for next
     // month must not count until it lands).
+    // client_name is a snapshot taken when the project was created, so
+    // correcting a business name on the lead never reached these cards.
+    // Prefer the lead's live company, falling back to the contact's own
+    // name, and only then to the snapshot (projects with no linked lead).
     let query = `
       SELECT p.*,
+        COALESCE(NULLIF(TRIM(l.company), ''), NULLIF(TRIM(l.name), ''), p.client_name)
+          AS client_name,
         COUNT(pt.id) AS task_count,
         SUM(CASE WHEN pt.completed = 1 THEN 1 ELSE 0 END) AS completed_count,
         (SELECT r.monthly_amount FROM client_retainers r
@@ -142,6 +148,7 @@ router.get('/', (req, res, next) => {
           ORDER BY r.effective_from DESC, r.id DESC LIMIT 1) AS retainer_since
       FROM projects p
       LEFT JOIN project_tasks pt ON pt.project_id = p.id
+      LEFT JOIN leads l ON l.id = p.lead_id
     `;
     const params: Record<string, string> = {};
 
@@ -193,7 +200,14 @@ router.get('/:id', (req, res, next) => {
       throw new ApiError(400, 'Invalid project ID');
     }
 
-    const projectRow = db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as ProjectRow | undefined;
+    const projectRow = db.prepare(`
+      SELECT p.*,
+        COALESCE(NULLIF(TRIM(l.company), ''), NULLIF(TRIM(l.name), ''), p.client_name)
+          AS client_name
+      FROM projects p
+      LEFT JOIN leads l ON l.id = p.lead_id
+      WHERE p.id = ?
+    `).get(id) as ProjectRow | undefined;
     if (!projectRow) {
       throw new ApiError(404, 'Project not found');
     }
