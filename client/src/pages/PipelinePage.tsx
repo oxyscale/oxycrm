@@ -133,7 +133,7 @@ export default function PipelinePage() {
 
       const [pipelineData, statsData, cats] = await Promise.all([
         api.getPipeline(filters),
-        api.getPipelineStats(),
+        api.getPipelineStats(filterCategory),
         api.getCategories(),
       ]);
       setPipeline(pipelineData);
@@ -172,7 +172,7 @@ export default function PipelinePage() {
         return next;
       });
       // Refresh stats
-      api.getPipelineStats().then(setStats).catch(() => {});
+      api.getPipelineStats(filterCategory).then(setStats).catch(() => {});
     } catch (err) {
       console.error('Failed to update stage:', err);
     } finally {
@@ -251,7 +251,9 @@ export default function PipelinePage() {
 
   // ── Derived data ────────────────────────────────────────────
 
-  const totalLeads = Object.values(pipeline).reduce((sum, leads) => sum + leads.length, 0);
+  // Counts what's actually on the board. The unplaced figure is shown
+  // separately, so calling this "Total Leads" implied it was everything.
+  const boardLeads = Object.values(pipeline).reduce((sum, leads) => sum + leads.length, 0);
 
   // Leads with no pipeline stage (NULL) don't appear in the kanban.
   // Surface the count from /api/pipeline/stats so Jordan knows where they went.
@@ -291,8 +293,8 @@ export default function PipelinePage() {
       {stats && (
         <div className="grid grid-cols-3 gap-4 mb-6 flex-shrink-0">
           <StatCard
-            eyebrow="Total Leads"
-            value={totalLeads}
+            eyebrow="On The Board"
+            value={boardLeads}
             icon={<Users size={16} />}
             elevated
           />
@@ -327,7 +329,7 @@ export default function PipelinePage() {
           </select>
         )}
         <span className="text-ink-dim text-sm ml-auto">
-          {totalLeads} lead{totalLeads !== 1 ? 's' : ''} in pipeline
+          {boardLeads} lead{boardLeads !== 1 ? 's' : ''} in pipeline
         </span>
       </div>
 
@@ -361,7 +363,7 @@ export default function PipelinePage() {
             </PillButton>
           </div>
         </div>
-      ) : totalLeads === 0 ? (
+      ) : boardLeads === 0 ? (
         <div className="flex-1 flex items-center justify-center py-16">
           <div className="text-center">
             <Kanban size={32} className="text-sky-ink mx-auto mb-3" />

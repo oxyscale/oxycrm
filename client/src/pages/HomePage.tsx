@@ -58,11 +58,9 @@ export default function HomePage() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState<Lead[]>([]);
 
-  const [pipelineStats, setPipelineStats] = useState<{
-    byStage: Record<string, number>;
-    conversionRate: number;
-    totalPipelineValue: number;
-  } | null>(null);
+  const [pipelineStats, setPipelineStats] = useState<
+    Awaited<ReturnType<typeof api.getPipelineStats>> | null
+  >(null);
   const [recentActivities, setRecentActivities] = useState<
     (Activity & { leadName: string; leadCompany: string | null })[]
   >([]);
@@ -367,9 +365,10 @@ export default function HomePage() {
     return `${days}d ago`;
   };
 
-  const totalPipelineLeads = pipelineStats
-    ? Object.values(pipelineStats.byStage).reduce((a, b) => a + b, 0)
-    : 0;
+  // Read the server's explicit figure rather than summing the stage
+  // buckets. The old sum silently included the "no stage" bucket, so this
+  // card and the Pipeline page's disagreed while sharing a label.
+  const totalPipelineLeads = pipelineStats?.totalLeads ?? 0;
 
   const now = new Date();
   const greetingHour = now.getHours();
@@ -871,7 +870,7 @@ export default function HomePage() {
         )}
 
         {/* ── Stat row ─────────────────────────────────────────── */}
-        <div className="grid grid-cols-4 gap-4 mb-10">
+        <div className="mb-10 max-w-xs">
           <StatCard
             eyebrow="Total Leads"
             value={totalPipelineLeads}
@@ -902,7 +901,7 @@ export default function HomePage() {
                 </button>
               }
             >
-              <div className="grid grid-cols-7 gap-4">
+              <div className="grid grid-cols-6 gap-4">
                 {Object.entries(STAGE_CONFIG).map(([key, { label, color }]) => {
                   const count = pipelineStats?.byStage[key] ?? 0;
                   return (
@@ -923,7 +922,7 @@ export default function HomePage() {
 
               {pipelineStats && pipelineStats.totalPipelineValue > 0 && (
                 <div className="mt-6 pt-5 border-t border-hair-soft flex items-center justify-between">
-                  <EyebrowLabel variant="bare">Pipeline value</EyebrowLabel>
+                  <EyebrowLabel variant="bare">Still in play</EyebrowLabel>
                   <span className="text-ink font-medium text-[22px] tracking-tight">
                     ${pipelineStats.totalPipelineValue.toLocaleString('en-AU')}
                   </span>

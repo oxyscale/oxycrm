@@ -173,7 +173,7 @@ export default function PrintReportPage() {
               accent
             />
           </div>
-          <div className="grid grid-cols-5 gap-3 mb-6">
+          <div className="grid grid-cols-4 gap-3 mb-6">
             <KpiCard
               label="New Leads"
               value={String(s.newLeadCount)}

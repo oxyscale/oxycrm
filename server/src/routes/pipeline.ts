@@ -341,18 +341,42 @@ router.get('/stats', (req, res, next) => {
   try {
     const db = getDb();
 
-    // Leads per stage
+    // Honour the same category filter the board uses. Without it the
+    // header cards described the whole database while the columns
+    // underneath described one category, so picking a filter made the
+    // Won card contradict the Won column directly below it.
+    const { category } = req.query;
+    const catFilter =
+      category && typeof category === 'string' && category !== 'all'
+        ? 'AND category = @category'
+        : '';
+    const catParam: Record<string, string> =
+      category && typeof category === 'string' && category !== 'all' ? { category } : {};
+
+    // Stages that are still in play. Won and Lost are closed outcomes —
+    // counting Won as pipeline was making Home's total disagree with
+    // both the board and Reports, under the same label.
+    const ACTIVE = "('hot','pulse','proposal','meeting_booked')";
+
     const stageCounts = db.prepare(`
       SELECT pipeline_stage, COUNT(*) AS count
       FROM leads
+      WHERE 1=1 ${catFilter}
       GROUP BY pipeline_stage
-    `).all() as { pipeline_stage: string; count: number }[];
+    `).all(catParam) as { pipeline_stage: string | null; count: number }[];
 
     const leadsPerStage: Record<string, number> = {};
     let totalLeads = 0;
+    let placedLeads = 0;
+    let unplaced = 0;
     for (const row of stageCounts) {
-      leadsPerStage[row.pipeline_stage] = row.count;
       totalLeads += row.count;
+      if (row.pipeline_stage === null) {
+        unplaced += row.count;
+      } else {
+        leadsPerStage[row.pipeline_stage] = row.count;
+        placedLeads += row.count;
+      }
     }
 
     // Conversion rate: won / (won + lost) — only if there are closed leads
@@ -361,46 +385,52 @@ router.get('/stats', (req, res, next) => {
     const closedTotal = wonCount + lostCount;
     const conversionRate = closedTotal > 0 ? Math.round((wonCount / closedTotal) * 100) : 0;
 
-    // Total pipeline value across the late stages. Previously summed
-    // projects.value, which the lead-conversion flow hard-codes to 0, so
-    // this read $0 no matter how much was in play. Now the retainer when
-    // there is one, the estimate otherwise — matching the board.
+    // Money per lead: the agreed retainer when there is one, the estimate
+    // otherwise. Same rule as the board and Reports, via the shared view.
     const valueRow = db.prepare(`
-      SELECT COALESCE(SUM(COALESCE(r.monthly_amount, l.deal_value)), 0) AS total_value
-      FROM leads l
-      LEFT JOIN current_retainers r ON r.lead_id = l.id
-      WHERE l.pipeline_stage IN ('hot', 'proposal', 'meeting_booked', 'won')
-    `).get() as { total_value: number };
+      SELECT COALESCE(SUM(COALESCE(r.monthly_amount, leads.deal_value)), 0) AS total_value
+      FROM leads
+      LEFT JOIN current_retainers r ON r.lead_id = leads.id
+      WHERE pipeline_stage IN ${ACTIVE} ${catFilter}
+    `).get(catParam) as { total_value: number };
 
-    // Temperature breakdown
+    // Won is reported separately rather than folded into the pipeline
+    // figure, so "what's still in play" and "what we closed" stay apart.
+    const wonRow = db.prepare(`
+      SELECT COALESCE(SUM(COALESCE(r.monthly_amount, leads.deal_value)), 0) AS total_value
+      FROM leads
+      LEFT JOIN current_retainers r ON r.lead_id = leads.id
+      WHERE pipeline_stage = 'won' ${catFilter}
+    `).get(catParam) as { total_value: number };
+
     const tempCounts = db.prepare(`
       SELECT temperature, COUNT(*) AS count
       FROM leads
-      WHERE temperature IS NOT NULL
+      WHERE temperature IS NOT NULL ${catFilter}
       GROUP BY temperature
-    `).all() as { temperature: string; count: number }[];
+    `).all(catParam) as { temperature: string; count: number }[];
 
     const temperatureBreakdown: Record<string, number> = {};
     for (const row of tempCounts) {
       temperatureBreakdown[row.temperature] = row.count;
     }
 
-    // Leads not currently placed in the kanban (pipeline_stage IS NULL).
-    // Surfaced on the Pipeline page so empty-looking kanbans don't read as
-    // "no leads exist".
-    const unplacedRow = db.prepare(
-      'SELECT COUNT(*) AS n FROM leads WHERE pipeline_stage IS NULL'
-    ).get() as { n: number };
-
     const stats = {
       byStage: leadsPerStage,
       conversionRate,
+      /** Still in play: hot, pulse, proposal, meeting booked. */
       totalPipelineValue: valueRow.total_value,
+      /** Closed and won — deliberately not part of the above. */
+      wonValue: wonRow.total_value,
       byTemperature: temperatureBreakdown,
-      unplaced: unplacedRow.n,
+      /** Every lead, placed on the board or not. */
+      totalLeads,
+      /** Only those sitting in a kanban column. */
+      placedLeads,
+      unplaced,
     };
 
-    logger.info({ totalLeads, conversionRate }, 'Fetched pipeline stats');
+    logger.info({ totalLeads, placedLeads, conversionRate }, 'Fetched pipeline stats');
     res.json(stats);
   } catch (err) {
     next(err);

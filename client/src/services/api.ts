@@ -1015,13 +1015,21 @@ export async function updateLeadTemperature(leadId: number, temperature: string 
   });
 }
 
-export async function getPipelineStats(): Promise<{
+export async function getPipelineStats(category?: string): Promise<{
   byStage: Record<string, number>;
   conversionRate: number;
+  /** Still in play — hot, pulse, proposal, meeting booked. Excludes Won. */
   totalPipelineValue: number;
+  /** Closed and won, reported separately from the above. */
+  wonValue: number;
+  /** Every lead, whether or not it sits on the kanban. */
+  totalLeads: number;
+  /** Only leads placed in a kanban column. */
+  placedLeads: number;
   byTemperature: Record<string, number>;
 }> {
-  return request('/pipeline/stats');
+  const qs = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
+  return request(`/pipeline/stats${qs}`);
 }
 
 export async function getFollowUpQueue(): Promise<(Lead & { isOverdue: boolean })[]> {

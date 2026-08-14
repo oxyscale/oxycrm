@@ -269,7 +269,7 @@ export default function ReportsPage() {
               accent
             />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <KpiCard
               icon={<Users size={14} />}
               label="New leads"
