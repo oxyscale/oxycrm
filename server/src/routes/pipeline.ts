@@ -7,7 +7,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
-import { todayInSydney } from '../util/dates.js';
+import { todayInMelbourne } from '../util/dates.js';
 import type { Lead, PipelineStage, Temperature } from '../../../shared/types.js';
 import pino from 'pino';
 
@@ -193,7 +193,7 @@ router.get('/', (req, res, next) => {
 router.get('/follow-ups', (_req, res, next) => {
   try {
     const db = getDb();
-    const today = todayInSydney(); // Sydney YYYY-MM-DD
+    const today = todayInMelbourne(); // Melbourne YYYY-MM-DD
 
     const rows = db.prepare(`
       SELECT *,

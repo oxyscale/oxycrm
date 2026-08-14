@@ -10,6 +10,7 @@ import {
   Pencil,
   Check,
   X,
+  Trash2,
 } from 'lucide-react';
 import * as api from '../services/api';
 import { parseTimestamp } from '../utils/dates';
@@ -71,6 +72,7 @@ export default function ProjectDetailPage() {
 
   // Status updating
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (id) loadProject(parseInt(id));
@@ -137,6 +139,30 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error('Failed to save build fee:', err);
       setSaveError('Could not save the build fee. Please try again.');
+    }
+  };
+
+  /**
+   * Deletes the project. Retainers live on the CLIENT, not the project,
+   * so removing a mistyped project never touches billing history — worth
+   * saying out loud in the prompt, because that is the thing a user is
+   * afraid of when clicking delete.
+   */
+  const handleDelete = async () => {
+    if (!project) return;
+    const warning = project.status === 'live'
+      ? `Delete "${project.name}"? This client is live. Their retainer and history stay on the client record, but this project and its checklist are removed for good.`
+      : `Delete "${project.name}"? This cannot be undone. The client record, notes and retainer history are not affected.`;
+    if (!window.confirm(warning)) return;
+    setDeleting(true);
+    setSaveError(null);
+    try {
+      await api.deleteProject(project.id);
+      navigate('/projects');
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+      setSaveError('Could not delete this project. Please try again.');
+      setDeleting(false);
     }
   };
 
@@ -484,6 +510,22 @@ export default function ProjectDetailPage() {
           placeholder="Scratchpad for this build..."
           className="w-full bg-paper border border-hair-soft rounded-xl px-4 py-3 text-sm text-ink-muted placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)] transition-all resize-none leading-relaxed"
         />
+      </div>
+
+      {/* Deliberately last and understated — not next to anything used daily */}
+      <div className="pt-6 border-t border-hair-soft flex items-center justify-between gap-4">
+        <p className="text-ink-dim text-xs">
+          Removing this project leaves the client record, notes and retainer
+          history untouched.
+        </p>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="flex items-center gap-1.5 text-ink-dim hover:text-risk text-xs transition-colors disabled:opacity-40 flex-shrink-0"
+        >
+          {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+          Delete project
+        </button>
       </div>
     </div>
   );

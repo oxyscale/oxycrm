@@ -63,7 +63,7 @@ export async function syncSentEmails(): Promise<{ matched: number; total: number
   // Explicit ISO timestamps with Z suffix. The schema default
   // `datetime('now')` returns UTC without a timezone marker, which the
   // browser's `new Date(str)` parser then treats as LOCAL time — a 10-hour
-  // miss for Sydney users (UTC noon shows as "02:00 am"). Passing an
+  // miss for Melbourne users (UTC noon shows as "02:00 am"). Passing an
   // ISO-with-Z string makes the round-trip unambiguous.
   const insertEmail = db.prepare(`
     INSERT INTO emails_sent (lead_id, to_address, from_address, subject, body_snippet, gmail_message_id, source, direction, created_at)

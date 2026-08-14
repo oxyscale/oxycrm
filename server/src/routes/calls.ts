@@ -110,7 +110,10 @@ router.get('/stats', (req, res, next) => {
 
     // Calls by disposition
     const dispositionRows = db.prepare(
-      `SELECT disposition, COUNT(*) as count FROM call_logs WHERE 1=1 ${dateFilter} GROUP BY disposition`
+      // Rows with no disposition are pasted transcripts, not call
+      // outcomes. Counting them would skew every breakdown.
+      `SELECT disposition, COUNT(*) as count FROM call_logs
+        WHERE disposition IS NOT NULL ${dateFilter} GROUP BY disposition`
     ).all() as { disposition: string; count: number }[];
 
     const byDisposition: Record<string, number> = {};

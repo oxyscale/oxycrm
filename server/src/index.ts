@@ -24,14 +24,11 @@ import authRouter from './routes/auth.js';
 
 // Import route handlers
 import leadsRouter from './routes/leads.js';
-import callbacksRouter from './routes/callbacks.js';
 import callsRouter from './routes/calls.js';
-import intelligenceRouter from './routes/intelligence.js';
 import emailRouter from './routes/email.js';
 import emailDraftsRouter from './routes/emailDrafts.js';
 import googleRouter from './routes/google.js';
 import webhooksRouter from './routes/webhooks.js';
-import transcribeRouter from './routes/transcribe.js';
 import notesRouter from './routes/notes.js';
 import projectsRouter from './routes/projects.js';
 import activitiesRouter from './routes/activities.js';
@@ -203,7 +200,7 @@ const authLimiter = rateLimit({
 });
 const expensiveLimiter = rateLimit({
   windowMs: 60_000,        // per minute
-  limit: 30,               // 30 hits per IP per minute on AI / email / transcribe routes
+  limit: 30,               // 30 hits per IP per minute on AI / email routes
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Rate limit hit — slow down.' },
@@ -240,25 +237,16 @@ app.use('/api', (req, res, next) => {
 });
 
 app.use('/api/leads', leadsRouter);
-app.use('/api/callbacks', callbacksRouter);
 app.use('/api/calls', callsRouter);
-app.use('/api/intelligence', expensiveLimiter, intelligenceRouter);
 app.use('/api/email', expensiveLimiter, emailRouter);
 app.use('/api/email-drafts', emailDraftsLimiter, emailDraftsRouter);
 app.use('/api/google', googleRouter);
-// transcribeRouter has to mount at /api because its own paths are
-// absolute (/transcribe, /ai/summarise, ...). Attaching expensiveLimiter
-// to that same '/api' mount was a real bug: Express runs path-prefix
-// middleware for EVERY request under the prefix, so the 30/min AI cap
-// was silently metering every route mounted below this line — tasks,
-// notes, activities, pipeline, settings, categories, lead-sources. A
-// few minutes of ordinary clicking exhausted it and the UI started
-// showing "Rate limit hit — slow down." on things like saving a task.
-//
-// Scope the limiter to the paths this router actually serves instead.
-app.use('/api/transcribe', expensiveLimiter);
+// The AI rate limiter is scoped to the AI paths only. It was once
+// attached to the bare '/api' mount, which made Express meter EVERY
+// route below that line — tasks, notes, pipeline, settings — so a few
+// minutes of ordinary clicking produced "Rate limit hit" on things like
+// saving a task. Keep it scoped.
 app.use('/api/ai', expensiveLimiter);
-app.use('/api', transcribeRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/activities', activitiesRouter);

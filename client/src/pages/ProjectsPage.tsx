@@ -11,7 +11,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import * as api from '../services/api';
-import { parseTimestamp, todayInSydney } from '../utils/dates';
+import { parseTimestamp, todayInMelbourne } from '../utils/dates';
 import type { Project, ProjectStatus, Lead } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
@@ -183,7 +183,7 @@ export default function ProjectsPage() {
     try {
       await api.addRetainer(group.leadId, {
         monthlyAmount: amount,
-        effectiveFrom: todayInSydney(),
+        effectiveFrom: todayInMelbourne(),
         note: 'Updated from Active clients',
       });
       setEditingRetainer(null);

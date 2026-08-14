@@ -27,7 +27,7 @@ import StatCard from '../components/ui/StatCard';
 import PanelCard from '../components/ui/PanelCard';
 import PriorityRow from '../components/ui/PriorityRow';
 import * as api from '../services/api';
-import { todayInSydney, parseTimestamp } from '../utils/dates';
+import { todayInMelbourne, parseTimestamp } from '../utils/dates';
 import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import type { ImportResult, DuplicateLead, Activity, Lead } from '../types';
 
@@ -393,7 +393,7 @@ export default function HomePage() {
     hour12: false,
   });
 
-  const today = todayInSydney();
+  const today = todayInMelbourne();
   const overdueTasks = homeTasks.filter((t) => t.dueDate < today);
   const dueTodayTasks = homeTasks.filter((t) => t.dueDate === today);
   const upcomingTasks = homeTasks.filter((t) => t.dueDate > today);

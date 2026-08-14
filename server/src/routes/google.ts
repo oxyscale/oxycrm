@@ -138,7 +138,7 @@ const createEventSchema = z.object({
   location: z.string().optional(),
   guests: z.array(z.string().email()).optional(),
   meetLink: z.boolean().optional().default(false),
-  timezone: z.string().optional(),                      // IANA timezone (e.g. 'Australia/Sydney')
+  timezone: z.string().optional(),                      // IANA timezone (e.g. 'Australia/Melbourne')
 });
 
 router.post('/calendar/event', async (req, res, next) => {

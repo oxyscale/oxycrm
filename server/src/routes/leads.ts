@@ -403,22 +403,24 @@ router.get('/', (req, res, next) => {
     // Compute "contacted" flag for each lead so the frontend can
     // show a pill without making extra queries per lead.
     // Pulse leads are always contacted by definition.
-    const contactedStmt = db.prepare(`
-      SELECT CASE WHEN (
-        ? = 1
-        OR ? = 1
-        OR EXISTS (SELECT 1 FROM notes WHERE notes.lead_id = ? AND notes.created_by != 'Import')
-        OR EXISTS (SELECT 1 FROM emails_sent WHERE emails_sent.lead_id = ?)
-        OR EXISTS (SELECT 1 FROM call_logs WHERE call_logs.lead_id = ?)
-        OR EXISTS (SELECT 1 FROM tasks WHERE tasks.lead_id = ?)
-      ) THEN 1 ELSE 0 END AS contacted
-    `);
+    // One query for the whole page, not one per lead. This used to run a
+    // four-subquery EXISTS statement per row — 203 round trips on the
+    // current book, and it grew linearly with every lead added.
+    const contactedRows = db.prepare(`
+      SELECT DISTINCT lead_id FROM (
+                    SELECT lead_id FROM notes WHERE created_by != 'Import'
+        UNION ALL   SELECT lead_id FROM emails_sent
+        UNION ALL   SELECT lead_id FROM call_logs
+        UNION ALL   SELECT lead_id FROM tasks
+      )
+    `).all() as { lead_id: number }[];
+    const contactedIds = new Set(contactedRows.map((r) => r.lead_id));
 
     for (const lead of leads) {
-      const mc = lead.manuallyContacted ? 1 : 0;
-      const isPulse = lead.pipelineStage === 'pulse' ? 1 : 0;
-      const result = contactedStmt.get(mc, isPulse, lead.id, lead.id, lead.id, lead.id) as { contacted: number };
-      lead.contacted = result.contacted === 1;
+      lead.contacted =
+        lead.manuallyContacted === true ||
+        lead.pipelineStage === 'pulse' ||
+        contactedIds.has(lead.id);
     }
 
     // Open-task counts per lead — single grouped query, then merged
@@ -2866,9 +2868,13 @@ router.post('/:id/transcripts', (req, res, next) => {
       : 0;
     const now = new Date().toISOString();
 
+    // No disposition. A pasted transcript records that a conversation
+    // happened, not how it went — this path used to write 'interested'
+    // purely to satisfy a NOT NULL column, which made every pasted
+    // transcript count as an interested call.
     const result = db.prepare(`
       INSERT INTO call_logs (lead_id, duration, transcript, disposition, created_at)
-      VALUES (?, ?, ?, 'interested', ?)
+      VALUES (?, ?, ?, NULL, ?)
     `).run(id, durationSeconds, payload.transcript, now);
 
     // Update last_called_at so the profile reflects "I just spoke to them"

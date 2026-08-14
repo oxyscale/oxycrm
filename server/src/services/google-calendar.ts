@@ -223,7 +223,7 @@ export interface CreateEventParams {
   location?: string;
   guests?: string[];   // Array of email addresses
   createMeetLink?: boolean;
-  timezone?: string;   // IANA timezone string (e.g. 'Australia/Sydney')
+  timezone?: string;   // IANA timezone string (e.g. 'Australia/Melbourne')
 }
 
 export interface CreateEventResult {
@@ -357,7 +357,7 @@ export async function findEventByTitlePrefix(
 ): Promise<{ eventId: string; summary: string; description: string } | null> {
   const auth = getAuthenticatedClient();
   const calendar = google.calendar({ version: 'v3', auth });
-  const tz = timezone || 'Australia/Sydney';
+  const tz = timezone || 'Australia/Melbourne';
 
   const response = await calendar.events.list({
     calendarId: 'primary',

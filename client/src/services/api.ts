@@ -1,14 +1,11 @@
 import type {
   Lead,
   CallLog,
-  CallbackWithLead,
   ImportResult,
   DispositionPayload,
   SendEmailPayload,
   LeadType,
   CallIntelligence,
-  CallIntelligenceStats,
-  CallLogWithLead,
   Note,
   Project,
   ProjectTask,
@@ -640,22 +637,7 @@ export async function searchLeads(query: string): Promise<(Lead & { lastCallLog:
   return request<(Lead & { lastCallLog: CallLog | null })[]>(`/leads/search?q=${encodeURIComponent(query)}`);
 }
 
-// ── Callbacks ──────────────────────────────────────────────────
 
-export async function getTodaysCallbacks(): Promise<CallbackWithLead[]> {
-  return request<CallbackWithLead[]>('/callbacks/today');
-}
-
-export async function createCallback(data: {
-  leadId: number;
-  callbackDate: string;
-  notes?: string;
-}): Promise<{ success: boolean }> {
-  return request<{ success: boolean }>('/callbacks', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
 
 // ── Call history ───────────────────────────────────────────────
 
@@ -684,30 +666,7 @@ export async function sendEmail(
   });
 }
 
-// ── Call Intelligence ─────────────────────────────────────────
 
-export async function getIntelligenceCalls(params?: {
-  disposition?: string;
-  category?: string;
-  from?: string;
-  to?: string;
-  limit?: number;
-  offset?: number;
-}): Promise<{ calls: CallLogWithLead[]; total: number }> {
-  const searchParams = new URLSearchParams();
-  if (params?.disposition) searchParams.set('disposition', params.disposition);
-  if (params?.category) searchParams.set('category', params.category);
-  if (params?.from) searchParams.set('from', params.from);
-  if (params?.to) searchParams.set('to', params.to);
-  if (params?.limit) searchParams.set('limit', String(params.limit));
-  if (params?.offset) searchParams.set('offset', String(params.offset));
-  const query = searchParams.toString();
-  return request<{ calls: CallLogWithLead[]; total: number }>(`/intelligence/calls${query ? `?${query}` : ''}`);
-}
-
-export async function getIntelligenceStats(): Promise<CallIntelligenceStats> {
-  return request<CallIntelligenceStats>('/intelligence/stats');
-}
 
 export async function runAnalysis(params?: {
   dateFrom?: string;
@@ -719,9 +678,6 @@ export async function runAnalysis(params?: {
   });
 }
 
-export async function getAnalyses(): Promise<CallIntelligence[]> {
-  return request<CallIntelligence[]>('/intelligence/analyses');
-}
 
 export async function deleteAnalysis(id: number): Promise<void> {
   return request<void>(`/intelligence/analyses/${id}`, {
@@ -781,35 +737,6 @@ export async function createCalendarEvent(params: {
   );
 }
 
-// ── Transcription & AI ───────────────────────────────────────
-
-export async function transcribeAudio(
-  audioFile: File
-): Promise<{ transcript: string }> {
-  const formData = new FormData();
-  formData.append('audio', audioFile);
-
-  const res = await fetch(`${BASE_URL}/transcribe`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-    // No Content-Type header — browser sets it with boundary for multipart
-  });
-
-  if (!res.ok) {
-    const errorBody = await res.text();
-    let message: string;
-    try {
-      const parsed = JSON.parse(errorBody);
-      message = parsed.error || parsed.message || `Transcription failed: ${res.status}`;
-    } catch {
-      message = `Transcription failed: ${res.status} ${res.statusText}`;
-    }
-    throw new Error(message);
-  }
-
-  return res.json();
-}
 
 export async function summariseCall(params: {
   transcript: string;
@@ -1008,12 +935,6 @@ export async function updateLeadStage(leadId: number, stage: string | null): Pro
   });
 }
 
-export async function updateLeadTemperature(leadId: number, temperature: string | null): Promise<Lead> {
-  return request<Lead>(`/pipeline/${leadId}/temperature`, {
-    method: 'PATCH',
-    body: JSON.stringify({ temperature }),
-  });
-}
 
 export async function getPipelineStats(category?: string): Promise<{
   byStage: Record<string, number>;

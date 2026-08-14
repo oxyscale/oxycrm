@@ -36,7 +36,7 @@ import {
 import * as api from '../services/api';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 import SectionHeading from '../components/ui/SectionHeading';
-import { todayInSydney } from '../utils/dates';
+import { todayInMelbourne } from '../utils/dates';
 import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -452,7 +452,7 @@ export default function ReportsPage() {
             ) : (
               <div className="bg-paper border border-hair-soft rounded-xl overflow-hidden">
                 {data.tasksDue.map((t, idx) => {
-                  const today = todayInSydney();
+                  const today = todayInMelbourne();
                   const overdue = t.dueDate < today;
                   const dueToday = t.dueDate === today;
                   return (

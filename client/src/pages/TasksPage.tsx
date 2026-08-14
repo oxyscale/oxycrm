@@ -19,7 +19,7 @@ function addWeeksFromToday(weeks: number): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 import EyebrowLabel from '../components/ui/EyebrowLabel';
-import { todayInSydney } from '../utils/dates';
+import { todayInMelbourne } from '../utils/dates';
 import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import SectionHeading from '../components/ui/SectionHeading';
 import PanelCard from '../components/ui/PanelCard';
@@ -44,7 +44,7 @@ export default function TasksPage() {
   // confirmation chip on the row so Jordan knows the click worked.
   const [recentlyScheduled, setRecentlyScheduled] = useState<Record<number, { weeks: number; ts: number }>>({});
 
-  const today = todayInSydney();
+  const today = todayInMelbourne();
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {

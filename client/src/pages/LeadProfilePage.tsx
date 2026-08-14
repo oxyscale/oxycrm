@@ -25,7 +25,7 @@ import {
 import * as api from '../services/api';
 import { recordLeadVisit, removeRecentLead } from '../utils/recentLeads';
 import { decodeHtmlEntities } from '../utils/text';
-import { todayInSydney, parseTimestamp } from '../utils/dates';
+import { todayInMelbourne, parseTimestamp } from '../utils/dates';
 import {
   getLeadProfileReturn,
   clearLeadProfileReturn,
@@ -2149,7 +2149,7 @@ export default function LeadProfilePage() {
             ) : (
               <ul className="space-y-2.5">
                 {tasks.map((task) => {
-                  const today = todayInSydney();
+                  const today = todayInMelbourne();
                   const overdue = !task.completed && task.dueDate < today;
                   const dueToday = !task.completed && task.dueDate === today;
                   const isEditing = editingTaskId === task.id;
@@ -2400,6 +2400,32 @@ function ClientPanel({
     }
   };
 
+  const [deletingRetainerId, setDeletingRetainerId] = useState<number | null>(null);
+
+  /**
+   * Removes one dated entry from the retainer history. Needed because a
+   * mistyped amount would otherwise be permanent — and since the current
+   * figure is whichever entry is latest, a typo becomes the live retainer
+   * and inflates revenue reporting with no way back.
+   */
+  const removeRetainer = async (retainerId: number, amount: number) => {
+    const isCurrent = current?.id === retainerId;
+    const msg = isCurrent
+      ? `Remove $${amount.toLocaleString('en-AU')}/mo? This is the figure currently in effect — the previous entry becomes current.`
+      : `Remove the $${amount.toLocaleString('en-AU')}/mo entry from this client's history?`;
+    if (!window.confirm(msg)) return;
+    setDeletingRetainerId(retainerId);
+    setRetainerError(null);
+    try {
+      await api.deleteRetainer(lead.id, retainerId);
+      await onChanged();
+    } catch (err) {
+      setRetainerError(err instanceof Error ? err.message : 'Could not remove that entry.');
+    } finally {
+      setDeletingRetainerId(null);
+    }
+  };
+
   const saveRetainer = async () => {
     const amount = Number(retainerDraft);
     if (!Number.isFinite(amount) || amount < 0) {
@@ -2415,7 +2441,7 @@ function ClientPanel({
     try {
       await api.addRetainer(lead.id, {
         monthlyAmount: amount,
-        effectiveFrom: todayInSydney(),
+        effectiveFrom: todayInMelbourne(),
         note: 'Updated on client record',
       });
       setEditingRetainer(false);
@@ -2536,15 +2562,28 @@ function ClientPanel({
               </summary>
               <div className="mt-2 space-y-1.5">
                 {retainers.map((r) => (
-                  <div key={r.id} className="flex items-baseline justify-between gap-2 text-xs">
+                  <div key={r.id} className="flex items-baseline justify-between gap-2 text-xs group/ret">
                     <span className="text-ink-muted">
                       ${r.monthlyAmount.toLocaleString('en-AU')}
                       <span className="text-ink-dim"> from {r.effectiveFrom}</span>
                     </span>
-                    {r.note && <span className="text-ink-faint truncate max-w-[55%]">{r.note}</span>}
+                    <span className="flex items-center gap-2 min-w-0">
+                      {r.note && <span className="text-ink-faint truncate max-w-[10rem]">{r.note}</span>}
+                      <button
+                        onClick={() => removeRetainer(r.id, r.monthlyAmount)}
+                        disabled={deletingRetainerId === r.id}
+                        className="text-ink-faint hover:text-risk transition-colors p-0.5 opacity-0 group-hover/ret:opacity-100 disabled:opacity-40 flex-shrink-0"
+                        title="Remove this entry"
+                      >
+                        {deletingRetainerId === r.id
+                          ? <Loader2 size={11} className="animate-spin" />
+                          : <Trash2 size={11} />}
+                      </button>
+                    </span>
                   </div>
                 ))}
               </div>
+              {retainerError && <p className="text-risk text-xs mt-2">{retainerError}</p>}
             </details>
           )}
         </div>

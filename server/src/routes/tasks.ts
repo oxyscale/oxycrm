@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { createEvent, findEventByTitlePrefix, updateEvent } from '../services/google-calendar.js';
-import { todayInSydney } from '../util/dates.js';
+import { todayInMelbourne } from '../util/dates.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'tasks-routes' });
@@ -207,7 +207,7 @@ router.post('/leads/:leadId/tasks', async (req, res, next) => {
       const existing = await findEventByTitlePrefix(
         payload.dueDate,
         payload.label,
-        'Australia/Sydney'
+        'Australia/Melbourne'
       );
 
       if (existing) {
@@ -243,7 +243,7 @@ router.post('/leads/:leadId/tasks', async (req, res, next) => {
           description: leadBlock.join('\n'),
           startTime,
           endTime,
-          timezone: 'Australia/Sydney',
+          timezone: 'Australia/Melbourne',
         });
         calendarEventId = event.eventId || null;
         calendarLink = event.htmlLink || null;
@@ -322,7 +322,7 @@ router.get('/tasks', (req, res, next) => {
 router.get('/tasks/stats', (req, res, next) => {
   try {
     const db = getDb();
-    const today = todayInSydney();
+    const today = todayInMelbourne();
 
     const overdue = (db.prepare(
       'SELECT COUNT(*) AS n FROM tasks WHERE completed = 0 AND due_date < ?'
@@ -532,7 +532,7 @@ export async function backfillCalendarEvents(): Promise<{ synced: number; failed
       const existing = await findEventByTitlePrefix(
         task.due_date,
         task.label,
-        'Australia/Sydney'
+        'Australia/Melbourne'
       );
 
       if (existing) {
@@ -550,7 +550,7 @@ export async function backfillCalendarEvents(): Promise<{ synced: number; failed
           description: leadBlock.join('\n'),
           startTime: `${task.due_date}T09:00:00`,
           endTime: `${task.due_date}T09:30:00`,
-          timezone: 'Australia/Sydney',
+          timezone: 'Australia/Melbourne',
         });
         if (event.eventId) {
           db.prepare('UPDATE tasks SET google_calendar_event_id = ? WHERE id = ?')

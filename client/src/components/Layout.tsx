@@ -5,8 +5,6 @@ import SearchBar from './SearchBar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useAuth } from '../hooks/useAuth';
-import { getLastVisitedLead } from '../utils/recentLeads';
-import { rememberLeadProfileReturn } from '../utils/leadProfileNav';
 import * as api from '../services/api';
 
 const navItems = [
@@ -117,19 +115,12 @@ export default function Layout() {
             return (
               <button
                 key={path}
-                onClick={() => {
-                  // If clicking Leads and we're NOT already on a lead page,
-                  // jump to the last-visited lead profile if one exists.
-                  if (path === '/leads' && !location.pathname.startsWith('/leads/')) {
-                    const last = getLastVisitedLead();
-                    if (last) {
-                      rememberLeadProfileReturn();
-                      navigate(`/leads/${last.id}`);
-                      return;
-                    }
-                  }
-                  navigate(path);
-                }}
+                // Leads goes to the Leads list. It used to jump to the
+                // last profile you'd opened, which meant a list icon
+                // landed you on one person and the list had no reliable
+                // way in. The list already sorts most-recently-viewed
+                // first, so nothing is lost.
+                onClick={() => navigate(path)}
                 title={label}
                 className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200 ${
                   isActive

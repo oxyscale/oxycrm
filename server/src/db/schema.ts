@@ -799,6 +799,52 @@ export function initializeDatabase(db: Database.Database): void {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Aug 2026: call_logs.disposition becomes nullable.
+  //
+  // A manually pasted transcript is not a call outcome, but the column
+  // was NOT NULL so that path wrote 'interested' to satisfy it. Every
+  // pasted transcript therefore counted as an interested call and the
+  // disposition breakdown was meaningless. Those rows now store NULL and
+  // are excluded from outcome stats.
+  //
+  // Same writable_schema rewrite used elsewhere in this file — no child
+  // tables reference call_logs, so nothing needs rebuilding.
+  // ─────────────────────────────────────────────────────────────────
+  const dispositionInfo = (
+    db.prepare('PRAGMA table_info(call_logs)').all() as Array<{ name: string; notnull: number }>
+  ).find((c) => c.name === 'disposition');
+
+  if (dispositionInfo && dispositionInfo.notnull === 1) {
+    try {
+      const row = db.prepare(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'call_logs'"
+      ).get() as { sql: string } | undefined;
+      const newSql = row?.sql?.replace(
+        /(["']?disposition["']?\s+TEXT)\s+NOT\s+NULL/i,
+        '$1',
+      );
+      if (row?.sql && newSql && newSql !== row.sql) {
+        db.unsafeMode(true);
+        db.exec('PRAGMA foreign_keys = OFF');
+        db.exec('PRAGMA writable_schema = ON');
+        db.prepare(
+          "UPDATE sqlite_master SET sql = ? WHERE type = 'table' AND name = 'call_logs'"
+        ).run(newSql);
+        db.exec('PRAGMA writable_schema = OFF');
+        db.exec('PRAGMA foreign_keys = ON');
+        db.unsafeMode(false);
+        const sv = db.pragma('schema_version', { simple: true }) as number;
+        db.pragma(`schema_version = ${sv + 1}`);
+        // eslint-disable-next-line no-console
+        console.log('[schema] call_logs.disposition is now nullable');
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[schema] disposition nullable migration failed:', err);
+    }
+  }
+
   // ============================================================
   // Suppression list — contacts deliberately removed.
   //

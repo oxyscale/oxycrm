@@ -38,7 +38,7 @@ export default function BookMeetingPage() {
   const [meetingLocation, setMeetingLocation] = useState('');
   const [meetingGuests, setMeetingGuests] = useState('');
   const [meetingNotes, setMeetingNotes] = useState('');
-  const [meetingTimezone, setMeetingTimezone] = useState('Australia/Sydney');
+  const [meetingTimezone, setMeetingTimezone] = useState('Australia/Melbourne');
 
   // Calendar events for selected day
   const [dayEvents, setDayEvents] = useState<Array<{ summary: string; startTime: string; endTime: string }>>([]);
@@ -372,7 +372,7 @@ export default function BookMeetingPage() {
               onChange={(e) => setMeetingTimezone(e.target.value)}
               className="w-full bg-tray border border-hair-soft rounded-lg px-4 py-2.5 text-ink text-sm focus:outline-none focus:border-[rgba(10,156,212,0.4)] transition-all"
             >
-              <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
+              <option value="Australia/Melbourne">Melbourne (AEST/AEDT)</option>
               <option value="Australia/Melbourne">Melbourne (AEST/AEDT)</option>
               <option value="Australia/Brisbane">Brisbane (AEST)</option>
               <option value="Australia/Adelaide">Adelaide (ACST/ACDT)</option>
