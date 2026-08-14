@@ -170,15 +170,26 @@ Phosphor Icons (regular for UI, bold for small sizes, fill for emphasis). Sky In
 
 ### Pipeline stages (canonical values)
 ```
-'hot' | 'pulse' | 'proposal' | 'meeting_booked' | 'won' | 'lost'
+'new_lead' | 'meeting_booked' | 'proposal' | 'pulse' | 'won' | 'lost'
 ```
-Listed in board order, left to right. Labels: Hot, Pulse, Proposal sent,
-Meeting booked, Won, Lost.
+Listed in board order, left to right. Labels: New lead, Meeting booked,
+Proposal sent, Pulse, Won, Lost.
 
-Plus `NULL` = not placed on the kanban. Retired names are migrated away
-at boot in `server/src/db/schema.ts`: new_lead / follow_up / call_booked
-/ negotiation / not_interested, then tier_1 + tier_2 -> hot and
-tier_3 -> pulse (Aug 2026).
+CSV imports and hand-created leads both start in `new_lead`. The Leads
+list is the master record and holds every lead whatever its stage.
+
+Plus `NULL` = deliberately kept off the kanban. This is a state Jordan
+uses ("Remove from pipeline"), so never bulk-convert NULL to a stage.
+
+Retired names are migrated away at boot in `server/src/db/schema.ts`:
+follow_up / call_booked / negotiation / not_interested, then
+tier_1 + tier_2 -> hot and tier_3 -> pulse, then hot -> new_lead
+(`pipeline_stages_v4`, Aug 2026).
+
+`new_lead` was previously reset to NULL by an UNGUARDED statement on
+every boot. That statement is gone. If you ever reinstate a stage that
+was once retired, check for a boot-time UPDATE that erases it — it will
+silently empty the column on each deploy.
 
 Adding a stage means updating ELEVEN places. Miss one and you get
 silent 400s or a stage that's invisible in reports:

@@ -218,12 +218,13 @@ export function initializeDatabase(db: Database.Database): void {
 
   // ─────────────────────────────────────────────────────────────────
   // Pipeline simplification (May 2026): collapse legacy stages.
-  // new_lead is NO LONGER migrated — it was causing CSV imports to
-  // be auto-placed into tier_3. Legacy new_lead rows are now set to
-  // NULL (no tier) instead.
+  //
+  // The line that reset new_lead to NULL is GONE (Aug 2026). new_lead is
+  // a real board column again — the first one — and CSV imports land
+  // there. This statement was unguarded, so leaving it would have
+  // emptied that column on every deploy.
   // ─────────────────────────────────────────────────────────────────
   db.exec(`
-    UPDATE leads SET pipeline_stage = NULL  WHERE pipeline_stage = 'new_lead';
     UPDATE leads SET pipeline_stage = 'tier_2' WHERE pipeline_stage = 'follow_up';
     UPDATE leads SET pipeline_stage = 'tier_1' WHERE pipeline_stage IN ('call_booked', 'negotiation');
     UPDATE leads SET pipeline_stage = 'lost'   WHERE pipeline_stage IN ('not_interested', 'five_strikes');
@@ -760,6 +761,41 @@ export function initializeDatabase(db: Database.Database): void {
     const c = migrateStages();
     if (c.hot || c.pulse) {
       console.log(`[schema] pipeline stages: ${c.hot} tier_1/2 -> hot, ${c.pulse} tier_3 -> pulse`);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Stage rework (Aug 2026): 'hot' retired, 'new_lead' reinstated as the
+  // first board column. Board order is now New lead, Meeting booked,
+  // Proposal sent, Pulse, Won, Lost.
+  //
+  // Anything sitting in 'hot' moves to 'new_lead' — it would otherwise be
+  // stranded in a column that no longer renders, invisible on the board
+  // but still counted by reports.
+  //
+  // Leads with NO stage are deliberately left alone. NULL still means
+  // "kept out of the pipeline on purpose", which is a state Jordan uses.
+  // ─────────────────────────────────────────────────────────────────
+  const stagesV4 = db
+    .prepare("SELECT value FROM settings WHERE key = 'pipeline_stages_v4'")
+    .get() as { value: string } | undefined;
+
+  if (!stagesV4) {
+    try {
+      const moved = db
+        .prepare("UPDATE leads SET pipeline_stage = 'new_lead' WHERE pipeline_stage = 'hot'")
+        .run();
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('pipeline_stages_v4', 'done', datetime('now'))",
+      ).run();
+      if (moved.changes) {
+        // eslint-disable-next-line no-console
+        console.log(`[schema] pipeline stages: ${moved.changes} hot -> new_lead`);
+      }
+    } catch (err) {
+      // A failed migration must never stop the server booting.
+      // eslint-disable-next-line no-console
+      console.error('[schema] hot -> new_lead migration failed:', err);
     }
   }
 

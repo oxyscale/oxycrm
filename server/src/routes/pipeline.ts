@@ -90,7 +90,7 @@ function mapLeadRow(row: LeadRow & { current_retainer?: number | null }): Lead {
 // ============================================================
 
 const PIPELINE_STAGES: [PipelineStage, ...PipelineStage[]] = [
-  'hot', 'pulse', 'proposal', 'meeting_booked', 'won', 'lost',
+  'new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost',
 ];
 
 const TEMPERATURES: [Temperature, ...Temperature[]] = ['hot', 'warm', 'cold'];
@@ -109,10 +109,10 @@ const updateTemperatureSchema = z.object({
 // ============================================================
 
 const stageLabels: Record<PipelineStage, string> = {
-  pulse: 'Pulse',
-  hot: 'Hot',
-  proposal: 'Proposal sent',
+  new_lead: 'New lead',
   meeting_booked: 'Meeting booked',
+  proposal: 'Proposal sent',
+  pulse: 'Pulse',
   won: 'Won',
   lost: 'Lost',
 };
@@ -356,7 +356,7 @@ router.get('/stats', (req, res, next) => {
     // Stages that are still in play. Won and Lost are closed outcomes —
     // counting Won as pipeline was making Home's total disagree with
     // both the board and Reports, under the same label.
-    const ACTIVE = "('hot','pulse','proposal','meeting_booked')";
+    const ACTIVE = "('new_lead','meeting_booked','proposal','pulse')";
 
     const stageCounts = db.prepare(`
       SELECT pipeline_stage, COUNT(*) AS count
@@ -418,7 +418,7 @@ router.get('/stats', (req, res, next) => {
     const stats = {
       byStage: leadsPerStage,
       conversionRate,
-      /** Still in play: hot, pulse, proposal, meeting booked. */
+      /** Still in play: new lead, meeting booked, proposal, pulse. */
       totalPipelineValue: valueRow.total_value,
       /** Closed and won — deliberately not part of the above. */
       wonValue: wonRow.total_value,

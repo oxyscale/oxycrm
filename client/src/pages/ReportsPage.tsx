@@ -315,13 +315,13 @@ export default function ReportsPage() {
           {/* Tier breakdown — clickable to expand leads */}
           <Section title="Pipeline by tier" icon={<TrendingUp size={14} />}>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {data.byTier.filter((t) => ['hot', 'pulse', 'proposal', 'meeting_booked'].includes(t.tier))
+              {data.byTier.filter((t) => ['new_lead', 'meeting_booked', 'proposal', 'pulse'].includes(t.tier))
                 .sort((a, b) => {
-                  const order = ['hot', 'pulse', 'proposal', 'meeting_booked'];
+                  const order = ['new_lead', 'meeting_booked', 'proposal', 'pulse'];
                   return order.indexOf(a.tier) - order.indexOf(b.tier);
                 })
                 .map((t) => {
-                  const weight = ({ meeting_booked: '85%', proposal: '60%', hot: '30%', pulse: '10%' } as Record<string, string>)[t.tier];
+                  const weight = ({ meeting_booked: '85%', proposal: '60%', pulse: '10%', new_lead: '5%' } as Record<string, string>)[t.tier];
                   return (
                     <button
                       key={t.tier}
@@ -558,7 +558,7 @@ function EmptyRow({ text }: { text: string }) {
 
 const TIER_LABELS: Record<string, string> = {
   pulse: 'Pulse',
-  hot: 'Hot',
+  new_lead: 'New lead',
   proposal: 'Proposal sent',
   meeting_booked: 'Meeting booked',
   won: 'Won',

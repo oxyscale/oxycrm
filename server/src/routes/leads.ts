@@ -289,7 +289,7 @@ const createLeadSchema = z.object({
   campaignContent: z.string().nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
-  pipelineStage: z.enum(['hot', 'pulse', 'proposal', 'meeting_booked', 'won', 'lost']).nullable().optional(),
+  pipelineStage: z.enum(['new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost']).nullable().optional(),
 });
 
 const updateLeadSchema = z.object({
@@ -306,7 +306,7 @@ const updateLeadSchema = z.object({
   consolidatedSummary: z.string().nullable().optional(),
   companyInfo: z.string().nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
-  pipelineStage: z.enum(['hot', 'pulse', 'proposal', 'meeting_booked', 'won', 'lost']).nullable().optional(),
+  pipelineStage: z.enum(['new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost']).nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   followUpDate: z.string().nullable().optional(),
   dealValue: z.number().min(0).optional(),
@@ -1089,7 +1089,7 @@ router.post('/undo-import', upload.single('file'), (req, res, next) => {
     // schema migration converts them to NULL at boot, but new INSERTs
     // can still pick up the column default before the explicit NULL
     // assignment lands everywhere.
-    const REAL_TIER_STAGES = new Set(['hot', 'pulse', 'proposal', 'meeting_booked', 'won', 'lost']);
+    const REAL_TIER_STAGES = new Set(['new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost']);
 
     function protectionReason(lead: typeof allLeads[number]): string | null {
       // Lead is in any REAL pipeline tier = intentional placement by Jordan.
@@ -1771,9 +1771,10 @@ router.post('/', (req, res, next) => {
         leadSource: payload.leadSource?.trim() || null,
         campaign: payload.campaign?.trim() || null,
         campaignContent: payload.campaignContent?.trim() || null,
-        // null = no tier yet. Jordan places leads into a tier manually
-        // from the lead profile dropdown.
-        pipelineStage: payload.pipelineStage ?? null,
+        // Same default as a CSV import, so a hand-typed lead and an
+        // imported one start in the same place. An explicit stage on the
+        // payload still wins.
+        pipelineStage: payload.pipelineStage ?? 'new_lead',
         temperature: payload.temperature ?? null,
         queuePosition: maxPosRow.max_pos + 1,
         now,
@@ -1802,7 +1803,7 @@ router.post('/', (req, res, next) => {
         phone: payload.phone || '',
         email: payload.email ?? null,
         website: payload.website ?? null,
-        pipeline_stage: payload.pipelineStage ?? null,
+        pipeline_stage: payload.pipelineStage ?? 'new_lead',
         manually_contacted: 0,
         consolidated_summary: null,
         deal_value: 0,
@@ -2004,13 +2005,15 @@ router.post('/import', upload.single('file'), (req, res, next) => {
     const result: ImportResult = { imported: 0, skipped: 0, duplicates: 0, errors: [] };
     const duplicateLeads: DuplicateLead[] = [];
 
-    // pipeline_stage is explicitly NULL because the column DEFAULT on
-    // older production DBs is the legacy 'new_lead' value, and we don't
-    // want CSV imports to silently inherit that — new leads must start
-    // unplaced on the kanban.
+    // Imports land in the 'New lead' column rather than being left off
+    // the board. Uploads happen often, and unplaced leads were invisible
+    // on the kanban — findable only via a banner counting them. They stay
+    // in the Leads list either way; that remains the master record.
+    // Set explicitly, not left to the column DEFAULT, which is NULL on
+    // newer DBs and the legacy 'new_lead' string on older ones.
     const insertStmt = db.prepare(`
       INSERT INTO leads (name, company, phone, email, website, lead_type, category, lead_source, campaign, campaign_content, external_id, deal_value, status, pipeline_stage, queue_position)
-      VALUES (@name, @company, @phone, @email, @website, @leadType, @category, @leadSource, @campaign, @campaignContent, @externalId, @dealValue, 'not_called', NULL, @queuePosition)
+      VALUES (@name, @company, @phone, @email, @website, @leadType, @category, @leadSource, @campaign, @campaignContent, @externalId, @dealValue, 'not_called', 'new_lead', @queuePosition)
     `);
 
     // Optional per-row note. If the CSV row has a `notes` column, we
@@ -3027,11 +3030,11 @@ interface ScanLead {
  * Activity score — higher = more "worked." Drives suspect vs target
  * assignment (target stays, suspect folds into it).
  *
- * Only counts REAL tier placements (hot, pulse, proposal, meeting_booked, won, lost) as
+ * Only counts REAL tier placements (new_lead, meeting_booked, proposal, pulse, won, lost) as
  * activity. Legacy 'new_lead' or 'follow_up' values are equivalent to
  * NULL — they don't represent intentional placement.
  */
-const REAL_TIER_STAGES_SCORE = new Set(['hot', 'pulse', 'proposal', 'meeting_booked', 'won', 'lost']);
+const REAL_TIER_STAGES_SCORE = new Set(['new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost']);
 function activityScore(lead: ScanLead): number {
   return (
     lead.notes_count

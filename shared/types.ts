@@ -8,11 +8,11 @@
 // (pipeline_stage IS NULL in the DB). NULL = not yet placed in the kanban.
 // The Lead profile dropdown includes a "Remove from pipeline" action that
 // nulls the stage.
-// Flow: New Lead (NULL) → Pulse → Hot → Proposal sent → Meeting booked → Won / Lost
-// Hot            = actively being worked
+// Board order: New lead → Meeting booked → Proposal sent → Pulse → Won / Lost
+// New lead       = freshly imported, not yet triaged. CSV imports land here.
 // Proposal sent  = a quote is out, awaiting their decision
 // Meeting booked = they've agreed to meet off the back of it
-export type PipelineStage = 'hot' | 'pulse' | 'proposal' | 'meeting_booked' | 'won' | 'lost';
+export type PipelineStage = 'new_lead' | 'meeting_booked' | 'proposal' | 'pulse' | 'won' | 'lost';
 
 // Temperature
 export type Temperature = 'hot' | 'warm' | 'cold';

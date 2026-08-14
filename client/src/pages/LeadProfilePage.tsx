@@ -55,10 +55,10 @@ const CREATE_CATEGORY_VALUE = '__create_category__';
 const CREATE_CAMPAIGN_VALUE = '__create_campaign__';
 
 const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
-  { value: 'hot', label: 'Hot' },
-  { value: 'pulse', label: 'Pulse' },
-  { value: 'proposal', label: 'Proposal sent' },
+  { value: 'new_lead', label: 'New lead' },
   { value: 'meeting_booked', label: 'Meeting booked' },
+  { value: 'proposal', label: 'Proposal sent' },
+  { value: 'pulse', label: 'Pulse' },
   { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
 ];

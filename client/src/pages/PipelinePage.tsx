@@ -30,10 +30,10 @@ interface StageColumn {
 }
 
 const STAGES: StageColumn[] = [
-  { key: 'hot', label: 'Hot', color: 'bg-sky-ink', bgTint: 'bg-[rgba(10,156,212,0.06)]' },
-  { key: 'pulse', label: 'Pulse', color: 'bg-violet-500', bgTint: 'bg-[rgba(139,92,246,0.06)]' },
-  { key: 'proposal', label: 'Proposal sent', color: 'bg-sky', bgTint: 'bg-[rgba(94,197,230,0.08)]' },
+  { key: 'new_lead', label: 'New lead', color: 'bg-sky-ink', bgTint: 'bg-[rgba(10,156,212,0.06)]' },
   { key: 'meeting_booked', label: 'Meeting booked', color: 'bg-amber-400', bgTint: 'bg-[rgba(245,158,11,0.06)]' },
+  { key: 'proposal', label: 'Proposal sent', color: 'bg-sky', bgTint: 'bg-[rgba(94,197,230,0.08)]' },
+  { key: 'pulse', label: 'Pulse', color: 'bg-violet-500', bgTint: 'bg-[rgba(139,92,246,0.06)]' },
   { key: 'won', label: 'Won', color: 'bg-emerald-500', bgTint: 'bg-[rgba(16,185,129,0.06)]' },
   { key: 'lost', label: 'Lost', color: 'bg-red-400', bgTint: 'bg-[rgba(248,113,113,0.06)]' },
 ];
@@ -266,7 +266,7 @@ export default function PipelinePage() {
   const monthlyValue = (lead: Lead) => lead.currentRetainer || lead.dealValue || 0;
 
   // Sum across the active tiers (Won/Lost are closed)
-  const activePipelineValue = (['hot', 'pulse', 'proposal', 'meeting_booked'] as const).reduce((sum, key) => {
+  const activePipelineValue = (['new_lead', 'meeting_booked', 'proposal', 'pulse'] as const).reduce((sum, key) => {
     const list = pipeline[key] || [];
     return sum + list.reduce((s, l) => s + monthlyValue(l), 0);
   }, 0);

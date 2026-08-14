@@ -453,7 +453,7 @@ export async function completeTask(taskId: number): Promise<LeadTask> {
 // ── Reports ───────────────────────────────────────────────────
 
 export interface ReportTierBucket {
-  tier: 'hot' | 'pulse' | 'proposal' | 'meeting_booked' | 'won' | 'lost';
+  tier: 'new_lead' | 'meeting_booked' | 'proposal' | 'pulse' | 'won' | 'lost';
   label: string;
   count: number;
   totalValue: number;
@@ -1018,7 +1018,7 @@ export async function updateLeadTemperature(leadId: number, temperature: string 
 export async function getPipelineStats(category?: string): Promise<{
   byStage: Record<string, number>;
   conversionRate: number;
-  /** Still in play — hot, pulse, proposal, meeting booked. Excludes Won. */
+  /** Still in play — new lead, meeting booked, proposal, pulse. Excludes Won. */
   totalPipelineValue: number;
   /** Closed and won, reported separately from the above. */
   wonValue: number;

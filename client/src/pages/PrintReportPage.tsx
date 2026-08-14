@@ -34,7 +34,7 @@ function formatLongDate(yyyymmdd: string): string {
 }
 
 function tierLabel(tier: string): string {
-  return ({ hot: 'Hot', pulse: 'Pulse', proposal: 'Proposal sent', meeting_booked: 'Meeting booked', won: 'Won', lost: 'Lost' })[tier] || tier;
+  return ({ new_lead: 'New lead', meeting_booked: 'Meeting booked', proposal: 'Proposal sent', pulse: 'Pulse', won: 'Won', lost: 'Lost' })[tier] || tier;
 }
 
 // ── Component ──────────────────────────────────────────────────
@@ -216,13 +216,13 @@ export default function PrintReportPage() {
             <SectionLabel>Pipeline by Tier</SectionLabel>
             <div className="grid grid-cols-4 gap-3 mb-6">
               {data.byTier
-                .filter((b) => ['hot', 'pulse', 'proposal', 'meeting_booked'].includes(b.tier))
+                .filter((b) => ['new_lead', 'meeting_booked', 'proposal', 'pulse'].includes(b.tier))
                 .sort((a, b2) => {
-                  const order = ['hot', 'pulse', 'proposal', 'meeting_booked'];
+                  const order = ['new_lead', 'meeting_booked', 'proposal', 'pulse'];
                   return order.indexOf(a.tier) - order.indexOf(b2.tier);
                 })
                 .map((b) => {
-                  const weight = ({ meeting_booked: '85%', proposal: '60%', hot: '30%', pulse: '10%' } as Record<string, string>)[b.tier];
+                  const weight = ({ meeting_booked: '85%', proposal: '60%', pulse: '10%', new_lead: '5%' } as Record<string, string>)[b.tier];
                   return (
                   <div
                     key={b.tier}
@@ -297,7 +297,7 @@ export default function PrintReportPage() {
                       </td>
                       <td className="py-2.5 pr-3 align-top">
                         <span className={`text-[11px] font-mono font-semibold uppercase tracking-[0.15em] ${
-                          lead.tier === 'hot' ? 'text-[#0a9cd4]'
+                          lead.tier === 'new_lead' ? 'text-[#0a9cd4]'
                           : lead.tier === 'meeting_booked' ? 'text-[#f59e0b]'
                           : lead.tier === 'pulse' ? 'text-[#8b5cf6]'
                           : 'text-[#8a95a0]'

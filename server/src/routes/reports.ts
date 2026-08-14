@@ -37,7 +37,7 @@ interface TierBucket {
 
 const TIER_LABELS: Record<string, string> = {
   pulse: 'Pulse',
-  hot: 'Hot',
+  new_lead: 'New lead',
   proposal: 'Proposal sent',
   meeting_booked: 'Meeting booked',
   won: 'Won',
@@ -67,13 +67,13 @@ router.get('/', (req, res, next) => {
              COUNT(*) AS count,
              COALESCE(SUM(COALESCE(r.monthly_amount, leads.deal_value)), 0) AS total_value
       FROM leads LEFT JOIN current_retainers r ON r.lead_id = leads.id
-      WHERE pipeline_stage IN ('hot','pulse','proposal','meeting_booked','won','lost')
+      WHERE pipeline_stage IN ('new_lead','meeting_booked','proposal','pulse','won','lost')
         ${catFilter}
       GROUP BY pipeline_stage
     `).all(catParam) as { tier: string; count: number; total_value: number }[];
 
     // Build the full set of tiers (even ones with 0) so the UI shows every column.
-    const byTier: TierBucket[] = (['hot', 'pulse', 'proposal', 'meeting_booked', 'won', 'lost'] as const).map(
+    const byTier: TierBucket[] = (['new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost'] as const).map(
       (t) => {
         const row = tierRows.find((r) => r.tier === t);
         return {
@@ -189,10 +189,10 @@ router.get('/', (req, res, next) => {
              COALESCE(r.monthly_amount, leads.deal_value) AS dealValue, follow_up_date AS followUpDate,
              manually_contacted AS manuallyContacted
       FROM leads LEFT JOIN current_retainers r ON r.lead_id = leads.id
-      WHERE pipeline_stage IN ('hot','pulse','proposal','meeting_booked')
+      WHERE pipeline_stage IN ('new_lead','meeting_booked','proposal','pulse')
         ${catFilter}
       ORDER BY
-        CASE pipeline_stage WHEN 'hot' THEN 1 WHEN 'pulse' THEN 2 WHEN 'proposal' THEN 3 WHEN 'meeting_booked' THEN 4 END,
+        CASE pipeline_stage WHEN 'new_lead' THEN 1 WHEN 'meeting_booked' THEN 2 WHEN 'proposal' THEN 3 WHEN 'pulse' THEN 4 END,
         COALESCE(r.monthly_amount, leads.deal_value) DESC
     `).all(catParam) as Array<{
       id: number; name: string; company: string | null; category: string | null;
@@ -224,10 +224,10 @@ router.get('/', (req, res, next) => {
 
     // ── Totals + KPIs ───────────────────────────────────────
     const totalPipelineValue = byTier
-      .filter((b) => ['hot', 'pulse', 'proposal', 'meeting_booked'].includes(b.tier))
+      .filter((b) => ['new_lead', 'meeting_booked', 'proposal', 'pulse'].includes(b.tier))
       .reduce((sum, b) => sum + b.totalValue, 0);
     const totalPipelineCount = byTier
-      .filter((b) => ['hot', 'pulse', 'proposal', 'meeting_booked'].includes(b.tier))
+      .filter((b) => ['new_lead', 'meeting_booked', 'proposal', 'pulse'].includes(b.tier))
       .reduce((sum, b) => sum + b.count, 0);
     const wonValue = won.reduce((sum, w) => sum + (w.dealValue || 0), 0);
     const lostValue = lost.reduce((sum, w) => sum + (w.dealValue || 0), 0);
@@ -236,8 +236,8 @@ router.get('/', (req, res, next) => {
     const TIER_WEIGHTS: Record<string, number> = {
       meeting_booked: 0.85, // agreed to meet off the back of the quote
       proposal: 0.60,       // quote is out, awaiting a decision
-      hot: 0.30,            // actively being worked
       pulse: 0.10,          // warm interest, nothing concrete yet
+      new_lead: 0.05,       // imported, not yet triaged
     };
     const weightedPipelineValue = byTier
       .filter((b) => b.tier in TIER_WEIGHTS)
