@@ -255,13 +255,18 @@ router.patch('/:leadId/stage', (req, res, next) => {
 
       const newLabel = newStage ? (stageLabels[newStage] || newStage) : 'No tier';
       const oldLabel = oldStage ? (stageLabels[oldStage as PipelineStage] || oldStage) : 'No tier';
+      // Record the machine-readable stage in metadata as well as the
+      // human title. The Investor Report's funnel needs "how many
+      // entered this stage this month", and parsing "Moved to Pulse"
+      // out of a display string breaks the moment a label is reworded.
       db.prepare(`
-        INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
-        VALUES (?, 'stage_change', ?, ?, ?, ?)
+        INSERT INTO activities (lead_id, type, title, description, metadata, created_at, created_by)
+        VALUES (?, 'stage_change', ?, ?, ?, ?, ?)
       `).run(
         leadId,
         `Moved to ${newLabel}`,
         `from ${oldLabel}`,
+        JSON.stringify({ from: oldStage ?? null, to: newStage ?? null }),
         now,
         actor,
       );

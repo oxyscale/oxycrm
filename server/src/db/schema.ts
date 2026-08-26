@@ -1301,6 +1301,126 @@ export function initializeDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_duplicate_flags_target
       ON duplicate_flags(target_lead_id) WHERE dismissed_at IS NULL;
   `);
+
+  // ============================================================
+  // Investor Report
+  //
+  // Self-contained: nothing here touches leads, projects or the stage
+  // model. The report READS the CRM and stores only its own manual
+  // inputs and locked monthly snapshots.
+  // ============================================================
+  db.exec(`
+    -- Report-level settings. Kept apart from the app 'settings' table so
+    -- the report's knobs are obvious and can't collide.
+    CREATE TABLE IF NOT EXISTS investor_settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    -- One row per month. 'draft' is editable; 'final' freezes a JSON
+    -- snapshot so a report already sent to shareholders can never change
+    -- underneath them when CRM data moves.
+    CREATE TABLE IF NOT EXISTS investor_months (
+      month              TEXT PRIMARY KEY,      -- YYYY-MM
+      bank_balance       REAL,
+      live_mrr_override  REAL,                  -- NULL = trust the CRM
+      pot_wages_drawn    REAL NOT NULL DEFAULT 0,
+      status             TEXT NOT NULL DEFAULT 'draft',
+      snapshot           TEXT,                  -- JSON, written on finalise
+      finalised_at       TEXT,
+      created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Itemised payments out of the $30k ring fence.
+    CREATE TABLE IF NOT EXISTS investor_ringfence_payments (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      paid_on    TEXT NOT NULL,                 -- YYYY-MM-DD
+      item       TEXT NOT NULL,
+      amount     REAL NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Carries forward month to month until the status changes.
+    CREATE TABLE IF NOT EXISTS investor_planned_spend (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      item           TEXT NOT NULL,
+      estimated_cost REAL NOT NULL DEFAULT 0,
+      timing         TEXT,
+      purpose        TEXT,
+      status         TEXT NOT NULL DEFAULT 'proposed',
+      created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Carries forward until closed.
+    CREATE TABLE IF NOT EXISTS investor_risks (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      risk       TEXT NOT NULL,
+      mitigation TEXT,
+      status     TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ringfence_paid_on
+      ON investor_ringfence_payments(paid_on);
+  `);
+
+  // Defaults, written once. Changing them later is a settings edit, not
+  // a code change — the 60-day lead time in particular lives in exactly
+  // one place so it can be corrected without hunting through queries.
+  const investorDefaults: Array<[string, string]> = [
+    ['revenue_lead_days', '60'],
+    ['monthly_cost_base', '0'],
+    ['pot_ringfence_total', '30000'],
+    ['pot_wages_total', '90000'],
+    ['distribution_list', JSON.stringify([
+      'stephen.borg@example.com',
+      'joe.sette@example.com',
+      'jarrad.dowling@example.com',
+      'george@oxyscale.ai',
+    ])],
+  ];
+  const insertSetting = db.prepare(
+    'INSERT OR IGNORE INTO investor_settings (key, value) VALUES (?, ?)'
+  );
+  for (const [k, v] of investorDefaults) insertSetting.run(k, v);
+
+  // Seed the risks the spec calls out, once. Status changes from here on
+  // are the user's, so this must never re-run and resurrect a closed row.
+  const risksSeeded = db
+    .prepare("SELECT value FROM settings WHERE key = 'investor_risks_seeded_v1'")
+    .get() as { value: string } | undefined;
+
+  if (!risksSeeded) {
+    try {
+      const insertRisk = db.prepare(
+        'INSERT INTO investor_risks (risk, mitigation, status) VALUES (?, ?, ?)'
+      );
+      insertRisk.run(
+        'Delivery capacity concentrated in one person',
+        'Document build process; identify an offshore data resource to take overflow.',
+        'open',
+      );
+      insertRisk.run(
+        'Founder working hours',
+        'Prioritise automation of repeat build steps to reduce hours per client.',
+        'open',
+      );
+      insertRisk.run(
+        'Client concentration',
+        'Broaden the pipeline across industries so no single client dominates revenue.',
+        'open',
+      );
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('investor_risks_seeded_v1', ?)"
+      ).run(new Date().toISOString());
+      console.log('[schema] Seeded investor report starting risks');
+    } catch (err) {
+      console.error('[schema] investor risk seed failed:', err);
+    }
+  }
 }
 
 /**
