@@ -1197,3 +1197,210 @@ export async function changePassword(currentPassword: string, newPassword: strin
     body: JSON.stringify({ currentPassword, newPassword }),
   });
 }
+
+// ============================================================
+// Investor Report
+// ============================================================
+
+export interface InvestorPipelineRow {
+  leadId: number;
+  company: string;
+  contact: string;
+  retainer: number;
+  oneOff: number;
+  latestNote: string | null;
+  latestNoteAt: string | null;
+  nextAction: string | null;
+  nextActionDue: string | null;
+}
+
+export interface InvestorStageGroup {
+  stage: string;
+  label: string;
+  count: number;
+  retainerTotal: number;
+  rows: InvestorPipelineRow[];
+}
+
+export interface InvestorSignedClient {
+  leadId: number;
+  company: string;
+  contact: string;
+  signedOn: string;
+  retainer: number;
+  oneOff: number;
+  revenueStartsOn: string;
+  daysUntilLive: number;
+  isLive: boolean;
+}
+
+export interface InvestorReport {
+  month: string;
+  monthLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  generatedAt: string;
+  preparedBy: string;
+  status: 'draft' | 'final';
+  finalisedAt: string | null;
+  settings: { revenueLeadDays: number };
+  tiles: {
+    liveMrr: number;
+    committedMrr: number;
+    notYetLiveMrr: number;
+    bankBalance: number;
+    runwayMonths: number | null;
+    forecastRunwayMonths: number | null;
+    openPipelineMrr: number;
+    signedThisMonth: { count: number; mrr: number; oneOff: number };
+  };
+  funnel: Array<{
+    stage: string; label: string; openNow: number;
+    enteredThisMonth: number; enteredLastMonth: number; change: number;
+  }>;
+  pipeline: {
+    openCount: number;
+    openPipelineMrr: number;
+    openPipelineOneOff: number;
+    byStage: InvestorStageGroup[];
+  };
+  signedNotYetLive: InvestorSignedClient[];
+  investment: {
+    ringfence: {
+      total: number; paid: number; remaining: number;
+      payments: Array<{ id: number; paidOn: string; item: string; amount: number }>;
+    };
+    wages: { total: number; drawn: number; remaining: number };
+  };
+  position: {
+    bankBalance: number; liveMrr: number; committedMrr: number;
+    committedIncoming: number;
+    runwayMonths: number | null; forecastRunwayMonths: number | null;
+  };
+  plannedSpend: Array<{
+    id: number; item: string; estimatedCost: number;
+    timing: string | null; purpose: string | null; status: string;
+  }>;
+  risks: Array<{ id: number; risk: string; mitigation: string | null; status: string }>;
+  inputs: {
+    bankBalance: number | null;
+    liveMrrOverride: number | null;
+    crmLiveMrr: number;
+    potWagesDrawn: number;
+  };
+}
+
+export interface InvestorHistoryPoint {
+  month: string;
+  monthLabel: string;
+  liveMrr: number;
+  committedMrr: number;
+  notYetLiveMrr: number;
+  bankBalance: number;
+  runwayMonths: number | null;
+  ringfenceRemaining: number;
+  wagesRemaining: number;
+  funnel: Record<string, number>;
+}
+
+export interface InvestorReportResponse {
+  report: InvestorReport;
+  previous: InvestorReport | null;
+  history: InvestorHistoryPoint[];
+  forward: Array<{ month: string; monthLabel: string; liveMrr: number; notYetLiveMrr: number; projected: true }>;
+}
+
+export interface InvestorSettings {
+  revenueLeadDays: number;
+  monthlyCostBase: number;
+  potRingfenceTotal: number;
+  potWagesTotal: number;
+  distributionList: string[];
+}
+
+export async function getInvestorReport(month: string): Promise<InvestorReportResponse> {
+  return request(`/investor/report/${month}`);
+}
+
+export async function getInvestorMonths(): Promise<
+  Array<{ month: string; monthLabel: string; status: string; finalisedAt: string | null }>
+> {
+  return request('/investor/months');
+}
+
+export async function saveInvestorInputs(
+  month: string,
+  data: { bankBalance?: number | null; liveMrrOverride?: number | null; potWagesDrawn?: number },
+): Promise<InvestorReport> {
+  return request(`/investor/report/${month}/inputs`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function finaliseInvestorReport(month: string): Promise<{ success: true; finalisedAt: string }> {
+  return request(`/investor/report/${month}/finalise`, { method: 'POST' });
+}
+
+export async function reopenInvestorReport(month: string): Promise<{ success: true }> {
+  return request(`/investor/report/${month}/reopen`, { method: 'POST' });
+}
+
+export async function addRingfencePayment(
+  data: { paidOn: string; item: string; amount: number },
+): Promise<{ id: number }> {
+  return request('/investor/ringfence', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function deleteRingfencePayment(id: number): Promise<void> {
+  await request(`/investor/ringfence/${id}`, { method: 'DELETE' });
+}
+
+export async function addPlannedSpend(data: {
+  item: string; estimatedCost?: number; timing?: string | null;
+  purpose?: string | null; status?: string;
+}): Promise<{ id: number }> {
+  return request('/investor/planned-spend', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updatePlannedSpend(
+  id: number,
+  data: Partial<{ item: string; estimatedCost: number; timing: string | null; purpose: string | null; status: string }>,
+): Promise<{ success: true }> {
+  return request(`/investor/planned-spend/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function deletePlannedSpend(id: number): Promise<void> {
+  await request(`/investor/planned-spend/${id}`, { method: 'DELETE' });
+}
+
+export async function addInvestorRisk(
+  data: { risk: string; mitigation?: string | null; status?: string },
+): Promise<{ id: number }> {
+  return request('/investor/risks', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateInvestorRisk(
+  id: number,
+  data: Partial<{ risk: string; mitigation: string | null; status: string }>,
+): Promise<{ success: true }> {
+  return request(`/investor/risks/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function deleteInvestorRisk(id: number): Promise<void> {
+  await request(`/investor/risks/${id}`, { method: 'DELETE' });
+}
+
+export async function getInvestorSettings(): Promise<InvestorSettings> {
+  return request('/investor/settings');
+}
+
+export async function updateInvestorSettings(
+  data: Partial<InvestorSettings>,
+): Promise<InvestorSettings> {
+  return request('/investor/settings', { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function emailInvestorReport(
+  month: string,
+  data: { html: string; subject?: string; to?: string[] },
+): Promise<{ success: true; sentTo: string[] }> {
+  return request(`/investor/report/${month}/email`, { method: 'POST', body: JSON.stringify(data) });
+}

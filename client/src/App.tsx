@@ -15,6 +15,7 @@ import BookMeetingPage from './pages/BookMeetingPage';
 import SettingsPage from './pages/SettingsPage';
 import EmailBankPage from './pages/EmailBankPage';
 import ReportsPage from './pages/ReportsPage';
+import InvestorReportPage from './pages/InvestorReportPage';
 import PrintReportPage from './pages/PrintReportPage';
 import TasksPage from './pages/TasksPage';
 
@@ -60,6 +61,7 @@ export default function App() {
                 <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/email-bank" element={<EmailBankPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/investor" element={<InvestorReportPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
             </Routes>
