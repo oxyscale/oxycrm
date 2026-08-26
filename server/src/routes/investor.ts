@@ -99,6 +99,9 @@ function todayIso(): string {
 type Settings = {
   revenueLeadDays: number;
   monthlyCostBase: number;
+  forecastMrr6: number;
+  forecastMrr12: number;
+  forecastNote: string;
   potRingfenceTotal: number;
   potWagesTotal: number;
   distributionList: string[];
@@ -123,6 +126,9 @@ function readSettings(): Settings {
   return {
     revenueLeadDays: num('revenue_lead_days', 60),
     monthlyCostBase: num('monthly_cost_base', 0),
+    forecastMrr6: num('forecast_mrr_6', 0),
+    forecastMrr12: num('forecast_mrr_12', 0),
+    forecastNote: map.get('forecast_note') ?? '',
     potRingfenceTotal: num('pot_ringfence_total', 30000),
     potWagesTotal: num('pot_wages_total', 90000),
     distributionList: list,
@@ -446,6 +452,15 @@ function buildReport(month: string) {
     status: inputs?.status ?? 'draft',
     finalisedAt: inputs?.finalised_at ?? null,
     settings: { revenueLeadDays: settings.revenueLeadDays },
+    forecast: {
+      mrr6: settings.forecastMrr6,
+      mrr12: settings.forecastMrr12,
+      note: settings.forecastNote,
+      // Months to the target at the current committed run rate, so the
+      // ambition sits next to where the business actually is.
+      liveMrr,
+      committedMrr,
+    },
     tiles: {
       liveMrr,
       committedMrr,
@@ -869,6 +884,9 @@ router.get('/settings', (_req, res, next) => {
 const settingsSchema = z.object({
   revenueLeadDays: z.number().int().min(0).max(365).optional(),
   monthlyCostBase: z.number().min(0).optional(),
+  forecastMrr6: z.number().min(0).optional(),
+  forecastMrr12: z.number().min(0).optional(),
+  forecastNote: z.string().max(600).optional(),
   potRingfenceTotal: z.number().min(0).optional(),
   potWagesTotal: z.number().min(0).optional(),
   distributionList: z.array(z.string().email()).optional(),
@@ -884,6 +902,9 @@ router.patch('/settings', (req, res, next) => {
     const map: Record<string, string> = {
       revenueLeadDays: 'revenue_lead_days',
       monthlyCostBase: 'monthly_cost_base',
+      forecastMrr6: 'forecast_mrr_6',
+      forecastMrr12: 'forecast_mrr_12',
+      forecastNote: 'forecast_note',
       potRingfenceTotal: 'pot_ringfence_total',
       potWagesTotal: 'pot_wages_total',
     };

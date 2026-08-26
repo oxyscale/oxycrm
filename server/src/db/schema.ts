@@ -1375,6 +1375,9 @@ export function initializeDatabase(db: Database.Database): void {
     ['monthly_cost_base', '0'],
     ['pot_ringfence_total', '30000'],
     ['pot_wages_total', '90000'],
+    ['forecast_mrr_6', '0'],
+    ['forecast_mrr_12', '0'],
+    ['forecast_note', ''],
     ['distribution_list', JSON.stringify([
       'stephen.borg@example.com',
       'joe.sette@example.com',

@@ -1244,6 +1244,10 @@ export interface InvestorReport {
   status: 'draft' | 'final';
   finalisedAt: string | null;
   settings: { revenueLeadDays: number };
+  forecast: {
+    mrr6: number; mrr12: number; note: string;
+    liveMrr: number; committedMrr: number;
+  };
   tiles: {
     liveMrr: number;
     committedMrr: number;
@@ -1326,6 +1330,9 @@ export interface InvestorReportResponse {
 export interface InvestorSettings {
   revenueLeadDays: number;
   monthlyCostBase: number;
+  forecastMrr6: number;
+  forecastMrr12: number;
+  forecastNote: string;
   potRingfenceTotal: number;
   potWagesTotal: number;
   distributionList: string[];

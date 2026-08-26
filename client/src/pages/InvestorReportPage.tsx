@@ -82,25 +82,6 @@ function niceMax(v: number): number {
   return Math.ceil(v / mag) * mag;
 }
 
-function ChartFrame({
-  title, subtitle, empty, children,
-}: {
-  title: string; subtitle?: string; empty?: boolean; children?: React.ReactNode;
-}) {
-  return (
-    <div className="bg-paper border border-hair-soft rounded-xl p-5 break-inside-avoid">
-      <p className="text-ink text-sm font-medium">{title}</p>
-      {subtitle && <p className="text-ink-dim text-xs mt-0.5 mb-3">{subtitle}</p>}
-      {empty ? (
-        <p className="text-ink-dim text-xs py-8 text-center">
-          Not enough finalised months yet — this fills in as you lock each month.
-        </p>
-      ) : (
-        <div className="overflow-x-auto">{children}</div>
-      )}
-    </div>
-  );
-}
 
 /** Multi-series line chart over labelled months. */
 function LineChart({
@@ -230,20 +211,6 @@ function StackedBars({
 
 // ── tiles ────────────────────────────────────────────────────────
 
-function Tile({
-  label, value, delta, sub,
-}: {
-  label: string; value: string; delta?: React.ReactNode; sub?: string;
-}) {
-  return (
-    <div className="bg-paper border border-hair-soft rounded-xl p-4 break-inside-avoid">
-      <p className="text-ink-dim text-[10px] font-medium uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-ink text-2xl font-bold leading-tight">{value}</p>
-      <div className="mt-1 min-h-[16px]">{delta}</div>
-      {sub && <p className="text-ink-dim text-xs mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 const SOURCE_COLOURS = [
   '#0a9cd4', '#f59e0b', '#10b981', '#8b5cf6',
@@ -390,6 +357,9 @@ export default function InvestorReportPage() {
 
   const t = report.tiles;
   const pt = prev?.tiles;
+  const lsTotals = report.leadSources.totals;
+  const leadsInThisMonth = lsTotals[lsTotals.length - 1] ?? 0;
+  const prevLeadsIn = lsTotals.length > 1 ? lsTotals[lsTotals.length - 2] : undefined;
 
   return (
     <div className="p-10 min-h-full bg-cream">
@@ -499,299 +469,100 @@ export default function InvestorReportPage() {
           onError={setError}
         />
       ) : (
-        <div ref={printRef} className="space-y-6">
-          {/* Header */}
-          <div className="bg-paper border border-hair-soft rounded-xl p-5 break-inside-avoid">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
+        // The document. Reads as a printed sheet: numbered sections,
+        // hairline rules, no stacked card chrome.
+        <div ref={printRef} className="bg-paper border border-hair-soft rounded-2xl px-12 py-10 max-w-[900px] mx-auto print:border-0 print:rounded-none print:px-0 print:py-0 print:max-w-none">
+
+          {/* Masthead */}
+          <header className="pb-8 border-b border-hair-strong">
+            <div className="flex items-start justify-between gap-8">
               <div>
-                <h1 className="text-ink text-xl font-bold">OxyScale — {report.monthLabel}</h1>
-                <p className="text-ink-dim text-xs mt-1">
-                  {shortDate(report.periodStart)} to {shortDate(report.periodEnd)} ·
-                  Prepared by {report.preparedBy} ·
-                  Generated {new Date(report.generatedAt).toLocaleDateString('en-AU')}
+                <p className="font-mono text-[10px] font-semibold tracking-[0.22em] uppercase text-ink-dim">
+                  Oxy<span className="text-sky-ink">Scale</span> · Investor update
+                </p>
+                <h1 className="mt-4 text-ink text-[42px] font-medium leading-none tracking-[-0.03em]">
+                  {report.monthLabel.split(' ')[0]}{' '}
+                  <span className="font-editorial italic text-sky-ink font-normal">
+                    {report.monthLabel.split(' ')[1]}
+                  </span>
+                </h1>
+                <p className="mt-3 text-ink-muted text-sm">
+                  Prepared by {report.preparedBy} · {shortDate(report.periodStart)} to {shortDate(report.periodEnd)}
                 </p>
               </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+              <span className={`font-mono text-[10px] font-semibold tracking-[0.18em] uppercase px-2.5 py-1 rounded-full whitespace-nowrap ${
                 locked ? 'bg-[rgba(16,185,129,0.12)] text-[#0f9d70]' : 'bg-[rgba(245,158,11,0.15)] text-warn'
               }`}>
                 {locked ? 'Final' : 'Draft'}
               </span>
             </div>
-          </div>
+          </header>
 
-          {/* Headline tiles */}
-          <div className="grid grid-cols-3 gap-4">
-            <Tile label="Live MRR" value={aud(t.liveMrr)}
-              delta={<Delta current={t.liveMrr} previous={pt?.liveMrr} money />}
-              sub="Retainers currently billing" />
-            <Tile label="Committed MRR" value={aud(t.committedMrr)}
-              delta={<Delta current={t.committedMrr} previous={pt?.committedMrr} money />}
-              sub={`Includes ${aud(t.notYetLiveMrr)} signed, not yet live`} />
-            <Tile label="Bank balance" value={aud(t.bankBalance)}
-              delta={<Delta current={t.bankBalance} previous={pt?.bankBalance} money />} />
-            <Tile
-              label="Runway"
-              value={t.runwayMonths === null ? 'Covered' : `${t.runwayMonths} mths`}
-              delta={<Delta current={t.runwayMonths} previous={pt?.runwayMonths} />}
-              sub={t.runwayMonths === null
-                ? 'Revenue covers the cost base'
-                : t.forecastRunwayMonths === null
-                  ? 'Committed MRR covers the cost base'
-                  : `${t.forecastRunwayMonths} mths on committed MRR`} />
-            <Tile label="Open pipeline" value={`${aud(t.openPipelineMrr)}/mo`}
-              delta={<Delta current={t.openPipelineMrr} previous={pt?.openPipelineMrr} money />}
-              sub={`${report.pipeline.openCount} open opportunities`} />
-            <Tile label="Signed this month" value={String(t.signedThisMonth.count)}
-              delta={<Delta current={t.signedThisMonth.count} previous={pt?.signedThisMonth.count} />}
-              sub={`${aud(t.signedThisMonth.mrr)}/mo · ${aud(t.signedThisMonth.oneOff)} one-off`} />
-          </div>
-
-          {/* Funnel */}
-          <Section title="Funnel">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-ink-dim text-[10px] uppercase tracking-wider border-b border-hair-soft">
-                  <th className="text-left font-medium pb-2">Stage</th>
-                  <th className="text-right font-medium pb-2">Open now</th>
-                  <th className="text-right font-medium pb-2">Entered this month</th>
-                  <th className="text-right font-medium pb-2">Last month</th>
-                  <th className="text-right font-medium pb-2">Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.funnel.map((f) => (
-                  <tr key={f.stage} className="border-b border-hair-soft last:border-0">
-                    <td className="py-2 text-ink-muted">{f.label}</td>
-                    <td className="py-2 text-right text-ink font-medium">{f.openNow}</td>
-                    <td className="py-2 text-right text-ink-muted">{f.enteredThisMonth}</td>
-                    <td className="py-2 text-right text-ink-dim">{f.enteredLastMonth}</td>
-                    <td className="py-2 text-right">
-                      {f.change === 0
-                        ? <span className="text-ink-dim">—</span>
-                        : <span className={f.change > 0 ? 'text-[#0f9d70]' : 'text-risk'}>
-                            {f.change > 0 ? '+' : ''}{f.change}
-                          </span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Section>
-
-          <ChartFrame title="Funnel by month" subtitle="Leads entering each stage, trailing 6 months"
-            empty={series.length < 2}>
-            <LineChart
-              points={series.slice(-6).map((h) => ({
-                label: shortLabel(h.month),
-                new_lead: h.funnel?.new_lead ?? 0,
-                proposal: h.funnel?.proposal ?? 0,
-                won: h.funnel?.won ?? 0,
-              }))}
-              series={[
-                { key: 'new_lead', label: 'Leads in', colour: '#5ec5e6' },
-                { key: 'proposal', label: 'Proposal sent', colour: '#f59e0b' },
-                { key: 'won', label: 'Signed', colour: '#10b981' },
-              ]}
-            />
-          </ChartFrame>
-
-          {/* Lead sources */}
-          <Section title="Lead sources"
-            right={`${report.leadSources.totals[report.leadSources.totals.length - 1]} in this month`}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-ink-dim text-[10px] uppercase tracking-wider border-b border-hair-soft">
-                    <th className="text-left font-medium pb-2">Source</th>
-                    {report.leadSources.monthLabels.map((l, i) => (
-                      <th key={i} className="text-right font-medium pb-2 px-2 whitespace-nowrap">{l}</th>
-                    ))}
-                    <th className="text-right font-medium pb-2 pl-3">Change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.leadSources.sources.length === 0 ? (
-                    <tr>
-                      <td colSpan={report.leadSources.months.length + 2}
-                        className="text-ink-dim text-xs py-3">
-                        No leads created in this window.
-                      </td>
-                    </tr>
-                  ) : report.leadSources.sources.map((s, si) => (
-                    <tr key={s.source} className="border-b border-hair-soft last:border-0">
-                      <td className="py-2 text-ink-muted whitespace-nowrap">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
-                            style={{ background: SOURCE_COLOURS[si % SOURCE_COLOURS.length] }} />
-                          {s.source}
-                        </span>
-                      </td>
-                      {s.counts.map((c, i) => (
-                        <td key={i}
-                          className={`py-2 px-2 text-right ${
-                            i === s.counts.length - 1 ? 'text-ink font-medium' : 'text-ink-muted'
-                          }`}>
-                          {c || <span className="text-ink-faint">—</span>}
-                        </td>
-                      ))}
-                      <td className="py-2 pl-3 text-right">
-                        {s.change === 0
-                          ? <span className="text-ink-dim">—</span>
-                          : <span className={s.change > 0 ? 'text-[#0f9d70]' : 'text-risk'}>
-                              {s.change > 0 ? '+' : ''}{s.change}
-                            </span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                {report.leadSources.sources.length > 0 && (
-                  <tfoot>
-                    <tr className="border-t border-hair">
-                      <td className="pt-2 text-ink text-xs font-medium uppercase tracking-wider">Total</td>
-                      {report.leadSources.totals.map((c, i) => (
-                        <td key={i} className="pt-2 px-2 text-right text-ink font-medium">{c}</td>
-                      ))}
-                      <td />
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
+          {/* 01 — Health */}
+          <Band n="01" title="The health of the business" lead>
+            <div className="grid grid-cols-3 gap-10">
+              <Lead label="In the bank" value={aud(t.bankBalance)}
+                delta={<Delta current={t.bankBalance} previous={pt?.bankBalance} money />}
+                note={`Plus ${aud(report.position.committedIncoming)} still to come from the wages pot`} />
+              <Lead label="Runway"
+                value={t.runwayMonths === null ? 'Covered' : `${t.runwayMonths}`}
+                unit={t.runwayMonths === null ? undefined : 'months'}
+                delta={<Delta current={t.runwayMonths} previous={pt?.runwayMonths} />}
+                note={t.runwayMonths === null
+                  ? 'Revenue now covers the cost base'
+                  : t.forecastRunwayMonths === null
+                    ? 'Signed revenue will cover the cost base'
+                    : `${t.forecastRunwayMonths} months once signed clients go live`} />
+              <Lead label="Monthly revenue" value={aud(t.liveMrr)}
+                delta={<Delta current={t.liveMrr} previous={pt?.liveMrr} money />}
+                note={t.notYetLiveMrr > 0
+                  ? `${aud(t.notYetLiveMrr)} more signed, starts within ${report.settings.revenueLeadDays} days`
+                  : 'All signed clients are billing'} />
             </div>
-          </Section>
+          </Band>
 
-          <ChartFrame title="Leads in by source" subtitle="New leads created each month, trailing 6 months"
-            empty={report.leadSources.sources.length === 0}>
-            <StackedBars
-              points={report.leadSources.monthLabels.map((label, i) => {
-                const row: Record<string, unknown> = { label };
-                report.leadSources.sources.forEach((s, si) => { row[`s${si}`] = s.counts[i]; });
-                return row as { label: string };
-              })}
-              series={report.leadSources.sources.map((s, si) => ({
-                key: `s${si}`,
-                label: s.source,
-                colour: SOURCE_COLOURS[si % SOURCE_COLOURS.length],
-              }))}
-            />
-          </ChartFrame>
+          {/* 02 — Growth */}
+          <Band n="02" title="Growth this month">
+            <div className="grid grid-cols-3 gap-10">
+              <Lead label="Clients signed" value={String(t.signedThisMonth.count)}
+                delta={<Delta current={t.signedThisMonth.count} previous={pt?.signedThisMonth.count} />}
+                note={`${aud(t.signedThisMonth.mrr)} a month, plus ${aud(t.signedThisMonth.oneOff)} in build fees`} />
+              <Lead label="New monthly revenue" value={aud(t.signedThisMonth.mrr)}
+                delta={<Delta current={t.signedThisMonth.mrr} previous={pt?.signedThisMonth.mrr} money />}
+                note="Signed this month, billing once live" />
+              <Lead label="Leads in" value={String(leadsInThisMonth)}
+                delta={<Delta current={leadsInThisMonth} previous={prevLeadsIn} />}
+                note={`Across ${report.leadSources.sources.length} sources`} />
+            </div>
+          </Band>
 
-          {/* Pipeline */}
-          <Section title="Pipeline"
-            right={`${report.pipeline.openCount} open · ${aud(report.pipeline.openPipelineMrr)}/mo`}>
-            {report.pipeline.byStage.length === 0 ? (
-              <p className="text-ink-dim text-sm">No open opportunities.</p>
-            ) : report.pipeline.byStage.map((g) => (
-              <div key={g.stage} className="mb-5 last:mb-0 break-inside-avoid">
-                <div className="flex items-baseline justify-between mb-2">
-                  <h4 className="text-ink text-sm font-medium">{g.label}</h4>
-                  <span className="text-ink-dim text-xs">
-                    {g.count} · {aud(g.retainerTotal)}/mo
-                  </span>
-                </div>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-ink-dim text-[10px] uppercase tracking-wider border-b border-hair-soft">
-                      <th className="text-left font-medium pb-1.5">Company</th>
-                      <th className="text-left font-medium pb-1.5">Contact</th>
-                      <th className="text-right font-medium pb-1.5">$/mo</th>
-                      <th className="text-right font-medium pb-1.5">One-off</th>
-                      <th className="text-left font-medium pb-1.5 pl-4">Latest note</th>
-                      <th className="text-left font-medium pb-1.5">Next action</th>
-                    </tr>
-                  </thead>
+          {/* 03 — Investment. Stephen's first ask, so it sits high. */}
+          <Band n="03" title="Where the investment sits">
+            <div className="grid grid-cols-2 gap-12">
+              <Pot
+                name="Build fund"
+                total={report.investment.ringfence.total}
+                used={report.investment.ringfence.paid}
+                remaining={report.investment.ringfence.remaining}
+                caption="Ring-fenced for setting the business up"
+              />
+              <Pot
+                name="Founder wages"
+                total={report.investment.wages.total}
+                used={report.investment.wages.drawn}
+                remaining={report.investment.wages.remaining}
+                caption="Drawn to date against the agreed period"
+              />
+            </div>
+
+            {report.investment.ringfence.payments.length > 0 && (
+              <div className="mt-8">
+                <Micro>What the build fund has gone on</Micro>
+                <table className="w-full text-sm mt-2 tabular-nums">
                   <tbody>
-                    {g.rows.map((r) => (
-                      <tr key={r.leadId} className="border-b border-hair-soft last:border-0 align-top">
-                        <td className="py-2 text-ink">{r.company}</td>
-                        <td className="py-2 text-ink-muted">{r.contact}</td>
-                        <td className="py-2 text-right text-ink">{r.retainer ? aud(r.retainer) : '—'}</td>
-                        <td className="py-2 text-right text-ink-muted">{r.oneOff ? aud(r.oneOff) : '—'}</td>
-                        <td className="py-2 pl-4 text-ink-muted max-w-[18rem]">
-                          {r.latestNote
-                            ? <>{r.latestNote}<span className="text-ink-dim"> · {shortDate(r.latestNoteAt)}</span></>
-                            : <span className="text-ink-dim">—</span>}
-                        </td>
-                        <td className="py-2 text-ink-muted">
-                          {r.nextAction
-                            ? <>{r.nextAction}<span className="text-ink-dim"> · {shortDate(r.nextActionDue)}</span></>
-                            : <span className="text-ink-dim">none set</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-          </Section>
-
-          {report.signedNotYetLive.length > 0 && (
-            <Section title="Signed, not yet billing"
-              right={`${aud(t.notYetLiveMrr)}/mo confirmed`}>
-              <p className="text-ink-dim text-xs mb-3">
-                Revenue starts about {report.settings.revenueLeadDays} days after signing —
-                roughly 30 days building and 30 days free.
-              </p>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-ink-dim text-[10px] uppercase tracking-wider border-b border-hair-soft">
-                    <th className="text-left font-medium pb-1.5">Company</th>
-                    <th className="text-left font-medium pb-1.5">Signed</th>
-                    <th className="text-right font-medium pb-1.5">$/mo</th>
-                    <th className="text-left font-medium pb-1.5">Revenue starts</th>
-                    <th className="text-right font-medium pb-1.5">Days until live</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.signedNotYetLive.map((c) => (
-                    <tr key={c.leadId} className="border-b border-hair-soft last:border-0">
-                      <td className="py-2 text-ink">{c.company}</td>
-                      <td className="py-2 text-ink-muted">{shortDate(c.signedOn)}</td>
-                      <td className="py-2 text-right text-ink">{aud(c.retainer)}</td>
-                      <td className="py-2 text-ink-muted">{shortDate(c.revenueStartsOn)}</td>
-                      <td className="py-2 text-right text-ink-muted">{c.daysUntilLive}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Section>
-          )}
-
-          <ChartFrame title="Committed MRR" subtitle="Trailing months and 3 months forward"
-            empty={series.length === 0}>
-            <StackedBars
-              points={[
-                ...series.slice(-6).map((h) => ({
-                  label: shortLabel(h.month), liveMrr: h.liveMrr, notYetLiveMrr: h.notYetLiveMrr,
-                })),
-                ...(data?.forward ?? []).map((f) => ({
-                  label: shortLabel(f.month), liveMrr: f.liveMrr, notYetLiveMrr: f.notYetLiveMrr, projected: true as const,
-                })),
-              ]}
-              series={[
-                { key: 'liveMrr', label: 'Live MRR', colour: '#0a9cd4' },
-                { key: 'notYetLiveMrr', label: 'Signed, not yet live', colour: '#5ec5e6' },
-              ]}
-            />
-          </ChartFrame>
-
-          {/* Investment tracker */}
-          <Section title="Investment tracker">
-            <div className="grid grid-cols-2 gap-5">
-              <div>
-                <div className="flex items-baseline justify-between mb-1">
-                  <h4 className="text-ink text-sm font-medium">Ring fence</h4>
-                  <span className="text-ink-dim text-xs">
-                    {aud(report.investment.ringfence.remaining)} of {aud(report.investment.ringfence.total)} left
-                  </span>
-                </div>
-                <PotBar total={report.investment.ringfence.total} used={report.investment.ringfence.paid} />
-                <table className="w-full text-sm mt-3">
-                  <tbody>
-                    {report.investment.ringfence.payments.length === 0 ? (
-                      <tr><td className="text-ink-dim text-xs py-2">No payments recorded.</td></tr>
-                    ) : report.investment.ringfence.payments.map((p) => (
+                    {report.investment.ringfence.payments.map((p) => (
                       <tr key={p.id} className="border-b border-hair-soft last:border-0">
-                        <td className="py-1.5 text-ink-dim text-xs w-20">{shortDate(p.paidOn)}</td>
+                        <td className="py-1.5 text-ink-dim text-xs w-24">{shortDate(p.paidOn)}</td>
                         <td className="py-1.5 text-ink-muted">{p.item}</td>
                         <td className="py-1.5 text-right text-ink">{aud(p.amount)}</td>
                       </tr>
@@ -799,87 +570,224 @@ export default function InvestorReportPage() {
                   </tbody>
                 </table>
               </div>
-              <div>
-                <div className="flex items-baseline justify-between mb-1">
-                  <h4 className="text-ink text-sm font-medium">Wages pot</h4>
-                  <span className="text-ink-dim text-xs">
-                    {aud(report.investment.wages.remaining)} of {aud(report.investment.wages.total)} left
+            )}
+
+            {series.length >= 2 && (
+              <div className="mt-8">
+                <Micro>Both pots, month by month</Micro>
+                <div className="mt-2 overflow-x-auto">
+                  <LineChart
+                    points={series.map((h) => ({
+                      label: shortLabel(h.month),
+                      wagesRemaining: h.wagesRemaining,
+                      ringfenceRemaining: h.ringfenceRemaining,
+                    }))}
+                    series={[
+                      { key: 'wagesRemaining', label: 'Founder wages left', colour: '#0a9cd4' },
+                      { key: 'ringfenceRemaining', label: 'Build fund left', colour: '#f59e0b' },
+                    ]}
+                  />
+                </div>
+              </div>
+            )}
+          </Band>
+
+          {/* 04 — Lead sources */}
+          <Band n="04" title="Where the leads came from">
+            {report.leadSources.sources.length === 0 ? (
+              <p className="text-ink-dim text-sm">No leads created in this window.</p>
+            ) : (
+              <>
+                <table className="w-full text-sm tabular-nums">
+                  <thead>
+                    <tr className="border-b border-hair">
+                      <th className="text-left pb-2"><Micro>Source</Micro></th>
+                      {report.leadSources.monthLabels.map((l, i) => (
+                        <th key={i} className="text-right pb-2 px-2 whitespace-nowrap">
+                          <Micro dim={i !== report.leadSources.monthLabels.length - 1}>{l.slice(0, 3)}</Micro>
+                        </th>
+                      ))}
+                      <th className="text-right pb-2 pl-3"><Micro>+/-</Micro></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.leadSources.sources.map((s, si) => (
+                      <tr key={s.source} className="border-b border-hair-soft last:border-0">
+                        <td className="py-2 text-ink-muted whitespace-nowrap">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{ background: SOURCE_COLOURS[si % SOURCE_COLOURS.length] }} />
+                            {s.source}
+                          </span>
+                        </td>
+                        {s.counts.map((c, i) => (
+                          <td key={i} className={`py-2 px-2 text-right ${
+                            i === s.counts.length - 1 ? 'text-ink font-medium' : 'text-ink-dim'
+                          }`}>
+                            {c || <span className="text-ink-faint">·</span>}
+                          </td>
+                        ))}
+                        <td className="py-2 pl-3 text-right font-mono text-xs">
+                          {s.change === 0
+                            ? <span className="text-ink-faint">·</span>
+                            : <span className={s.change > 0 ? 'text-[#0f9d70]' : 'text-risk'}>
+                                {s.change > 0 ? '+' : ''}{s.change}
+                              </span>}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="border-t border-hair">
+                      <td className="pt-2"><Micro>Total</Micro></td>
+                      {report.leadSources.totals.map((c, i) => (
+                        <td key={i} className={`pt-2 px-2 text-right font-medium ${
+                          i === report.leadSources.totals.length - 1 ? 'text-ink' : 'text-ink-muted'
+                        }`}>{c}</td>
+                      ))}
+                      <td />
+                    </tr>
+                  </tbody>
+                </table>
+                <div className="mt-6 overflow-x-auto">
+                  <StackedBars
+                    points={report.leadSources.monthLabels.map((label, i) => {
+                      const row: Record<string, unknown> = { label: label.slice(0, 3) };
+                      report.leadSources.sources.forEach((s, si) => { row[`s${si}`] = s.counts[i]; });
+                      return row as { label: string };
+                    })}
+                    series={report.leadSources.sources.map((s, si) => ({
+                      key: `s${si}`, label: s.source,
+                      colour: SOURCE_COLOURS[si % SOURCE_COLOURS.length],
+                    }))}
+                  />
+                </div>
+              </>
+            )}
+          </Band>
+
+          {/* 05 — Pipeline */}
+          <Band n="05" title="What is in play"
+            aside={`${report.pipeline.openCount} opportunities · ${aud(report.pipeline.openPipelineMrr)} a month`}>
+            {report.pipeline.byStage.length === 0 ? (
+              <p className="text-ink-dim text-sm">Nothing open right now.</p>
+            ) : report.pipeline.byStage.map((g) => (
+              <div key={g.stage} className="mb-6 last:mb-0 break-inside-avoid">
+                <div className="flex items-baseline justify-between border-b border-hair pb-1.5 mb-1">
+                  <Micro>{g.label}</Micro>
+                  <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim tabular-nums">
+                    {g.count} · {aud(g.retainerTotal)}/mo
                   </span>
                 </div>
-                <PotBar total={report.investment.wages.total} used={report.investment.wages.drawn} />
-                <p className="text-ink-dim text-xs mt-3">
-                  {aud(report.investment.wages.drawn)} drawn to date. The remainder counts as
-                  committed incoming cash in the runway figure.
+                {g.rows.map((r) => (
+                  <div key={r.leadId} className="py-2.5 border-b border-hair-soft last:border-0">
+                    <div className="flex items-baseline justify-between gap-6">
+                      <div className="min-w-0">
+                        <span className="text-ink text-sm font-medium">{r.company}</span>
+                        <span className="text-ink-dim text-xs ml-2">{r.contact}</span>
+                      </div>
+                      <span className="text-ink text-sm tabular-nums whitespace-nowrap">
+                        {r.retainer ? `${aud(r.retainer)}/mo` : '—'}
+                        {r.oneOff > 0 && (
+                          <span className="text-ink-dim"> + {aud(r.oneOff)} build</span>
+                        )}
+                      </span>
+                    </div>
+                    {(r.latestNote || r.nextAction) && (
+                      <p className="text-ink-muted text-xs mt-1 leading-relaxed">
+                        {r.latestNote}
+                        {r.latestNote && r.nextAction && <span className="text-ink-faint"> — </span>}
+                        {r.nextAction && (
+                          <span className="text-sky-ink">
+                            Next: {r.nextAction} ({shortDate(r.nextActionDue)})
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+
+            {report.signedNotYetLive.length > 0 && (
+              <div className="mt-8 break-inside-avoid">
+                <div className="flex items-baseline justify-between border-b border-hair pb-1.5 mb-1">
+                  <Micro>Signed, revenue not started</Micro>
+                  <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim tabular-nums">
+                    {aud(t.notYetLiveMrr)}/mo confirmed
+                  </span>
+                </div>
+                {report.signedNotYetLive.map((c) => (
+                  <div key={c.leadId} className="flex items-baseline justify-between gap-6 py-2 border-b border-hair-soft last:border-0">
+                    <span className="text-ink text-sm">{c.company}</span>
+                    <span className="text-ink-muted text-xs tabular-nums whitespace-nowrap">
+                      {aud(c.retainer)}/mo · starts {shortDate(c.revenueStartsOn)}
+                      <span className="text-ink-dim"> ({c.daysUntilLive} days)</span>
+                    </span>
+                  </div>
+                ))}
+                <p className="text-ink-dim text-xs mt-3 leading-relaxed">
+                  Revenue starts about {report.settings.revenueLeadDays} days after signing —
+                  roughly a month building, then a month free.
                 </p>
               </div>
-            </div>
-          </Section>
+            )}
+          </Band>
 
-          <ChartFrame title="Pots remaining" subtitle="By month" empty={series.length < 2}>
-            <LineChart
-              points={series.map((h) => ({
-                label: shortLabel(h.month),
-                ringfenceRemaining: h.ringfenceRemaining,
-                wagesRemaining: h.wagesRemaining,
-              }))}
-              series={[
-                { key: 'wagesRemaining', label: 'Wages pot', colour: '#0a9cd4' },
-                { key: 'ringfenceRemaining', label: 'Ring fence', colour: '#f59e0b' },
-              ]}
-            />
-          </ChartFrame>
+          {/* 06 — Forecast */}
+          <Band n="06" title="Where we are heading">
+            {report.forecast.mrr6 === 0 && report.forecast.mrr12 === 0 ? (
+              <p className="text-ink-dim text-sm">
+                No targets set yet. Add them in settings and they will appear here.
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-10">
+                  <Lead label="Today" value={aud(report.forecast.committedMrr)}
+                    note="Committed monthly revenue" />
+                  <Lead label="In 6 months" value={aud(report.forecast.mrr6)}
+                    note={report.forecast.mrr6 > report.forecast.committedMrr
+                      ? `${aud(report.forecast.mrr6 - report.forecast.committedMrr)} more to find`
+                      : 'Target already met'} />
+                  <Lead label="In 12 months" value={aud(report.forecast.mrr12)}
+                    note={report.forecast.mrr12 > report.forecast.committedMrr
+                      ? `${aud(report.forecast.mrr12 - report.forecast.committedMrr)} more to find`
+                      : 'Target already met'} />
+                </div>
+                {report.forecast.note && (
+                  <p className="text-ink-muted text-sm mt-6 leading-relaxed max-w-[52ch]">
+                    {report.forecast.note}
+                  </p>
+                )}
+              </>
+            )}
+          </Band>
 
-          {/* Position */}
-          <Section title="Position">
-            <div className="grid grid-cols-4 gap-4">
-              <Figure label="Bank balance" value={aud(report.position.bankBalance)} />
-              <Figure label="Committed incoming" value={aud(report.position.committedIncoming)}
-                sub="Remaining wages pot" />
-              <Figure label="Runway" value={report.position.runwayMonths === null ? 'Covered' : `${report.position.runwayMonths} mths`}
-                sub="On live MRR" />
-              <Figure label="Forecast runway" value={report.position.forecastRunwayMonths === null ? 'Covered' : `${report.position.forecastRunwayMonths} mths`}
-                sub="On committed MRR" />
-            </div>
-          </Section>
-
-          <ChartFrame title="Bank balance and live MRR" subtitle="Trailing 12 months"
-            empty={series.length < 2}>
-            <LineChart
-              points={series.slice(-12).map((h) => ({
-                label: shortLabel(h.month), bankBalance: h.bankBalance, liveMrr: h.liveMrr,
-              }))}
-              series={[
-                { key: 'bankBalance', label: 'Bank balance', colour: '#0b0d0e' },
-                { key: 'liveMrr', label: 'Live MRR', colour: '#0a9cd4' },
-              ]}
-            />
-          </ChartFrame>
-
-          {/* Planned spend */}
-          <Section title="Planned spend">
+          {/* 07 — Planned spend */}
+          <Band n="07" title="What we plan to spend">
             {report.plannedSpend.length === 0 ? (
-              <p className="text-ink-dim text-sm">Nothing planned.</p>
+              <p className="text-ink-dim text-sm">Nothing planned this month.</p>
             ) : (
-              <table className="w-full text-sm">
+              <table className="w-full text-sm tabular-nums">
                 <thead>
-                  <tr className="text-ink-dim text-[10px] uppercase tracking-wider border-b border-hair-soft">
-                    <th className="text-left font-medium pb-1.5">Item</th>
-                    <th className="text-right font-medium pb-1.5">Est. cost</th>
-                    <th className="text-left font-medium pb-1.5 pl-4">Timing</th>
-                    <th className="text-left font-medium pb-1.5">Purpose</th>
-                    <th className="text-left font-medium pb-1.5">Status</th>
+                  <tr className="border-b border-hair">
+                    <th className="text-left pb-2"><Micro>Item</Micro></th>
+                    <th className="text-right pb-2"><Micro>Cost</Micro></th>
+                    <th className="text-left pb-2 pl-6"><Micro>When</Micro></th>
+                    <th className="text-left pb-2 pl-6"><Micro>Why</Micro></th>
+                    <th className="text-right pb-2"><Micro>Status</Micro></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {report.plannedSpend.map((s) => (
-                    <tr key={s.id} className="border-b border-hair-soft last:border-0 align-top">
-                      <td className="py-2 text-ink">{s.item}</td>
-                      <td className="py-2 text-right text-ink-muted">{s.estimatedCost ? aud(s.estimatedCost) : '—'}</td>
-                      <td className="py-2 pl-4 text-ink-muted">{s.timing || '—'}</td>
-                      <td className="py-2 text-ink-muted max-w-[20rem]">{s.purpose || '—'}</td>
-                      <td className="py-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${STATUS_PILL[s.status] || ''}`}>
-                          {s.status}
+                  {report.plannedSpend.map((sp) => (
+                    <tr key={sp.id} className="border-b border-hair-soft last:border-0 align-top">
+                      <td className="py-2.5 text-ink">{sp.item}</td>
+                      <td className="py-2.5 text-right text-ink whitespace-nowrap">
+                        {sp.estimatedCost ? aud(sp.estimatedCost) : '—'}
+                      </td>
+                      <td className="py-2.5 pl-6 text-ink-muted whitespace-nowrap">{sp.timing || '—'}</td>
+                      <td className="py-2.5 pl-6 text-ink-muted max-w-[26ch]">{sp.purpose || '—'}</td>
+                      <td className="py-2.5 text-right">
+                        <span className={`font-mono text-[9px] tracking-[0.14em] uppercase px-2 py-0.5 rounded-full ${STATUS_PILL[sp.status] || ''}`}>
+                          {sp.status}
                         </span>
                       </td>
                     </tr>
@@ -887,37 +795,37 @@ export default function InvestorReportPage() {
                 </tbody>
               </table>
             )}
-          </Section>
+          </Band>
 
-          {/* Risks */}
-          <Section title="Key risks">
+          {/* 08 — Risks */}
+          <Band n="08" title="What could go wrong">
             {report.risks.length === 0 ? (
-              <p className="text-ink-dim text-sm">No risks recorded.</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-ink-dim text-[10px] uppercase tracking-wider border-b border-hair-soft">
-                    <th className="text-left font-medium pb-1.5">Risk</th>
-                    <th className="text-left font-medium pb-1.5">Mitigation</th>
-                    <th className="text-left font-medium pb-1.5">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.risks.map((r) => (
-                    <tr key={r.id} className="border-b border-hair-soft last:border-0 align-top">
-                      <td className="py-2 text-ink max-w-[18rem]">{r.risk}</td>
-                      <td className="py-2 text-ink-muted max-w-[24rem]">{r.mitigation || '—'}</td>
-                      <td className="py-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${STATUS_PILL[r.status] || ''}`}>
-                          {r.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Section>
+              <p className="text-ink-dim text-sm">Nothing flagged.</p>
+            ) : report.risks.map((r) => (
+              <div key={r.id} className="py-3 border-b border-hair-soft last:border-0 break-inside-avoid">
+                <div className="flex items-baseline justify-between gap-6">
+                  <span className="text-ink text-sm font-medium">{r.risk}</span>
+                  <span className={`font-mono text-[9px] tracking-[0.14em] uppercase px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_PILL[r.status] || ''}`}>
+                    {r.status}
+                  </span>
+                </div>
+                {r.mitigation && (
+                  <p className="text-ink-muted text-xs mt-1 leading-relaxed max-w-[70ch]">
+                    {r.mitigation}
+                  </p>
+                )}
+              </div>
+            ))}
+          </Band>
+
+          <footer className="mt-12 pt-5 border-t border-hair-strong flex items-baseline justify-between">
+            <p className="font-mono text-[10px] tracking-[0.18em] uppercase text-ink-dim">
+              Oxy<span className="text-sky-ink">Scale</span> · {report.monthLabel}
+            </p>
+            <p className="text-ink-faint text-xs">
+              Generated {new Date(report.generatedAt).toLocaleDateString('en-AU')}
+            </p>
+          </footer>
         </div>
       )}
     </div>
@@ -926,35 +834,117 @@ export default function InvestorReportPage() {
 
 // ── small building blocks ────────────────────────────────────────
 
-function Section({
+/**
+ * A numbered section of the document. Hairline rule and a mono index
+ * rather than a card — the page should read as one sheet, not a stack
+ * of boxes.
+ */
+function Band({
+  n, title, aside, lead = false, children,
+}: {
+  n: string; title: string; aside?: string;
+  /** First band after the masthead: no rule of its own, tighter top. */
+  lead?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={`break-inside-avoid ${
+      lead ? 'pt-8' : 'pt-9 mt-9 border-t border-hair'
+    }`}>
+      <div className="flex items-baseline justify-between gap-6 mb-6">
+        <h2 className="flex items-baseline gap-3">
+          <span className="font-mono text-[10px] font-semibold tracking-[0.22em] text-sky-ink">{n}</span>
+          <span className="text-ink text-[19px] font-medium tracking-[-0.02em]">{title}</span>
+        </h2>
+        {aside && (
+          <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim whitespace-nowrap tabular-nums">
+            {aside}
+          </span>
+        )}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** One headline figure. The largest type on the page, used sparingly. */
+function Lead({
+  label, value, unit, delta, note,
+}: {
+  label: string; value: string; unit?: string;
+  delta?: React.ReactNode; note?: string;
+}) {
+  return (
+    <div>
+      <Micro>{label}</Micro>
+      <p className="mt-2 text-ink text-[38px] font-medium leading-none tracking-[-0.035em] tabular-nums">
+        {value}
+        {unit && <span className="text-ink-dim text-base font-normal tracking-normal ml-1.5">{unit}</span>}
+      </p>
+      {delta && <div className="mt-2">{delta}</div>}
+      {note && <p className="text-ink-muted text-xs mt-2 leading-relaxed max-w-[30ch]">{note}</p>}
+    </div>
+  );
+}
+
+/** Mono micro-label. The document's connective tissue. */
+function Micro({ children, dim = false }: { children: React.ReactNode; dim?: boolean }) {
+  return (
+    <span className={`font-mono text-[10px] font-semibold tracking-[0.2em] uppercase ${
+      dim ? 'text-ink-faint' : 'text-ink-dim'
+    }`}>
+      {children}
+    </span>
+  );
+}
+
+/**
+ * An investment pot, drawn as a meter. Stephen asked to see where each
+ * pot is up to, so the remaining figure is the one set large and the
+ * bar reads left-to-right as spent-to-remaining.
+ */
+function Pot({
+  name, total, used, remaining, caption,
+}: {
+  name: string; total: number; used: number; remaining: number; caption: string;
+}) {
+  const left = total > 0 ? Math.min(100, Math.max(0, (remaining / total) * 100)) : 0;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <Micro>{name}</Micro>
+        <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim tabular-nums">
+          of {aud(total)}
+        </span>
+      </div>
+      <p className="mt-2 text-ink text-[38px] font-medium leading-none tracking-[-0.035em] tabular-nums">
+        {aud(remaining)}
+      </p>
+      <p className="text-ink-muted text-xs mt-1.5">left · {aud(used)} used</p>
+      <div className="mt-3 h-1.5 bg-tray rounded-full overflow-hidden" title={`${Math.round(left)}% remaining`}>
+        <div className="h-full bg-ink rounded-full" style={{ width: `${left}%` }} />
+      </div>
+      <div className="flex items-baseline justify-between mt-1.5">
+        <span className="font-mono text-[9px] tracking-[0.14em] uppercase text-ink-faint">
+          {Math.round(left)}% remaining
+        </span>
+      </div>
+      <p className="text-ink-dim text-xs mt-2 leading-relaxed">{caption}</p>
+    </div>
+  );
+}
+
+/** Card wrapper for the input form. App chrome, not part of the document. */
+function FormSection({
   title, right, children,
 }: { title: string; right?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-paper border border-hair-soft rounded-xl p-5 break-inside-avoid">
+    <div className="bg-paper border border-hair-soft rounded-xl p-5">
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="text-ink text-sm font-medium uppercase tracking-wider">{title}</h3>
         {right && <span className="text-ink-dim text-xs">{right}</span>}
       </div>
       {children}
-    </div>
-  );
-}
-
-function Figure({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div>
-      <p className="text-ink-dim text-[10px] uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-ink text-lg font-bold">{value}</p>
-      {sub && <p className="text-ink-dim text-xs mt-0.5">{sub}</p>}
-    </div>
-  );
-}
-
-function PotBar({ total, used }: { total: number; used: number }) {
-  const pct = total > 0 ? Math.min(100, Math.max(0, (used / total) * 100)) : 0;
-  return (
-    <div className="w-full h-2 bg-tray rounded-full overflow-hidden">
-      <div className="h-full bg-ink rounded-full transition-all" style={{ width: `${pct}%` }} />
     </div>
   );
 }
@@ -970,6 +960,9 @@ function SettingsPanel({
 }) {
   const [leadDays, setLeadDays] = useState(String(settings.revenueLeadDays));
   const [costBase, setCostBase] = useState(String(settings.monthlyCostBase));
+  const [mrr6, setMrr6] = useState(String(settings.forecastMrr6));
+  const [mrr12, setMrr12] = useState(String(settings.forecastMrr12));
+  const [note, setNote] = useState(settings.forecastNote);
   const [list, setList] = useState(settings.distributionList.join('\n'));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -981,6 +974,9 @@ function SettingsPanel({
       const saved = await api.updateInvestorSettings({
         revenueLeadDays: Number(leadDays),
         monthlyCostBase: Number(costBase),
+        forecastMrr6: Number(mrr6) || 0,
+        forecastMrr12: Number(mrr12) || 0,
+        forecastNote: note,
         distributionList: emails,
       });
       onSaved(saved); onClose();
@@ -1003,6 +999,22 @@ function SettingsPanel({
         <Field label="Monthly cost base" hint="Used for runway. Never shown on the report.">
           <input type="number" value={costBase} onChange={(e) => setCostBase(e.target.value)}
             className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-4 mt-4">
+        <Field label="Target monthly revenue in 6 months">
+          <input type="number" value={mrr6} onChange={(e) => setMrr6(e.target.value)}
+            className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
+        </Field>
+        <Field label="Target monthly revenue in 12 months">
+          <input type="number" value={mrr12} onChange={(e) => setMrr12(e.target.value)}
+            className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
+        </Field>
+      </div>
+      <div className="mt-4">
+        <Field label="What we will need to get there" hint="One or two lines. Appears on the report.">
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2}
+            className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)] resize-none" />
         </Field>
       </div>
       <div className="mt-4">
@@ -1130,7 +1142,7 @@ function InputsPanel({
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <Section title={`Figures for ${report.monthLabel}`}>
+      <FormSection title={`Figures for ${report.monthLabel}`}>
         <div className="grid grid-cols-3 gap-4">
           <Field label="Bank balance at month end">
             <input type="number" value={bank} onChange={(e) => setBank(e.target.value)}
@@ -1152,9 +1164,9 @@ function InputsPanel({
             onClick={saveFigures}>Save figures</PillButton>
           {saved && <span className="text-[#0f9d70] text-xs">Saved.</span>}
         </div>
-      </Section>
+      </FormSection>
 
-      <Section title="Ring fence payments this month"
+      <FormSection title="Ring fence payments this month"
         right={`${aud(report.investment.ringfence.remaining)} left`}>
         <div className="grid grid-cols-[8rem_1fr_8rem_auto] gap-2 items-end mb-3">
           <Field label="Date">
@@ -1189,9 +1201,9 @@ function InputsPanel({
             </button>
           </div>
         ))}
-      </Section>
+      </FormSection>
 
-      <Section title="Planned spend">
+      <FormSection title="Planned spend">
         <div className="grid grid-cols-[1fr_7rem_7rem_auto] gap-2 items-end mb-3">
           <Field label="Item">
             <input value={spendItem} onChange={(e) => setSpendItem(e.target.value)}
@@ -1237,9 +1249,9 @@ function InputsPanel({
             </button>
           </div>
         ))}
-      </Section>
+      </FormSection>
 
-      <Section title="Key risks">
+      <FormSection title="Key risks">
         <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end mb-3">
           <Field label="Risk">
             <input value={riskText} onChange={(e) => setRiskText(e.target.value)}
@@ -1278,7 +1290,7 @@ function InputsPanel({
             </button>
           </div>
         ))}
-      </Section>
+      </FormSection>
     </div>
   );
 }
