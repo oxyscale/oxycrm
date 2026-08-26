@@ -220,7 +220,9 @@ function StackedBars({
             {s.label}
           </span>
         ))}
-        <span className="text-xs text-ink-dim">Faded bars are projections</span>
+        {points.some((p) => p.projected) && (
+          <span className="text-xs text-ink-dim">Faded bars are projections</span>
+        )}
       </div>
     </>
   );
@@ -242,6 +244,11 @@ function Tile({
     </div>
   );
 }
+
+const SOURCE_COLOURS = [
+  '#0a9cd4', '#f59e0b', '#10b981', '#8b5cf6',
+  '#ef4444', '#5ec5e6', '#0f9d70', '#b8bfc6',
+];
 
 const STATUS_PILL: Record<string, string> = {
   proposed: 'bg-[rgba(94,197,230,0.14)] text-sky-ink',
@@ -585,6 +592,86 @@ export default function InvestorReportPage() {
                 { key: 'proposal', label: 'Proposal sent', colour: '#f59e0b' },
                 { key: 'won', label: 'Signed', colour: '#10b981' },
               ]}
+            />
+          </ChartFrame>
+
+          {/* Lead sources */}
+          <Section title="Lead sources"
+            right={`${report.leadSources.totals[report.leadSources.totals.length - 1]} in this month`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-ink-dim text-[10px] uppercase tracking-wider border-b border-hair-soft">
+                    <th className="text-left font-medium pb-2">Source</th>
+                    {report.leadSources.monthLabels.map((l, i) => (
+                      <th key={i} className="text-right font-medium pb-2 px-2 whitespace-nowrap">{l}</th>
+                    ))}
+                    <th className="text-right font-medium pb-2 pl-3">Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.leadSources.sources.length === 0 ? (
+                    <tr>
+                      <td colSpan={report.leadSources.months.length + 2}
+                        className="text-ink-dim text-xs py-3">
+                        No leads created in this window.
+                      </td>
+                    </tr>
+                  ) : report.leadSources.sources.map((s, si) => (
+                    <tr key={s.source} className="border-b border-hair-soft last:border-0">
+                      <td className="py-2 text-ink-muted whitespace-nowrap">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                            style={{ background: SOURCE_COLOURS[si % SOURCE_COLOURS.length] }} />
+                          {s.source}
+                        </span>
+                      </td>
+                      {s.counts.map((c, i) => (
+                        <td key={i}
+                          className={`py-2 px-2 text-right ${
+                            i === s.counts.length - 1 ? 'text-ink font-medium' : 'text-ink-muted'
+                          }`}>
+                          {c || <span className="text-ink-faint">—</span>}
+                        </td>
+                      ))}
+                      <td className="py-2 pl-3 text-right">
+                        {s.change === 0
+                          ? <span className="text-ink-dim">—</span>
+                          : <span className={s.change > 0 ? 'text-[#0f9d70]' : 'text-risk'}>
+                              {s.change > 0 ? '+' : ''}{s.change}
+                            </span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {report.leadSources.sources.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t border-hair">
+                      <td className="pt-2 text-ink text-xs font-medium uppercase tracking-wider">Total</td>
+                      {report.leadSources.totals.map((c, i) => (
+                        <td key={i} className="pt-2 px-2 text-right text-ink font-medium">{c}</td>
+                      ))}
+                      <td />
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </Section>
+
+          <ChartFrame title="Leads in by source" subtitle="New leads created each month, trailing 6 months"
+            empty={report.leadSources.sources.length === 0}>
+            <StackedBars
+              points={report.leadSources.monthLabels.map((label, i) => {
+                const row: Record<string, unknown> = { label };
+                report.leadSources.sources.forEach((s, si) => { row[`s${si}`] = s.counts[i]; });
+                return row as { label: string };
+              })}
+              series={report.leadSources.sources.map((s, si) => ({
+                key: `s${si}`,
+                label: s.source,
+                colour: SOURCE_COLOURS[si % SOURCE_COLOURS.length],
+              }))}
             />
           </ChartFrame>
 

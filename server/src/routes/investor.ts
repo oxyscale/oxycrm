@@ -226,6 +226,64 @@ function stageEntries(month: string): Record<string, number> {
   return counts;
 }
 
+/**
+ * Leads created per source, per month.
+ *
+ * Read straight from leads.created_at rather than from locked
+ * snapshots, so the history is complete from day one instead of only
+ * filling in as months are finalised. Bounded at the report month so a
+ * locked report never picks up leads that arrived after it was sent.
+ */
+function leadSourcesByMonth(upToMonth: string, monthCount: number) {
+  const db = getDb();
+  const months: string[] = [];
+  for (let i = monthCount - 1; i >= 0; i--) months.push(shiftMonth(upToMonth, -i));
+  const from = `${months[0]}-01`;
+  const to = monthBounds(upToMonth).end;
+
+  const rows = db.prepare(`
+    SELECT strftime('%Y-%m', created_at) AS month,
+           COALESCE(NULLIF(TRIM(lead_source), ''), 'Unattributed') AS source,
+           COUNT(*) AS n
+      FROM leads
+     WHERE DATE(created_at) >= ? AND DATE(created_at) <= ?
+     GROUP BY month, source
+  `).all(from, to) as { month: string; source: string; n: number }[];
+
+  const bySource = new Map<string, Record<string, number>>();
+  for (const r of rows) {
+    if (!bySource.has(r.source)) bySource.set(r.source, {});
+    bySource.get(r.source)![r.month] = r.n;
+  }
+
+  const thisMonth = upToMonth;
+  const lastMonth = shiftMonth(upToMonth, -1);
+
+  const sources = [...bySource.entries()]
+    .map(([source, counts]) => {
+      const current = counts[thisMonth] || 0;
+      const previous = counts[lastMonth] || 0;
+      return {
+        source,
+        counts: months.map((m) => counts[m] || 0),
+        total: months.reduce((sum, m) => sum + (counts[m] || 0), 0),
+        thisMonth: current,
+        lastMonth: previous,
+        change: current - previous,
+      };
+    })
+    // Busiest source first; ties broken alphabetically so the order is
+    // stable between months rather than shuffling.
+    .sort((a, b) => b.total - a.total || a.source.localeCompare(b.source));
+
+  return {
+    months,
+    monthLabels: months.map((m) => monthLabel(m).replace(/ \d{4}$/, '')),
+    sources,
+    totals: months.map((_, i) => sources.reduce((sum, s) => sum + s.counts[i], 0)),
+  };
+}
+
 function safeRunway(cash: number, costBase: number, mrr: number): number | null {
   const burn = costBase - mrr;
   // Covering costs from revenue means runway is not a meaningful number.
@@ -399,6 +457,7 @@ function buildReport(month: string) {
       signedThisMonth,
     },
     funnel,
+    leadSources: leadSourcesByMonth(month, 6),
     pipeline: {
       openCount: openRows.length,
       openPipelineMrr,

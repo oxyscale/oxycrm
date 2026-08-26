@@ -1258,6 +1258,19 @@ export interface InvestorReport {
     stage: string; label: string; openNow: number;
     enteredThisMonth: number; enteredLastMonth: number; change: number;
   }>;
+  leadSources: {
+    months: string[];
+    monthLabels: string[];
+    totals: number[];
+    sources: Array<{
+      source: string;
+      counts: number[];
+      total: number;
+      thisMonth: number;
+      lastMonth: number;
+      change: number;
+    }>;
+  };
   pipeline: {
     openCount: number;
     openPipelineMrr: number;
