@@ -423,10 +423,10 @@ export default function ProjectDetailPage() {
               !project.leadId
                 ? 'no client linked'
                 : siblingProjects > 1
-                  ? `applies across all ${siblingProjects} of this client's projects`
+                  ? `ex GST · applies across all ${siblingProjects} of this client's projects`
                   : project.retainerSince
-                    ? `since ${formatDate(project.retainerSince)}`
-                    : undefined
+                    ? `ex GST · since ${formatDate(project.retainerSince)}`
+                    : 'ex GST'
             }
           >
             <div className="relative">

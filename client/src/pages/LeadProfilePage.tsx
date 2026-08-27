@@ -2470,7 +2470,9 @@ function ClientPanel({
       {(isClient || retainers.length > 0) && (
         <div className="mb-4 pb-4 border-b border-hair-soft">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-ink-dim text-[11px] uppercase tracking-wider">Monthly Revenue</p>
+            <p className="text-ink-dim text-[11px] uppercase tracking-wider">
+              Monthly Revenue <span className="normal-case tracking-normal">(ex GST)</span>
+            </p>
             {!editingRetainer && (
               <button
                 onClick={() => {
@@ -2503,7 +2505,7 @@ function ClientPanel({
                   placeholder="0"
                   className="flex-1 bg-cream border border-hair-soft rounded-lg px-3 py-1.5 text-sm text-ink placeholder-ink-dim focus:outline-none focus:border-[rgba(10,156,212,0.3)]"
                 />
-                <span className="text-ink-dim text-xs">/mo</span>
+                <span className="text-ink-dim text-xs">/mo ex GST</span>
               </div>
               {retainerError && <p className="text-risk text-xs">{retainerError}</p>}
               <div className="flex items-center gap-2">
