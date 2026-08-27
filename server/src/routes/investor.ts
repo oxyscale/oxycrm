@@ -610,6 +610,27 @@ function buildReport(month: string) {
       openPipelineOneOff,
       byStage,
     },
+    /** Build fees are collected in full by the time the retainer starts,
+     *  so a fee still outstanding past that date is money that should
+     *  already be in. */
+    buildFees: (() => {
+      const withFee = clients.filter((c) => c.oneOffOutstanding > 0);
+      const overdue = withFee.filter((c) => c.revenueStartsOn <= today);
+      return {
+        outstanding: Math.round(withFee.reduce((s, c) => s + c.oneOffOutstanding, 0) * 100) / 100,
+        dueLater: Math.round(
+          withFee.filter((c) => c.revenueStartsOn > today)
+            .reduce((s, c) => s + c.oneOffOutstanding, 0) * 100,
+        ) / 100,
+        overdue: Math.round(overdue.reduce((s, c) => s + c.oneOffOutstanding, 0) * 100) / 100,
+        overdueClients: overdue.map((c) => ({
+          leadId: c.leadId,
+          company: c.company,
+          outstanding: c.oneOffOutstanding,
+          shouldHaveBeenPaidBy: c.revenueStartsOn,
+        })),
+      };
+    })(),
     signedNotYetLive: clients
       .filter((c) => !c.isLive)
       .sort((a, b) => a.revenueStartsOn.localeCompare(b.revenueStartsOn)),

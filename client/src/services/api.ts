@@ -1296,6 +1296,15 @@ export interface InvestorReport {
     openPipelineOneOff: number;
     byStage: InvestorStageGroup[];
   };
+  buildFees: {
+    outstanding: number;
+    dueLater: number;
+    overdue: number;
+    overdueClients: Array<{
+      leadId: number; company: string;
+      outstanding: number; shouldHaveBeenPaidBy: string;
+    }>;
+  };
   signedNotYetLive: InvestorSignedClient[];
   investment: {
     ringfence: {

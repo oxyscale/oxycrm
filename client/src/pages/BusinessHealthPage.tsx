@@ -392,7 +392,6 @@ export default function BusinessHealthPage() {
   const t = report.tiles;
   const pt = prev?.tiles;
   // One-off fees still to be invoiced on the builds in flight.
-  const upcomingBuildFees = report.signedNotYetLive.reduce((sum, c) => sum + c.oneOffOutstanding, 0);
   const lsTotals = report.leadSources.totals;
   const leadsInThisMonth = lsTotals[lsTotals.length - 1] ?? 0;
   const prevLeadsIn = lsTotals.length > 1 ? lsTotals[lsTotals.length - 2] : undefined;
@@ -844,19 +843,41 @@ export default function BusinessHealthPage() {
                     </span>
                   </div>
                 ))}
-                {upcomingBuildFees > 0 && (
+                {report.buildFees.dueLater > 0 && (
                   <p className="text-ink text-sm mt-3">
-                    Plus {aud(upcomingBuildFees)} of build fees still to invoice.
+                    Plus {aud(report.buildFees.dueLater)} of build fees still to
+                    invoice, all due before those retainers start.
                   </p>
                 )}
                 <p className="text-ink-dim text-xs mt-3 leading-relaxed">
                   Revenue starts about {report.settings.revenueLeadDays} days after signing —
-                  roughly a month building, then a month free. Build fees are one-off and
-                  land separately from the monthly retainer.
+                  roughly a month building, then a month free. The build fee is invoiced
+                  and collected in full by then; the retainer is ongoing management
+                  from that point on.
                 </p>
               </div>
             )}
           </Band>
+
+          {report.buildFees.overdue > 0 && (
+            <Band n="06b" title="Build fees overdue"
+              aside={`${aud(report.buildFees.overdue)} should already be in`}>
+              <p className="text-ink-muted text-sm mb-3 leading-relaxed max-w-[62ch]">
+                These clients are billing, which means their build fee should have
+                been invoiced and collected in full before the retainer started.
+              </p>
+              {report.buildFees.overdueClients.map((c) => (
+                <div key={c.leadId}
+                  className="flex items-baseline justify-between gap-6 py-2 border-b border-hair-soft last:border-0">
+                  <span className="text-ink text-sm">{c.company}</span>
+                  <span className="text-risk text-sm tabular-nums whitespace-nowrap">
+                    {aud(c.outstanding)}
+                    <span className="text-ink-dim"> · due by {shortDate(c.shouldHaveBeenPaidBy)}</span>
+                  </span>
+                </div>
+              ))}
+            </Band>
+          )}
 
           {/* 07 — Forecast */}
           <Band n="07" title="Where we are heading">
