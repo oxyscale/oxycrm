@@ -344,6 +344,7 @@ export default function BusinessHealthPage() {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<'report' | 'inputs'>('report');
   const [showSettings, setShowSettings] = useState(false);
+  const [showCompose, setShowCompose] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   const load = async (m: string) => {
@@ -420,21 +421,31 @@ export default function BusinessHealthPage() {
     } finally { setBusy(false); }
   };
 
-  const handleEmail = async () => {
-    if (!report || !printRef.current) return;
-    const to = settings?.distributionList ?? [];
-    if (!to.length) {
+  const openCompose = () => {
+    if (!settings?.distributionList.length) {
       setError('No distribution list set. Add recipients in settings first.');
       return;
     }
-    if (!window.confirm(`Send the ${report.monthLabel} report to ${to.length} recipients?\n\n${to.join('\n')}`)) return;
+    setShowCompose(true);
+  };
+
+  const sendReport = async (to: string[], note: string, subject: string) => {
+    if (!report || !printRef.current) return;
     setBusy(true);
+    setError(null);
     try {
-      // Send exactly what is on screen, so the email cannot drift from
-      // the preview.
-      const html = `<div style="font-family:Geist,Helvetica,Arial,sans-serif;color:#0b0d0e">${printRef.current.innerHTML}</div>`;
-      const res = await api.emailInvestorReport(report.month, { html });
-      setNotice(`Sent to ${res.sentTo.length} recipients.`);
+      // The covering note sits above the report, and the report itself is
+      // exactly what is on screen — so the email cannot drift from the
+      // preview.
+      const intro = note.trim()
+        ? `<div style="font-family:Geist,Helvetica,Arial,sans-serif;color:#0b0d0e;font-size:15px;line-height:1.6;max-width:640px;margin:0 auto 28px">
+             ${note.trim().split('\n').filter(Boolean).map((l) => `<p style="margin:0 0 12px">${l}</p>`).join('')}
+           </div>`
+        : '';
+      const html = `<div style="font-family:Geist,Helvetica,Arial,sans-serif;color:#0b0d0e">${intro}${printRef.current.innerHTML}</div>`;
+      const res = await api.emailInvestorReport(report.month, { html, subject, to });
+      setShowCompose(false);
+      setNotice(`Sent to ${res.sentTo.join(', ')}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not send the report.');
     } finally { setBusy(false); }
@@ -516,7 +527,7 @@ export default function BusinessHealthPage() {
             <Printer size={14} /> PDF
           </button>
           <button
-            onClick={handleEmail}
+            onClick={openCompose}
             disabled={busy}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-hair-soft text-ink-muted hover:text-ink text-sm transition-colors disabled:opacity-40"
           >
@@ -546,6 +557,16 @@ export default function BusinessHealthPage() {
         }`}>
           <p className={`text-sm ${error ? 'text-risk' : 'text-[#0f9d70]'}`}>{error || notice}</p>
         </div>
+      )}
+
+      {showCompose && settings && report && (
+        <ComposePanel
+          report={report}
+          recipients={settings.distributionList}
+          busy={busy}
+          onCancel={() => setShowCompose(false)}
+          onSend={sendReport}
+        />
       )}
 
       {showSettings && settings && (
@@ -724,8 +745,10 @@ export default function BusinessHealthPage() {
                       The blue line is what signed clients will be billing each
                       month, read against the left axis. Amber spikes are one-off
                       build fees landing when that client's retainer begins, read
-                      against the right. The grey line is last month's projection —
-                      the gap between the lines is what onboarding added.
+                      against the right.
+                      {prev?.projection?.length
+                        ? " The grey line is last month's projection — the gap between the lines is what onboarding added."
+                        : ' A second line appears once a previous month has been finalised, showing how the forecast has moved since.'}
                     </p>
                     <div className="overflow-x-auto">
                       <LineChart
@@ -1268,6 +1291,104 @@ function FormSection({
         {right && <span className="text-ink-dim text-xs">{right}</span>}
       </div>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Compose step before sending. Lets a test go to one address first, and
+ * puts a covering note above the report — an email that arrives as a
+ * wall of figures with no greeting reads as automated.
+ */
+function ComposePanel({
+  report, recipients, busy, onCancel, onSend,
+}: {
+  report: InvestorReport;
+  recipients: string[];
+  busy: boolean;
+  onCancel: () => void;
+  onSend: (to: string[], note: string, subject: string) => void;
+}) {
+  const [selected, setSelected] = useState<string[]>(recipients);
+  const [subject, setSubject] = useState(`OxyScale business health — ${report.monthLabel}`);
+  const [note, setNote] = useState(
+    `Morning all,\n\n`
+    + `Here is the ${report.monthLabel} update. Live monthly revenue is `
+    + `${aud(report.tiles.liveMrr)}, with ${aud(report.tiles.notYetLiveMrr)} more signed `
+    + `and starting shortly. The full picture is below.\n\n`
+    + `Happy to walk through any of it.\n\nJordan`,
+  );
+
+  const toggle = (email: string) =>
+    setSelected((prev) =>
+      prev.includes(email) ? prev.filter((e) => e !== email) : [...prev, email]);
+
+  const me = recipients.find((e) => e.startsWith('jordan@'));
+
+  return (
+    <div className="no-print bg-paper border border-hair-soft rounded-xl p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-ink text-sm font-medium">Send {report.monthLabel}</h3>
+        <button onClick={onCancel} className="text-ink-dim hover:text-ink p-1">
+          <X size={16} />
+        </button>
+      </div>
+
+      <Field label="Subject">
+        <input value={subject} onChange={(e) => setSubject(e.target.value)}
+          className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
+      </Field>
+
+      <div className="mt-4">
+        <Field label="Covering note" hint="Sits above the report. Leave blank to send the report on its own.">
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={7}
+            className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)] resize-none leading-relaxed" />
+        </Field>
+      </div>
+
+      <div className="mt-4">
+        <div className="flex items-baseline justify-between mb-2">
+          <Micro>Send to</Micro>
+          <div className="flex items-center gap-3">
+            {me && (
+              <button onClick={() => setSelected([me])}
+                className="text-sky-ink text-xs hover:underline">
+                Just me, as a test
+              </button>
+            )}
+            <button onClick={() => setSelected(recipients)}
+              className="text-sky-ink text-xs hover:underline">
+              Everyone
+            </button>
+          </div>
+        </div>
+        {recipients.map((email) => (
+          <label key={email}
+            className="flex items-center gap-2.5 py-1.5 border-b border-hair-soft last:border-0 cursor-pointer">
+            <input type="checkbox" checked={selected.includes(email)}
+              onChange={() => toggle(email)} className="accent-ink" />
+            <span className="text-ink-muted text-sm">{email}</span>
+          </label>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 mt-5">
+        <p className="text-ink-dim text-xs">
+          The report goes in the body of the email, exactly as shown on this
+          page. Use Print for a PDF.
+        </p>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-sm text-ink-muted border border-hair-soft hover:bg-[rgba(11,13,14,0.03)]">
+            Cancel
+          </button>
+          <PillButton variant="primary" size="md" trailing="none"
+            icon={busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            onClick={() => selected.length && onSend(selected, note, subject)}>
+            {selected.length === 1 ? 'Send to 1' : `Send to ${selected.length}`}
+          </PillButton>
+        </div>
+      </div>
     </div>
   );
 }
