@@ -1565,6 +1565,64 @@ export function initializeDatabase(db: Database.Database): void {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Corrected actuals (Xero P&L to 31 Aug 2026, after the wages recode).
+  //
+  // The first seed captured figures that double-counted wages: the net
+  // pay had been coded to the Wages and Salaries expense account as well
+  // as posting through the payroll journal. Recoding those payments to
+  // Wages Payable dropped June and July wages from $18,418 to $10,000
+  // and August from $13,111 to $7,000.
+  //
+  // Only rewrites rows still carrying the old figures, and never touches
+  // a finalised month.
+  // ─────────────────────────────────────────────────────────────────
+  const actualsCorrected = db
+    .prepare("SELECT value FROM settings WHERE key = 'investor_actuals_v2'")
+    .get() as { value: string } | undefined;
+
+  if (!actualsCorrected) {
+    try {
+      // [month, wrong expenses (null = never seeded), right expenses, revenue]
+      const corrections: Array<[string, number | null, number, number]> = [
+        ['2026-05', null, 112.27, 1116.43],
+        ['2026-06', 20100.65, 11682.65, 1934.00],
+        ['2026-07', 23926.93, 15508.93, 2083.63],
+        ['2026-08', 17130.58, 11019.58, 1828.00],
+      ];
+
+      const fix = db.prepare(`
+        UPDATE investor_months
+           SET actual_expenses = @right, actual_revenue = @revenue,
+               updated_at = datetime('now')
+         WHERE month = @month AND status != 'final' AND actual_expenses = @wrong
+      `);
+      const add = db.prepare(`
+        INSERT OR IGNORE INTO investor_months (month, actual_expenses, actual_revenue)
+        VALUES (@month, @right, @revenue)
+      `);
+
+      let changed = 0;
+      for (const [month, wrong, right, revenue] of corrections) {
+        if (wrong === null) {
+          changed += add.run({ month, right, revenue }).changes;
+        } else {
+          changed += fix.run({ month, wrong, right, revenue }).changes;
+        }
+      }
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('investor_actuals_v2', ?)"
+      ).run(new Date().toISOString());
+      if (changed > 0) {
+        // eslint-disable-next-line no-console
+        console.log(`[schema] Corrected ${changed} months of actuals after the wages recode`);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[schema] actuals correction failed:', err);
+    }
+  }
+
   // Seed the risks the spec calls out, once. Status changes from here on
   // are the user's, so this must never re-run and resurrect a closed row.
   const risksSeeded = db
