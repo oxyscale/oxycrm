@@ -88,9 +88,9 @@ export default function Layout() {
   useKeyboardShortcuts(shortcuts);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-cream">
+    <div className="app-shell flex h-screen overflow-hidden bg-cream">
       {/* Sidebar */}
-      <aside className="w-16 flex-shrink-0 bg-paper border-r border-hair-soft flex flex-col items-center py-6 gap-8">
+      <aside className="app-sidebar w-16 flex-shrink-0 bg-paper border-r border-hair-soft flex flex-col items-center py-6 gap-8">
         {/* OxyScale favicon */}
         <button
           onClick={() => navigate('/')}
@@ -176,7 +176,7 @@ export default function Layout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto bg-cream">
+      <main className="app-main flex-1 overflow-y-auto bg-cream">
         <Outlet />
       </main>
 

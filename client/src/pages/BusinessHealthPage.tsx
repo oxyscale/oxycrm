@@ -480,15 +480,7 @@ export default function BusinessHealthPage() {
   const prevLeadsIn = lsTotals.length > 1 ? lsTotals[lsTotals.length - 2] : undefined;
 
   return (
-    <div className="p-10 min-h-full bg-cream">
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          body { background: #fff; }
-          .break-inside-avoid { break-inside: avoid; }
-        }
-      `}</style>
-
+    <div className="print-page-padding p-10 min-h-full bg-cream">
       {/* Controls */}
       <div className="no-print flex items-start justify-between gap-6 mb-8 flex-wrap">
         <div>
@@ -599,7 +591,7 @@ export default function BusinessHealthPage() {
       ) : (
         // The document. Reads as a printed sheet: numbered sections,
         // hairline rules, no stacked card chrome.
-        <div ref={printRef} className="bg-paper border border-hair-soft rounded-2xl px-12 py-10 max-w-[900px] mx-auto print:border-0 print:rounded-none print:px-0 print:py-0 print:max-w-none">
+        <div ref={printRef} className="print-document bg-paper border border-hair-soft rounded-2xl px-12 py-10 max-w-[900px] mx-auto">
 
           {/* Masthead */}
           <header className="pb-8 border-b border-hair-strong">
@@ -1149,7 +1141,7 @@ function Band({
   children: React.ReactNode;
 }) {
   return (
-    <section className={`break-inside-avoid ${
+    <section className={`print-section break-inside-avoid ${
       lead ? 'pt-8' : 'pt-9 mt-9 border-t border-hair'
     }`}>
       <div className="flex items-baseline justify-between gap-6 mb-6">

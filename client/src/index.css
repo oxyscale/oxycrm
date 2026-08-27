@@ -37,3 +37,85 @@ body {
   outline: 2px solid rgba(12, 141, 191, 0.55);
   outline-offset: 2px;
 }
+
+/* ============================================================
+   Print
+   ------------------------------------------------------------
+   The app shell is a fixed-height flex layout with a scrolling
+   <main>. Browsers cannot paginate inside a scroll container, so
+   printing produced one clipped page that looked like a screen
+   grab. Everything here exists to unwrap that shell into ordinary
+   flowing document, then set the page itself properly.
+   ============================================================ */
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm 14mm 18mm;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+    /* Without this most browsers drop background colours and the
+       report prints as grey text on white. */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Unwrap the shell so content can flow across pages. */
+  .app-shell,
+  .app-main,
+  #root {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .app-sidebar,
+  .no-print {
+    display: none !important;
+  }
+
+  /* The document fills the page rather than sitting in a card. */
+  .print-document {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  .print-page-padding {
+    padding: 0 !important;
+  }
+
+  /* A section is never split across a page break — if it will not
+     fit, it moves whole to the next page. */
+  .print-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* A heading never sits alone at the foot of a page. */
+  h1, h2, h3,
+  .print-keep-with-next {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Long tables may split, but never mid-row, and headers repeat. */
+  table { break-inside: auto; }
+  thead { display: table-header-group; }
+  tr, img, svg { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Links are noise on paper. */
+  a { text-decoration: none !important; color: inherit !important; }
+
+  /* Slightly tighter for paper without losing the hierarchy. */
+  .print-document { font-size: 11.5pt; }
+}
