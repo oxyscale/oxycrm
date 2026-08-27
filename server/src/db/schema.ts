@@ -1407,8 +1407,10 @@ export function initializeDatabase(db: Database.Database): void {
     // figure, so it stays correct when wages change — and editable,
     // because the statutory rate moves.
     ['super_rate', '12'],
-    ['forecast_mrr_6', '0'],
-    ['forecast_mrr_12', '50000'],
+    // One target with a date on it, rather than fixed 6 and 12 month
+    // buckets. A goal is "$50k by December", not "$50k at some horizon".
+    ['forecast_target_mrr', '50000'],
+    ['forecast_target_month', '2026-12'],
     // What a typical client is worth per month. Turns a revenue target
     // into a number of clients, which is the thing you can actually go
     // and do something about.
@@ -1752,6 +1754,36 @@ export function initializeDatabase(db: Database.Database): void {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[schema] investor settings update failed:', err);
+    }
+  }
+
+  // Move the old two-horizon forecast onto a single dated target.
+  const forecastV2 = db
+    .prepare("SELECT value FROM settings WHERE key = 'investor_forecast_v2'")
+    .get() as { value: string } | undefined;
+
+  if (!forecastV2) {
+    try {
+      const put = db.prepare(
+        'INSERT INTO investor_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+      );
+      const old = db
+        .prepare("SELECT value FROM investor_settings WHERE key = 'forecast_mrr_12'")
+        .get() as { value: string } | undefined;
+      const existing = db
+        .prepare("SELECT value FROM investor_settings WHERE key = 'forecast_target_mrr'")
+        .get() as { value: string } | undefined;
+      if (!existing) {
+        put.run('forecast_target_mrr', old?.value && Number(old.value) > 0 ? old.value : '50000');
+        put.run('forecast_target_month', '2026-12');
+      }
+      db.prepare("DELETE FROM investor_settings WHERE key IN ('forecast_mrr_6','forecast_mrr_12')").run();
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('investor_forecast_v2', ?)"
+      ).run(new Date().toISOString());
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[schema] forecast migration failed:', err);
     }
   }
 

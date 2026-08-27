@@ -261,7 +261,7 @@ const STATUS_PILL: Record<string, string> = {
   closed: 'bg-[rgba(11,13,14,0.05)] text-ink-dim',
 };
 
-export default function InvestorReportPage() {
+export default function BusinessHealthPage() {
   const [month, setMonth] = useState(currentMonth());
   const [data, setData] = useState<InvestorReportResponse | null>(null);
   const [months, setMonths] = useState<Array<{ month: string; monthLabel: string; status: string }>>([]);
@@ -410,8 +410,8 @@ export default function InvestorReportPage() {
       {/* Controls */}
       <div className="no-print flex items-start justify-between gap-6 mb-8 flex-wrap">
         <div>
-          <EyebrowLabel variant="pill" className="mb-4">OXYSCALE · INVESTOR REPORT</EyebrowLabel>
-          <SectionHeading size="section">Investor report.</SectionHeading>
+          <EyebrowLabel variant="pill" className="mb-4">OXYSCALE · BUSINESS HEALTH</EyebrowLabel>
+          <SectionHeading size="section">Business health.</SectionHeading>
           <p className="text-ink-muted text-sm mt-3">
             Pipeline pulls from the CRM. Five fields a month are yours.
           </p>
@@ -514,7 +514,7 @@ export default function InvestorReportPage() {
             <div className="flex items-start justify-between gap-8">
               <div>
                 <p className="font-mono text-[10px] font-semibold tracking-[0.22em] uppercase text-ink-dim">
-                  Oxy<span className="text-sky-ink">Scale</span> · Investor update
+                  Oxy<span className="text-sky-ink">Scale</span> · Business health
                 </p>
                 <h1 className="mt-4 text-ink text-[42px] font-medium leading-none tracking-[-0.03em]">
                   {report.monthLabel.split(' ')[0]}{' '}
@@ -860,28 +860,58 @@ export default function InvestorReportPage() {
 
           {/* 07 — Forecast */}
           <Band n="07" title="Where we are heading">
-            {report.forecast.mrr6 === 0 && report.forecast.mrr12 === 0 ? (
+            {report.forecast.targetMrr <= 0 ? (
               <p className="text-ink-dim text-sm">
-                No targets set yet. Add them in settings and they will appear here.
+                No target set yet. Add one in settings and it will appear here.
               </p>
             ) : (
               <>
                 <div className="grid grid-cols-3 gap-10">
                   <Lead label="Today" value={aud(report.forecast.committedMrr)}
                     note={`${clientsFor(report.forecast.committedMrr, report.forecast.avgClientValue)} · committed monthly revenue`} />
-                  <Horizon label="In 6 months" target={report.forecast.mrr6}
+                  <Lead
+                    label={report.forecast.targetMonthLabel
+                      ? `By ${report.forecast.targetMonthLabel}`
+                      : 'Target'}
+                    value={aud(report.forecast.targetMrr)}
+                    note={`${clientsFor(report.forecast.targetMrr, report.forecast.avgClientValue)} at ${aud(report.forecast.avgClientValue)} a month each`} />
+                  <TargetGap
+                    target={report.forecast.targetMrr}
                     committed={report.forecast.committedMrr}
-                    avg={report.forecast.avgClientValue} />
-                  <Horizon label="In 12 months" target={report.forecast.mrr12}
-                    committed={report.forecast.committedMrr}
-                    avg={report.forecast.avgClientValue} />
+                    avg={report.forecast.avgClientValue}
+                    monthsRemaining={report.forecast.monthsRemaining} />
                 </div>
-                <p className="text-ink-dim text-xs mt-6 leading-relaxed max-w-[62ch]">
-                  Client numbers assume an average of{' '}
-                  {aud(report.forecast.avgClientValue)} a month each.
-                </p>
+                {report.projection.length > 1 && (
+                  <div className="mt-8">
+                    <Micro>Projected billing revenue</Micro>
+                    <p className="text-ink-dim text-xs mt-1 mb-2 leading-relaxed max-w-[62ch]">
+                      What each signed client will be billing, by the month their
+                      revenue starts. The second line is last month's projection —
+                      the gap between them is what onboarding added.
+                    </p>
+                    <div className="overflow-x-auto">
+                      <LineChart
+                        points={report.projection.map((pt, i) => {
+                          const last = prev?.projection?.find((q) => q.month === pt.month);
+                          return {
+                            label: shortLabel(pt.month),
+                            thisMonth: pt.projectedMrr,
+                            ...(last ? { lastMonth: last.projectedMrr } : {}),
+                            _i: i,
+                          };
+                        })}
+                        series={[
+                          { key: 'thisMonth', label: 'Projected now', colour: '#0a9cd4' },
+                          ...(prev?.projection?.length
+                            ? [{ key: 'lastMonth', label: `As projected in ${prev.monthLabel.split(' ')[0]}`, colour: '#b8bfc6' }]
+                            : []),
+                        ]}
+                      />
+                    </div>
+                  </div>
+                )}
                 {report.forecast.note && (
-                  <p className="text-ink-muted text-sm mt-3 leading-relaxed max-w-[52ch]">
+                  <p className="text-ink-muted text-sm mt-6 leading-relaxed max-w-[52ch]">
                     {report.forecast.note}
                   </p>
                 )}
@@ -889,7 +919,6 @@ export default function InvestorReportPage() {
             )}
           </Band>
 
-          {/* 07 — Planned spend */}
           <Band n="08" title="What we plan to spend">
             {report.plannedSpend.length === 0 ? (
               <p className="text-ink-dim text-sm">Nothing planned this month.</p>
@@ -1016,37 +1045,45 @@ function Lead({
 }
 
 /**
- * A forecast horizon. States the target, how many clients that is, and
- * the gap from where the business is today — a dollar figure alone
- * doesn't tell you what to go and do. An unset target says so rather
- * than rendering as $0, which would read as a target of nothing.
+ * What is left to do, expressed as a rate. "13 more clients" is a fact;
+ * "13 in 4 months" is a plan, and the monthly rate is the thing that can
+ * be checked against reality each month.
  */
-function Horizon({
-  label, target, committed, avg,
-}: { label: string; target: number; committed: number; avg: number }) {
-  if (!(target > 0)) {
+function TargetGap({
+  target, committed, avg, monthsRemaining,
+}: {
+  target: number; committed: number; avg: number; monthsRemaining: number | null;
+}) {
+  const gap = target - committed;
+  if (gap <= 0) {
     return (
       <div>
-        <Micro>{label}</Micro>
-        <p className="mt-2 text-ink-faint text-[38px] font-medium leading-none tracking-[-0.035em]">
-          &mdash;
+        <Micro>To get there</Micro>
+        <p className="mt-2 text-[#0f9d70] text-[38px] font-medium leading-none tracking-[-0.035em]">
+          There
         </p>
-        <p className="text-ink-dim text-xs mt-2">No target set</p>
+        <p className="text-ink-muted text-xs mt-2">Target already met</p>
       </div>
     );
   }
-  const gap = target - committed;
+  const clients = Math.ceil(gap / (avg > 0 ? avg : 1));
+  const perMonth =
+    monthsRemaining !== null && monthsRemaining > 0
+      ? Math.round((clients / monthsRemaining) * 10) / 10
+      : null;
   return (
     <div>
-      <Micro>{label}</Micro>
+      <Micro>To get there</Micro>
       <p className="mt-2 text-ink text-[38px] font-medium leading-none tracking-[-0.035em] tabular-nums">
-        {aud(target)}
+        {clients}
       </p>
       <p className="text-ink-muted text-xs mt-2 leading-relaxed max-w-[30ch]">
-        {clientsFor(target, avg)}
-        {gap > 0
-          ? ` · ${clientsFor(gap, avg)} more to sign`
-          : ' · already there'}
+        more clients, {aud(gap)} a month
+        {monthsRemaining === null
+          ? ''
+          : monthsRemaining <= 0
+            ? ' · target date has passed'
+            : ` · ${monthsRemaining} ${monthsRemaining === 1 ? 'month' : 'months'} left, about ${perMonth} a month`}
       </p>
     </div>
   );
@@ -1124,8 +1161,8 @@ function SettingsPanel({
   onSaved: (s: InvestorSettings) => void;
 }) {
   const [leadDays, setLeadDays] = useState(String(settings.revenueLeadDays));
-  const [mrr6, setMrr6] = useState(String(settings.forecastMrr6));
-  const [mrr12, setMrr12] = useState(String(settings.forecastMrr12));
+  const [targetMrr, setTargetMrr] = useState(String(settings.forecastTargetMrr));
+  const [targetMonth, setTargetMonth] = useState(settings.forecastTargetMonth);
   const [note, setNote] = useState(settings.forecastNote);
   const [list, setList] = useState(settings.distributionList.join('\n'));
   const [saving, setSaving] = useState(false);
@@ -1137,8 +1174,8 @@ function SettingsPanel({
       const emails = list.split('\n').map((s) => s.trim()).filter(Boolean);
       const saved = await api.updateInvestorSettings({
         revenueLeadDays: Number(leadDays),
-        forecastMrr6: Number(mrr6) || 0,
-        forecastMrr12: Number(mrr12) || 0,
+        forecastTargetMrr: Number(targetMrr) || 0,
+        ...(targetMonth ? { forecastTargetMonth: targetMonth } : {}),
         forecastNote: note,
         distributionList: emails,
       });
@@ -1151,7 +1188,7 @@ function SettingsPanel({
   return (
     <div className="no-print bg-paper border border-hair-soft rounded-xl p-5 mb-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-ink text-sm font-medium">Report settings</h3>
+        <h3 className="text-ink text-sm font-medium">Settings</h3>
         <button onClick={onClose} className="text-ink-dim hover:text-ink p-1"><X size={16} /></button>
       </div>
       <Field label="Revenue lead time (days)"
@@ -1164,12 +1201,12 @@ function SettingsPanel({
         not modelled here.
       </p>
       <div className="grid grid-cols-2 gap-4 mt-4">
-        <Field label="Target monthly revenue in 6 months">
-          <input type="number" value={mrr6} onChange={(e) => setMrr6(e.target.value)}
+        <Field label="Target monthly revenue">
+          <input type="number" value={targetMrr} onChange={(e) => setTargetMrr(e.target.value)}
             className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
         </Field>
-        <Field label="Target monthly revenue in 12 months">
-          <input type="number" value={mrr12} onChange={(e) => setMrr12(e.target.value)}
+        <Field label="By when" hint="The month you want to hit it.">
+          <input type="month" value={targetMonth} onChange={(e) => setTargetMonth(e.target.value)}
             className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
         </Field>
       </div>

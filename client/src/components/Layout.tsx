@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { Home, Users, Kanban, Briefcase, HelpCircle, Settings, Inbox, LogOut, FileText, ListChecks, TrendingUp } from 'lucide-react';
+import { Home, Users, Kanban, Briefcase, HelpCircle, Settings, Inbox, LogOut, FileText, ListChecks, Activity } from 'lucide-react';
 import SearchBar from './SearchBar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -15,7 +15,7 @@ const navItems = [
   { path: '/email-bank', icon: Inbox, label: 'Email Bank' },
   { path: '/projects', icon: Briefcase, label: 'Active' },
   { path: '/reports', icon: FileText, label: 'Reports' },
-  { path: '/investor', icon: TrendingUp, label: 'Investor' },
+  { path: '/health', icon: Activity, label: 'Health' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -30,7 +30,7 @@ const shortcutEntries = [
   { label: '5', description: 'Go to Email Bank' },
   { label: '6', description: 'Go to Active' },
   { label: '7', description: 'Go to Reports' },
-  { label: '8', description: 'Go to Investor' },
+  { label: '8', description: 'Go to Health' },
   { label: '9', description: 'Go to Settings' },
 ];
 
@@ -79,7 +79,7 @@ export default function Layout() {
       { key: '5', handler: () => navigate('/email-bank'), description: 'Go to Email Bank' },
       { key: '6', handler: () => navigate('/projects'), description: 'Go to Active' },
       { key: '7', handler: () => navigate('/reports'), description: 'Go to Reports' },
-      { key: '8', handler: () => navigate('/investor'), description: 'Go to Investor' },
+      { key: '8', handler: () => navigate('/health'), description: 'Go to Health' },
       { key: '9', handler: () => navigate('/settings'), description: 'Go to Settings' },
     ],
     [navigate]

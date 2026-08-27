@@ -1254,7 +1254,11 @@ export interface InvestorReport {
   finalisedAt: string | null;
   settings: { revenueLeadDays: number };
   forecast: {
-    mrr6: number; mrr12: number; note: string;
+    targetMrr: number;
+    targetMonth: string;
+    targetMonthLabel: string;
+    monthsRemaining: number | null;
+    note: string;
     avgClientValue: number;
     liveMrr: number; committedMrr: number;
   };
@@ -1272,6 +1276,7 @@ export interface InvestorReport {
     stage: string; label: string; openNow: number;
     enteredThisMonth: number; enteredLastMonth: number; change: number;
   }>;
+  projection: Array<{ month: string; monthLabel: string; projectedMrr: number }>;
   leadSources: {
     months: string[];
     monthLabels: string[];
@@ -1356,8 +1361,8 @@ export interface InvestorReportResponse {
 export interface InvestorSettings {
   revenueLeadDays: number;
   monthlyCostBase: number;
-  forecastMrr6: number;
-  forecastMrr12: number;
+  forecastTargetMrr: number;
+  forecastTargetMonth: string;
   forecastNote: string;
   avgClientValue: number;
   potRingfenceTotal: number;

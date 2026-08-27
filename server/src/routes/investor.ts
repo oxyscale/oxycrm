@@ -83,6 +83,12 @@ function daysBetween(from: string, to: string): number {
   return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000);
 }
 
+function monthsBetween(from: string, to: string): number {
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
+
 function monthLabel(month: string): string {
   const [y, m] = month.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-AU', {
@@ -99,8 +105,8 @@ function todayIso(): string {
 type Settings = {
   revenueLeadDays: number;
   monthlyCostBase: number;
-  forecastMrr6: number;
-  forecastMrr12: number;
+  forecastTargetMrr: number;
+  forecastTargetMonth: string;
   forecastNote: string;
   avgClientValue: number;
   potRingfenceTotal: number;
@@ -127,8 +133,8 @@ function readSettings(): Settings {
   return {
     revenueLeadDays: num('revenue_lead_days', 60),
     monthlyCostBase: num('monthly_cost_base', 0),
-    forecastMrr6: num('forecast_mrr_6', 0),
-    forecastMrr12: num('forecast_mrr_12', 0),
+    forecastTargetMrr: num('forecast_target_mrr', 0),
+    forecastTargetMonth: map.get('forecast_target_month') ?? '',
     forecastNote: map.get('forecast_note') ?? '',
     avgClientValue: num('avg_client_value', 2500),
     potRingfenceTotal: num('pot_ringfence_total', 30000),
@@ -145,6 +151,9 @@ interface SignedClient {
   contact: string;
   signedOn: string;
   retainer: number;
+  /** The agreed rate regardless of when it takes effect. Used for
+   *  projections; `retainer` is what applies today. */
+  agreedRetainer: number;
   oneOff: number;
   oneOffPaid: number;
   oneOffOutstanding: number;
@@ -182,6 +191,15 @@ function signedClients(leadTimeDays: number): SignedClient[] {
           AND (a.title IN ('Moved to Won', 'Converted to project')
                OR a.metadata LIKE '%"to":"won"%')) AS won_at,
       COALESCE(r.monthly_amount, 0) AS retainer,
+      -- The agreed rate, whatever date it takes effect. A client signed
+      -- with a retainer starting on their go-live date has no CURRENT
+      -- retainer yet, but projecting them at zero would be wrong — the
+      -- rate is agreed, it just hasn't started.
+      COALESCE((
+        SELECT x.monthly_amount FROM client_retainers x
+         WHERE x.lead_id = l.id
+         ORDER BY x.effective_from DESC, x.id DESC LIMIT 1
+      ), 0) AS agreed_retainer,
       l.updated_at
     FROM leads l
     LEFT JOIN current_retainers r ON r.lead_id = l.id
@@ -189,7 +207,8 @@ function signedClients(leadTimeDays: number): SignedClient[] {
   `).all() as Array<{
     lead_id: number; company: string; contact: string;
     project_start: string | null; live_from: string | null; one_off: number;
-    won_at: string | null; retainer: number; updated_at: string; one_off_paid: number;
+    won_at: string | null; retainer: number; agreed_retainer: number;
+    updated_at: string; one_off_paid: number;
   }>;
 
   return rows.map((r) => {
@@ -207,6 +226,7 @@ function signedClients(leadTimeDays: number): SignedClient[] {
       contact: r.contact,
       signedOn,
       retainer: r.retainer,
+      agreedRetainer: r.agreed_retainer,
       oneOff: r.one_off,
       oneOffPaid: r.one_off_paid,
       oneOffOutstanding: Math.max(0, Math.round((r.one_off - r.one_off_paid) * 100) / 100),
@@ -534,8 +554,16 @@ function buildReport(month: string) {
     finalisedAt: inputs?.finalised_at ?? null,
     settings: { revenueLeadDays: settings.revenueLeadDays },
     forecast: {
-      mrr6: settings.forecastMrr6,
-      mrr12: settings.forecastMrr12,
+      targetMrr: settings.forecastTargetMrr,
+      targetMonth: settings.forecastTargetMonth,
+      targetMonthLabel: MONTH_RE.test(settings.forecastTargetMonth)
+        ? monthLabel(settings.forecastTargetMonth)
+        : '',
+      // Whole months from this report to the target. Negative once the
+      // date has passed, which the page reports rather than hiding.
+      monthsRemaining: MONTH_RE.test(settings.forecastTargetMonth)
+        ? monthsBetween(month, settings.forecastTargetMonth)
+        : null,
       note: settings.forecastNote,
       // A dollar target is abstract; clients are countable. Derived from
       // the average client value rather than entered separately, so the
@@ -557,6 +585,24 @@ function buildReport(month: string) {
       signedThisMonth,
     },
     funnel,
+    /** Billing revenue projected forward from each client's start date.
+     *  Snapshotted with the month so a later report can show how the
+     *  forecast moved as clients were onboarded. */
+    projection: (() => {
+      const out: Array<{ month: string; monthLabel: string; projectedMrr: number }> = [];
+      for (let i = 0; i <= 6; i++) {
+        const m = shiftMonth(month, i);
+        const { end: mEnd } = monthBounds(m);
+        out.push({
+          month: m,
+          monthLabel: monthLabel(m),
+          projectedMrr: clients
+            .filter((c) => c.revenueStartsOn <= mEnd)
+            .reduce((sum, c) => sum + (c.agreedRetainer || c.retainer), 0),
+        });
+      }
+      return out;
+    })(),
     leadSources: leadSourcesByMonth(month, 6),
     pipeline: {
       openCount: openRows.length,
@@ -986,8 +1032,8 @@ router.get('/settings', (_req, res, next) => {
 const settingsSchema = z.object({
   revenueLeadDays: z.number().int().min(0).max(365).optional(),
   monthlyCostBase: z.number().min(0).optional(),
-  forecastMrr6: z.number().min(0).optional(),
-  forecastMrr12: z.number().min(0).optional(),
+  forecastTargetMrr: z.number().min(0).optional(),
+  forecastTargetMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
   forecastNote: z.string().max(600).optional(),
   avgClientValue: z.number().min(1).optional(),
   potRingfenceTotal: z.number().min(0).optional(),
@@ -1005,8 +1051,8 @@ router.patch('/settings', (req, res, next) => {
     const map: Record<string, string> = {
       revenueLeadDays: 'revenue_lead_days',
       monthlyCostBase: 'monthly_cost_base',
-      forecastMrr6: 'forecast_mrr_6',
-      forecastMrr12: 'forecast_mrr_12',
+      forecastTargetMrr: 'forecast_target_mrr',
+      forecastTargetMonth: 'forecast_target_month',
       forecastNote: 'forecast_note',
       avgClientValue: 'avg_client_value',
       potRingfenceTotal: 'pot_ringfence_total',
@@ -1050,8 +1096,8 @@ router.post('/report/:month/email', async (req, res, next) => {
       throw new ApiError(400, 'No recipients configured. Add a distribution list in settings.');
     }
 
-    const subject = body.subject || `OxyScale investor update — ${monthLabel(month)}`;
-    const text = `OxyScale investor update for ${monthLabel(month)}.\n\n`
+    const subject = body.subject || `OxyScale business health — ${monthLabel(month)}`;
+    const text = `OxyScale business health update for ${monthLabel(month)}.\n\n`
       + 'This report is best viewed as HTML.';
 
     await sendEmail({
