@@ -1623,6 +1623,38 @@ export function initializeDatabase(db: Database.Database): void {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // July again, after the superannuation recode. A $2,400 payment to
+  // the fund had been coded to the Superannuation expense account as
+  // well as the payroll journals that raised the liability, so June and
+  // July super were each expensed twice. Recoding it to Superannuation
+  // Payable takes July super from $3,600 to $1,200 — exactly 12% of the
+  // $10,000 in wages, matching June and August.
+  // ─────────────────────────────────────────────────────────────────
+  const julyFixed = db
+    .prepare("SELECT value FROM settings WHERE key = 'investor_actuals_v3'")
+    .get() as { value: string } | undefined;
+
+  if (!julyFixed) {
+    try {
+      const changed = db.prepare(`
+        UPDATE investor_months
+           SET actual_expenses = 13108.93, updated_at = datetime('now')
+         WHERE month = '2026-07' AND status != 'final' AND actual_expenses = 15508.93
+      `).run().changes;
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('investor_actuals_v3', ?)"
+      ).run(new Date().toISOString());
+      if (changed > 0) {
+        // eslint-disable-next-line no-console
+        console.log('[schema] Corrected July actuals after the superannuation recode');
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[schema] July correction failed:', err);
+    }
+  }
+
   // Seed the risks the spec calls out, once. Status changes from here on
   // are the user's, so this must never re-run and resurrect a closed row.
   const risksSeeded = db
