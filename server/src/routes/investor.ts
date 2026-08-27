@@ -290,11 +290,23 @@ function leadSourcesByMonth(upToMonth: string, monthCount: number) {
   };
 }
 
-function safeRunway(cash: number, costBase: number, mrr: number): number | null {
+type Runway =
+  | { state: 'months'; months: number }
+  | { state: 'covered' }
+  | { state: 'unknown' };
+
+/**
+ * Runway, or an honest reason there isn't one.
+ *
+ * 'unknown' matters: with no cost base recorded the burn is negative and
+ * the arithmetic reports infinite runway, which renders as a healthy
+ * business when the truth is that nobody has entered the costs yet.
+ */
+function safeRunway(cash: number, costBase: number, mrr: number): Runway {
+  if (!(costBase > 0)) return { state: 'unknown' };
   const burn = costBase - mrr;
-  // Covering costs from revenue means runway is not a meaningful number.
-  if (burn <= 0) return null;
-  return Math.round((cash / burn) * 10) / 10;
+  if (burn <= 0) return { state: 'covered' };
+  return { state: 'months', months: Math.round((cash / burn) * 10) / 10 };
 }
 
 function buildReport(month: string) {
@@ -406,12 +418,22 @@ function buildReport(month: string) {
     oneOff: signedThisMonthList.reduce((s, c) => s + c.oneOff, 0),
   };
 
-  // ── investment pots ──
+  // ── investment pots, as at the end of the reporting month ──
+  // Bounded by date so a report for July shows the pots as they stood in
+  // July, rather than as they stand today.
   const payments = db.prepare(
-    'SELECT id, paid_on AS paidOn, item, amount FROM investor_ringfence_payments ORDER BY paid_on ASC, id ASC'
-  ).all() as { id: number; paidOn: string; item: string; amount: number }[];
+    'SELECT id, paid_on AS paidOn, item, amount FROM investor_ringfence_payments WHERE paid_on <= ? ORDER BY paid_on ASC, id ASC'
+  ).all(end) as { id: number; paidOn: string; item: string; amount: number }[];
   const ringfencePaid = payments.reduce((s, p) => s + p.amount, 0);
-  const wagesDrawn = inputs?.pot_wages_drawn ?? 0;
+
+  const wageDraws = db.prepare(
+    'SELECT id, drawn_on AS drawnOn, item, amount FROM investor_wage_draws WHERE drawn_on <= ? ORDER BY drawn_on ASC, id ASC'
+  ).all(end) as { id: number; drawnOn: string; item: string; amount: number }[];
+  // Fall back to the old single-figure input for months captured before
+  // instalments were logged individually.
+  const wagesDrawn = wageDraws.length
+    ? wageDraws.reduce((s, w) => s + w.amount, 0)
+    : (inputs?.pot_wages_drawn ?? 0);
 
   const investment = {
     ringfence: {
@@ -424,16 +446,28 @@ function buildReport(month: string) {
       total: settings.potWagesTotal,
       drawn: wagesDrawn,
       remaining: settings.potWagesTotal - wagesDrawn,
+      draws: wageDraws,
     },
   };
+
+  // ── running costs ──
+  // The cost base is the sum of the recorded lines. The old single
+  // setting is only a fallback for anyone who set it before costs were
+  // itemised; once there are lines, they are the truth.
+  const costLines = db.prepare(
+    'SELECT id, item, amount, category FROM investor_costs ORDER BY amount DESC, id ASC'
+  ).all() as { id: number; item: string; amount: number; category: string }[];
+  const costBase = costLines.length
+    ? costLines.reduce((s, c) => s + c.amount, 0)
+    : settings.monthlyCostBase;
 
   // ── position ──
   const bankBalance = inputs?.bank_balance ?? 0;
   // Remaining wage pot is committed incoming cash, so it counts toward
   // runway — but it is deliberately reported separately from the bank.
   const cashAvailable = bankBalance + investment.wages.remaining;
-  const runwayMonths = safeRunway(cashAvailable, settings.monthlyCostBase, liveMrr);
-  const forecastRunwayMonths = safeRunway(cashAvailable, settings.monthlyCostBase, committedMrr);
+  const runway = safeRunway(cashAvailable, costBase, liveMrr);
+  const forecastRunway = safeRunway(cashAvailable, costBase, committedMrr);
 
   const plannedSpend = db.prepare(
     'SELECT id, item, estimated_cost AS estimatedCost, timing, purpose, status FROM investor_planned_spend ORDER BY id ASC'
@@ -466,8 +500,8 @@ function buildReport(month: string) {
       committedMrr,
       notYetLiveMrr,
       bankBalance,
-      runwayMonths,
-      forecastRunwayMonths,
+      runway,
+      forecastRunway,
       openPipelineMrr,
       signedThisMonth,
     },
@@ -488,9 +522,12 @@ function buildReport(month: string) {
       liveMrr,
       committedMrr,
       committedIncoming: investment.wages.remaining,
-      runwayMonths,
-      forecastRunwayMonths,
+      runway,
+      forecastRunway,
+      costBase,
+      costLines,
     },
+    costs: { base: costBase, lines: costLines },
     plannedSpend,
     risks,
     inputs: {
@@ -537,7 +574,7 @@ function historySeries(upToMonth: string, months: number) {
         committedMrr: snap.tiles?.committedMrr ?? 0,
         notYetLiveMrr: snap.tiles?.notYetLiveMrr ?? 0,
         bankBalance: snap.tiles?.bankBalance ?? 0,
-        runwayMonths: snap.tiles?.runwayMonths ?? null,
+        runwayMonths: snap.tiles?.runway?.state === 'months' ? snap.tiles.runway.months : null,
         ringfenceRemaining: snap.investment?.ringfence?.remaining ?? 0,
         wagesRemaining: snap.investment?.wages?.remaining ?? 0,
         funnel: Object.fromEntries(
@@ -751,6 +788,99 @@ router.delete('/ringfence/:id', (req, res, next) => {
     const r = getDb().prepare('DELETE FROM investor_ringfence_payments WHERE id = ?')
       .run(parseInt(req.params.id, 10));
     if (r.changes === 0) throw new ApiError(404, 'Payment not found');
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── running costs ─────────────────────────────────────────────────
+
+const COST_CATEGORIES = ['software', 'wages', 'contractors', 'other'] as const;
+
+const costSchema = z.object({
+  item: z.string().min(1).max(200),
+  amount: z.number().min(0),
+  category: z.enum(COST_CATEGORIES).optional(),
+});
+
+router.get('/costs', (_req, res, next) => {
+  try {
+    res.json(getDb().prepare(
+      'SELECT id, item, amount, category FROM investor_costs ORDER BY amount DESC, id ASC'
+    ).all());
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/costs', (req, res, next) => {
+  try {
+    const b = costSchema.parse(req.body);
+    const r = getDb().prepare(
+      'INSERT INTO investor_costs (item, amount, category) VALUES (?, ?, ?)'
+    ).run(b.item.trim(), b.amount, b.category ?? 'other');
+    res.status(201).json({ id: r.lastInsertRowid });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/costs/:id', (req, res, next) => {
+  try {
+    const b = costSchema.partial().parse(req.body);
+    const id = parseInt(req.params.id, 10);
+    const sets: string[] = [];
+    const params: Record<string, unknown> = { id };
+    for (const k of ['item', 'amount', 'category'] as const) {
+      if (b[k] !== undefined) { sets.push(`${k} = @${k}`); params[k] = b[k]; }
+    }
+    if (!sets.length) throw new ApiError(400, 'No fields to update');
+    sets.push("updated_at = datetime('now')");
+    const r = getDb().prepare(`UPDATE investor_costs SET ${sets.join(', ')} WHERE id = @id`).run(params);
+    if (r.changes === 0) throw new ApiError(404, 'Cost not found');
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/costs/:id', (req, res, next) => {
+  try {
+    const r = getDb().prepare('DELETE FROM investor_costs WHERE id = ?')
+      .run(parseInt(req.params.id, 10));
+    if (r.changes === 0) throw new ApiError(404, 'Cost not found');
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── founder wage instalments ──────────────────────────────────────
+
+const wageDrawSchema = z.object({
+  drawnOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  item: z.string().max(200).optional(),
+  amount: z.number(),
+});
+
+router.post('/wage-draws', (req, res, next) => {
+  try {
+    const b = wageDrawSchema.parse(req.body);
+    const r = getDb().prepare(
+      'INSERT INTO investor_wage_draws (drawn_on, item, amount) VALUES (?, ?, ?)'
+    ).run(b.drawnOn, (b.item || 'Monthly instalment').trim(), b.amount);
+    res.status(201).json({ id: r.lastInsertRowid });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/wage-draws/:id', (req, res, next) => {
+  try {
+    const r = getDb().prepare('DELETE FROM investor_wage_draws WHERE id = ?')
+      .run(parseInt(req.params.id, 10));
+    if (r.changes === 0) throw new ApiError(404, 'Instalment not found');
     res.status(204).send();
   } catch (err) {
     next(err);

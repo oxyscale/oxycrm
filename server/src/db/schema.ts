@@ -1363,8 +1363,33 @@ export function initializeDatabase(db: Database.Database): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- What it costs to run the business each month. Held as lines
+    -- rather than one number so the figure is self-documenting, and
+    -- carried forward month to month rather than retallied from zero.
+    CREATE TABLE IF NOT EXISTS investor_costs (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      item       TEXT NOT NULL,
+      amount     REAL NOT NULL DEFAULT 0,
+      category   TEXT NOT NULL DEFAULT 'other',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Instalments received out of the founder wages pot. Mirrors the
+    -- ring fence: dated rows that add up, rather than a running total
+    -- someone has to remember to keep correct.
+    CREATE TABLE IF NOT EXISTS investor_wage_draws (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      drawn_on   TEXT NOT NULL,
+      item       TEXT NOT NULL DEFAULT 'Monthly instalment',
+      amount     REAL NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_ringfence_paid_on
       ON investor_ringfence_payments(paid_on);
+    CREATE INDEX IF NOT EXISTS idx_wage_draws_on
+      ON investor_wage_draws(drawn_on);
   `);
 
   // Defaults, written once. Changing them later is a settings edit, not

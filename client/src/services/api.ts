@@ -1202,6 +1202,19 @@ export async function changePassword(currentPassword: string, newPassword: strin
 // Investor Report
 // ============================================================
 
+/** Runway, or an honest reason there isn't one. */
+export type InvestorRunway =
+  | { state: 'months'; months: number }
+  | { state: 'covered' }
+  | { state: 'unknown' };
+
+export interface InvestorCost {
+  id: number;
+  item: string;
+  amount: number;
+  category: string;
+}
+
 export interface InvestorPipelineRow {
   leadId: number;
   company: string;
@@ -1253,8 +1266,8 @@ export interface InvestorReport {
     committedMrr: number;
     notYetLiveMrr: number;
     bankBalance: number;
-    runwayMonths: number | null;
-    forecastRunwayMonths: number | null;
+    runway: InvestorRunway;
+    forecastRunway: InvestorRunway;
     openPipelineMrr: number;
     signedThisMonth: { count: number; mrr: number; oneOff: number };
   };
@@ -1287,13 +1300,19 @@ export interface InvestorReport {
       total: number; paid: number; remaining: number;
       payments: Array<{ id: number; paidOn: string; item: string; amount: number }>;
     };
-    wages: { total: number; drawn: number; remaining: number };
+    wages: {
+      total: number; drawn: number; remaining: number;
+      draws: Array<{ id: number; drawnOn: string; item: string; amount: number }>;
+    };
   };
   position: {
     bankBalance: number; liveMrr: number; committedMrr: number;
     committedIncoming: number;
-    runwayMonths: number | null; forecastRunwayMonths: number | null;
+    runway: InvestorRunway; forecastRunway: InvestorRunway;
+    costBase: number;
+    costLines: InvestorCost[];
   };
+  costs: { base: number; lines: InvestorCost[] };
   plannedSpend: Array<{
     id: number; item: string; estimatedCost: number;
     timing: string | null; purpose: string | null; status: string;
@@ -1406,6 +1425,33 @@ export async function updateInvestorRisk(
 
 export async function deleteInvestorRisk(id: number): Promise<void> {
   await request(`/investor/risks/${id}`, { method: 'DELETE' });
+}
+
+export async function addInvestorCost(
+  data: { item: string; amount: number; category?: string },
+): Promise<{ id: number }> {
+  return request('/investor/costs', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateInvestorCost(
+  id: number,
+  data: Partial<{ item: string; amount: number; category: string }>,
+): Promise<{ success: true }> {
+  return request(`/investor/costs/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function deleteInvestorCost(id: number): Promise<void> {
+  await request(`/investor/costs/${id}`, { method: 'DELETE' });
+}
+
+export async function addWageDraw(
+  data: { drawnOn: string; item?: string; amount: number },
+): Promise<{ id: number }> {
+  return request('/investor/wage-draws', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function deleteWageDraw(id: number): Promise<void> {
+  await request(`/investor/wage-draws/${id}`, { method: 'DELETE' });
 }
 
 export async function getInvestorSettings(): Promise<InvestorSettings> {

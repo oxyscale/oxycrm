@@ -31,6 +31,28 @@ function currentMonth(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Melbourne' }).slice(0, 7);
 }
 
+/** How a runway state reads as a headline figure. */
+function runwayValue(r: api.InvestorRunway): string {
+  if (r.state === 'unknown') return 'Not set';
+  if (r.state === 'covered') return 'Covered';
+  return String(r.months);
+}
+
+/**
+ * The sentence under the runway figure. 'Not set' has to say why —
+ * an unentered cost base previously rendered as infinite runway, which
+ * read as a healthy business rather than as missing information.
+ */
+function runwayNote(
+  r: api.InvestorRunway, forecast: api.InvestorRunway, costBase: number,
+): string {
+  if (r.state === 'unknown') return 'Add your monthly running costs to calculate runway';
+  if (r.state === 'covered') return `Revenue covers the ${aud(costBase)} monthly cost base`;
+  if (forecast.state === 'covered') return 'Signed revenue will cover the cost base';
+  if (forecast.state === 'months') return `${forecast.months} months once signed clients go live`;
+  return '';
+}
+
 // ── month-on-month delta ─────────────────────────────────────────
 
 /**
@@ -212,6 +234,10 @@ function StackedBars({
 // ── tiles ────────────────────────────────────────────────────────
 
 
+const COST_LABEL: Record<string, string> = {
+  software: 'Software', wages: 'Wages', contractors: 'Contractors', other: 'Other',
+};
+
 const SOURCE_COLOURS = [
   '#0a9cd4', '#f59e0b', '#10b981', '#8b5cf6',
   '#ef4444', '#5ec5e6', '#0f9d70', '#b8bfc6',
@@ -275,7 +301,7 @@ export default function InvestorReportPage() {
       committedMrr: data.report.tiles.committedMrr,
       notYetLiveMrr: data.report.tiles.notYetLiveMrr,
       bankBalance: data.report.tiles.bankBalance,
-      runwayMonths: data.report.tiles.runwayMonths,
+      runwayMonths: data.report.tiles.runway.state === 'months' ? data.report.tiles.runway.months : null,
       ringfenceRemaining: data.report.investment.ringfence.remaining,
       wagesRemaining: data.report.investment.wages.remaining,
       funnel: Object.fromEntries(data.report.funnel.map((f) => [f.stage, f.enteredThisMonth])),
@@ -505,14 +531,13 @@ export default function InvestorReportPage() {
                 delta={<Delta current={t.bankBalance} previous={pt?.bankBalance} money />}
                 note={`Plus ${aud(report.position.committedIncoming)} still to come from the wages pot`} />
               <Lead label="Runway"
-                value={t.runwayMonths === null ? 'Covered' : `${t.runwayMonths}`}
-                unit={t.runwayMonths === null ? undefined : 'months'}
-                delta={<Delta current={t.runwayMonths} previous={pt?.runwayMonths} />}
-                note={t.runwayMonths === null
-                  ? 'Revenue now covers the cost base'
-                  : t.forecastRunwayMonths === null
-                    ? 'Signed revenue will cover the cost base'
-                    : `${t.forecastRunwayMonths} months once signed clients go live`} />
+                value={runwayValue(t.runway)}
+                unit={t.runway.state === 'months' ? 'months' : undefined}
+                delta={t.runway.state === 'months'
+                  ? <Delta current={t.runway.months}
+                      previous={pt?.runway?.state === 'months' ? pt.runway.months : undefined} />
+                  : undefined}
+                note={runwayNote(t.runway, t.forecastRunway, report.costs.base)} />
               <Lead label="Monthly revenue" value={aud(t.liveMrr)}
                 delta={<Delta current={t.liveMrr} previous={pt?.liveMrr} money />}
                 note={t.notYetLiveMrr > 0
@@ -555,6 +580,23 @@ export default function InvestorReportPage() {
               />
             </div>
 
+            {report.investment.wages.draws.length > 0 && (
+              <div className="mt-8">
+                <Micro>Wage instalments received</Micro>
+                <table className="w-full text-sm mt-2 tabular-nums">
+                  <tbody>
+                    {report.investment.wages.draws.map((w) => (
+                      <tr key={w.id} className="border-b border-hair-soft last:border-0">
+                        <td className="py-1.5 text-ink-dim text-xs w-24">{shortDate(w.drawnOn)}</td>
+                        <td className="py-1.5 text-ink-muted">{w.item}</td>
+                        <td className="py-1.5 text-right text-ink">{aud(w.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             {report.investment.ringfence.payments.length > 0 && (
               <div className="mt-8">
                 <Micro>What the build fund has gone on</Micro>
@@ -592,8 +634,44 @@ export default function InvestorReportPage() {
             )}
           </Band>
 
-          {/* 04 — Lead sources */}
-          <Band n="04" title="Where the leads came from">
+          {/* 04 — Running costs. Stephen asked how we know the runway is
+              real; this is the number it is calculated from. */}
+          <Band n="04" title="What it costs to run"
+            aside={report.costs.base > 0 ? `${aud(report.costs.base)} a month` : undefined}>
+            {report.costs.lines.length === 0 ? (
+              <p className="text-ink-dim text-sm">
+                No running costs recorded yet, so runway cannot be calculated.
+                Add them on the monthly input screen.
+              </p>
+            ) : (
+              <>
+                <table className="w-full text-sm tabular-nums">
+                  <tbody>
+                    {report.costs.lines.map((c) => (
+                      <tr key={c.id} className="border-b border-hair-soft last:border-0">
+                        <td className="py-2 text-ink-muted">{c.item}</td>
+                        <td className="py-2 text-ink-dim text-xs">{COST_LABEL[c.category] || c.category}</td>
+                        <td className="py-2 text-right text-ink">{aud(c.amount)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t border-hair">
+                      <td className="pt-2" colSpan={2}><Micro>Total each month</Micro></td>
+                      <td className="pt-2 text-right text-ink font-medium">{aud(report.costs.base)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p className="text-ink-dim text-xs mt-4 leading-relaxed max-w-[62ch]">
+                  Runway is {aud(t.bankBalance)} in the bank plus{' '}
+                  {aud(report.position.committedIncoming)} still to come from the wages pot,
+                  divided by {aud(report.costs.base)} of costs less{' '}
+                  {aud(t.liveMrr)} of revenue each month.
+                </p>
+              </>
+            )}
+          </Band>
+
+          {/* 05 — Lead sources */}
+          <Band n="05" title="Where the leads came from">
             {report.leadSources.sources.length === 0 ? (
               <p className="text-ink-dim text-sm">No leads created in this window.</p>
             ) : (
@@ -665,7 +743,7 @@ export default function InvestorReportPage() {
           </Band>
 
           {/* 05 — Pipeline */}
-          <Band n="05" title="What is in play"
+          <Band n="06" title="What is in play"
             aside={`${report.pipeline.openCount} opportunities · ${aud(report.pipeline.openPipelineMrr)} a month`}>
             {report.pipeline.byStage.length === 0 ? (
               <p className="text-ink-dim text-sm">Nothing open right now.</p>
@@ -733,7 +811,7 @@ export default function InvestorReportPage() {
           </Band>
 
           {/* 06 — Forecast */}
-          <Band n="06" title="Where we are heading">
+          <Band n="07" title="Where we are heading">
             {report.forecast.mrr6 === 0 && report.forecast.mrr12 === 0 ? (
               <p className="text-ink-dim text-sm">
                 No targets set yet. Add them in settings and they will appear here.
@@ -762,7 +840,7 @@ export default function InvestorReportPage() {
           </Band>
 
           {/* 07 — Planned spend */}
-          <Band n="07" title="What we plan to spend">
+          <Band n="08" title="What we plan to spend">
             {report.plannedSpend.length === 0 ? (
               <p className="text-ink-dim text-sm">Nothing planned this month.</p>
             ) : (
@@ -798,7 +876,7 @@ export default function InvestorReportPage() {
           </Band>
 
           {/* 08 — Risks */}
-          <Band n="08" title="What could go wrong">
+          <Band n="09" title="What could go wrong">
             {report.risks.length === 0 ? (
               <p className="text-ink-dim text-sm">Nothing flagged.</p>
             ) : report.risks.map((r) => (
@@ -959,7 +1037,6 @@ function SettingsPanel({
   onSaved: (s: InvestorSettings) => void;
 }) {
   const [leadDays, setLeadDays] = useState(String(settings.revenueLeadDays));
-  const [costBase, setCostBase] = useState(String(settings.monthlyCostBase));
   const [mrr6, setMrr6] = useState(String(settings.forecastMrr6));
   const [mrr12, setMrr12] = useState(String(settings.forecastMrr12));
   const [note, setNote] = useState(settings.forecastNote);
@@ -973,7 +1050,6 @@ function SettingsPanel({
       const emails = list.split('\n').map((s) => s.trim()).filter(Boolean);
       const saved = await api.updateInvestorSettings({
         revenueLeadDays: Number(leadDays),
-        monthlyCostBase: Number(costBase),
         forecastMrr6: Number(mrr6) || 0,
         forecastMrr12: Number(mrr12) || 0,
         forecastNote: note,
@@ -991,16 +1067,14 @@ function SettingsPanel({
         <h3 className="text-ink text-sm font-medium">Report settings</h3>
         <button onClick={onClose} className="text-ink-dim hover:text-ink p-1"><X size={16} /></button>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Revenue lead time (days)" hint="Signing to first billing. 30 build + 30 free.">
-          <input type="number" value={leadDays} onChange={(e) => setLeadDays(e.target.value)}
-            className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
-        </Field>
-        <Field label="Monthly cost base" hint="Used for runway. Never shown on the report.">
-          <input type="number" value={costBase} onChange={(e) => setCostBase(e.target.value)}
-            className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
-        </Field>
-      </div>
+      <Field label="Revenue lead time (days)"
+        hint="Signing to first billing. 30 days building, 30 days free.">
+        <input type="number" value={leadDays} onChange={(e) => setLeadDays(e.target.value)}
+          className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
+      </Field>
+      <p className="text-ink-dim text-xs mt-2">
+        Monthly running costs are entered as lines on the input screen, not here.
+      </p>
       <div className="grid grid-cols-2 gap-4 mt-4">
         <Field label="Target monthly revenue in 6 months">
           <input type="number" value={mrr6} onChange={(e) => setMrr6(e.target.value)}
@@ -1060,7 +1134,12 @@ function InputsPanel({
 }) {
   const [bank, setBank] = useState(report.inputs.bankBalance?.toString() ?? '');
   const [mrrOverride, setMrrOverride] = useState(report.inputs.liveMrrOverride?.toString() ?? '');
-  const [wagesDrawn, setWagesDrawn] = useState(String(report.inputs.potWagesDrawn));
+  const [costItem, setCostItem] = useState('');
+  const [costAmount, setCostAmount] = useState('');
+  const [costCat, setCostCat] = useState('software');
+
+  const [drawDate, setDrawDate] = useState(report.periodEnd);
+  const [drawAmount, setDrawAmount] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -1092,7 +1171,6 @@ function InputsPanel({
       await api.saveInvestorInputs(report.month, {
         bankBalance: bank === '' ? null : Number(bank),
         liveMrrOverride: mrrOverride === '' ? null : Number(mrrOverride),
-        potWagesDrawn: Number(wagesDrawn) || 0,
       });
       setSaved(true);
       onChanged();
@@ -1110,6 +1188,28 @@ function InputsPanel({
       setPayItem(''); setPayAmount(''); onChanged();
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Could not add the payment.');
+    }
+  };
+
+  const addCost = async () => {
+    if (!costItem.trim() || !costAmount) return;
+    try {
+      await api.addInvestorCost({
+        item: costItem.trim(), amount: Number(costAmount), category: costCat,
+      });
+      setCostItem(''); setCostAmount(''); onChanged();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Could not add that cost.');
+    }
+  };
+
+  const addDraw = async () => {
+    if (!drawAmount) return;
+    try {
+      await api.addWageDraw({ drawnOn: drawDate, amount: Number(drawAmount) });
+      setDrawAmount(''); onChanged();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Could not add that instalment.');
     }
   };
 
@@ -1143,7 +1243,7 @@ function InputsPanel({
   return (
     <div className="space-y-6 max-w-4xl">
       <FormSection title={`Figures for ${report.monthLabel}`}>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <Field label="Bank balance at month end">
             <input type="number" value={bank} onChange={(e) => setBank(e.target.value)}
               placeholder="0" className={input} />
@@ -1152,10 +1252,6 @@ function InputsPanel({
             hint={`CRM says ${aud(report.inputs.crmLiveMrr)}. Leave blank to use it.`}>
             <input type="number" value={mrrOverride} onChange={(e) => setMrrOverride(e.target.value)}
               placeholder={String(report.inputs.crmLiveMrr)} className={input} />
-          </Field>
-          <Field label="$90k pot: total drawn to date">
-            <input type="number" value={wagesDrawn} onChange={(e) => setWagesDrawn(e.target.value)}
-              placeholder="0" className={input} />
           </Field>
         </div>
         <div className="flex items-center gap-3 mt-4">
@@ -1195,6 +1291,90 @@ function InputsPanel({
                 if (!window.confirm(`Remove the ${aud(p.amount)} payment for "${p.item}"?`)) return;
                 try { await api.deleteRingfencePayment(p.id); onChanged(); }
                 catch { onError('Could not remove that payment.'); }
+              }}
+              className="text-ink-faint hover:text-risk p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+      </FormSection>
+
+      <FormSection title="What it costs to run each month"
+        right={report.costs.base > 0 ? `${aud(report.costs.base)} a month` : 'Not set'}>
+        <p className="text-ink-dim text-xs mb-3 leading-relaxed">
+          Set these once. They carry forward every month, so there is nothing to
+          retally — just change a line when a cost actually changes. Runway cannot
+          be worked out until something is here.
+        </p>
+        <div className="grid grid-cols-[1fr_8rem_9rem_auto] gap-2 items-end mb-3">
+          <Field label="What">
+            <input value={costItem} onChange={(e) => setCostItem(e.target.value)}
+              placeholder="e.g. Jordan wage" className={input} />
+          </Field>
+          <Field label="Per month">
+            <input type="number" value={costAmount} onChange={(e) => setCostAmount(e.target.value)}
+              placeholder="0" className={input} />
+          </Field>
+          <Field label="Type">
+            <select value={costCat} onChange={(e) => setCostCat(e.target.value)} className={input}>
+              <option value="wages">Wages</option>
+              <option value="software">Software</option>
+              <option value="contractors">Contractors</option>
+              <option value="other">Other</option>
+            </select>
+          </Field>
+          <button onClick={addCost} disabled={!costItem.trim() || !costAmount}
+            className="bg-ink text-white rounded-lg p-2.5 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 mb-[1px]">
+            <Plus size={16} />
+          </button>
+        </div>
+        {report.costs.lines.map((c) => (
+          <div key={c.id} className="flex items-center gap-3 py-1.5 border-b border-hair-soft last:border-0 text-sm group">
+            <span className="text-ink flex-1">{c.item}</span>
+            <span className="text-ink-dim text-xs">{COST_LABEL[c.category] || c.category}</span>
+            <span className="text-ink tabular-nums">{aud(c.amount)}</span>
+            <button
+              onClick={async () => {
+                if (!window.confirm(`Remove "${c.item}" from monthly costs?`)) return;
+                try { await api.deleteInvestorCost(c.id); onChanged(); }
+                catch { onError('Could not remove that cost.'); }
+              }}
+              className="text-ink-faint hover:text-risk p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+      </FormSection>
+
+      <FormSection title="Founder wage instalments received"
+        right={`${aud(report.investment.wages.remaining)} of ${aud(report.investment.wages.total)} left`}>
+        <p className="text-ink-dim text-xs mb-3 leading-relaxed">
+          Log each instalment as it lands. The total drawn adds itself up, so the
+          pot is always right without keeping a running figure by hand.
+        </p>
+        <div className="grid grid-cols-[10rem_1fr_auto] gap-2 items-end mb-3">
+          <Field label="Date received">
+            <input type="date" value={drawDate} onChange={(e) => setDrawDate(e.target.value)} className={input} />
+          </Field>
+          <Field label="Amount">
+            <input type="number" value={drawAmount} onChange={(e) => setDrawAmount(e.target.value)}
+              placeholder="10000" className={input} />
+          </Field>
+          <button onClick={addDraw} disabled={!drawAmount}
+            className="bg-ink text-white rounded-lg p-2.5 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 mb-[1px]">
+            <Plus size={16} />
+          </button>
+        </div>
+        {report.investment.wages.draws.map((w) => (
+          <div key={w.id} className="flex items-center gap-3 py-1.5 border-b border-hair-soft last:border-0 text-sm group">
+            <span className="text-ink-dim text-xs w-24">{shortDate(w.drawnOn)}</span>
+            <span className="text-ink-muted flex-1">{w.item}</span>
+            <span className="text-ink tabular-nums">{aud(w.amount)}</span>
+            <button
+              onClick={async () => {
+                if (!window.confirm(`Remove the ${aud(w.amount)} instalment?`)) return;
+                try { await api.deleteWageDraw(w.id); onChanged(); }
+                catch { onError('Could not remove that instalment.'); }
               }}
               className="text-ink-faint hover:text-risk p-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <Trash2 size={12} />
