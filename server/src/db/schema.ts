@@ -1679,6 +1679,29 @@ export function initializeDatabase(db: Database.Database): void {
     }
   }
 
+  // August's bank balance, from the reconciled Xero statement balance at
+  // 26 Aug 2026. Seeded so the report is complete; it stays editable on
+  // the input screen and later months are entered there each month.
+  const bankSeeded = db
+    .prepare("SELECT value FROM settings WHERE key = 'investor_bank_aug26_v1'")
+    .get() as { value: string } | undefined;
+
+  if (!bankSeeded) {
+    try {
+      db.prepare(`
+        UPDATE investor_months
+           SET bank_balance = 6419.66, updated_at = datetime('now')
+         WHERE month = '2026-08' AND status != 'final' AND bank_balance IS NULL
+      `).run();
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('investor_bank_aug26_v1', ?)"
+      ).run(new Date().toISOString());
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[schema] bank balance seed failed:', err);
+    }
+  }
+
   // Seed the risks the spec calls out, once. Status changes from here on
   // are the user's, so this must never re-run and resurrect a closed row.
   const risksSeeded = db
