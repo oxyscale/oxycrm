@@ -99,6 +99,7 @@ function todayIso(): string {
 type Settings = {
   revenueLeadDays: number;
   monthlyCostBase: number;
+  superRate: number;
   forecastMrr6: number;
   forecastMrr12: number;
   forecastNote: string;
@@ -126,6 +127,7 @@ function readSettings(): Settings {
   return {
     revenueLeadDays: num('revenue_lead_days', 60),
     monthlyCostBase: num('monthly_cost_base', 0),
+    superRate: num('super_rate', 12),
     forecastMrr6: num('forecast_mrr_6', 0),
     forecastMrr12: num('forecast_mrr_12', 0),
     forecastNote: map.get('forecast_note') ?? '',
@@ -457,8 +459,16 @@ function buildReport(month: string) {
   const costLines = db.prepare(
     'SELECT id, item, amount, category FROM investor_costs ORDER BY amount DESC, id ASC'
   ).all() as { id: number; item: string; amount: number; category: string }[];
+  const costLinesTotal = costLines.reduce((s, c) => s + c.amount, 0);
+  // Superannuation is a legal on-cost of wages, not a line someone
+  // remembers to add, so it is derived from the wage lines. Deriving it
+  // also means it follows automatically when a wage changes.
+  const wagesTotal = costLines
+    .filter((c) => c.category === 'wages')
+    .reduce((s, c) => s + c.amount, 0);
+  const superAmount = Math.round(wagesTotal * (settings.superRate / 100) * 100) / 100;
   const costBase = costLines.length
-    ? costLines.reduce((s, c) => s + c.amount, 0)
+    ? costLinesTotal + superAmount
     : settings.monthlyCostBase;
 
   // ── position ──
@@ -527,7 +537,14 @@ function buildReport(month: string) {
       costBase,
       costLines,
     },
-    costs: { base: costBase, lines: costLines },
+    costs: {
+      base: costBase,
+      lines: costLines,
+      linesTotal: costLinesTotal,
+      wagesTotal,
+      superRate: settings.superRate,
+      superAmount,
+    },
     plannedSpend,
     risks,
     inputs: {
@@ -1014,6 +1031,7 @@ router.get('/settings', (_req, res, next) => {
 const settingsSchema = z.object({
   revenueLeadDays: z.number().int().min(0).max(365).optional(),
   monthlyCostBase: z.number().min(0).optional(),
+  superRate: z.number().min(0).max(100).optional(),
   forecastMrr6: z.number().min(0).optional(),
   forecastMrr12: z.number().min(0).optional(),
   forecastNote: z.string().max(600).optional(),
@@ -1032,6 +1050,7 @@ router.patch('/settings', (req, res, next) => {
     const map: Record<string, string> = {
       revenueLeadDays: 'revenue_lead_days',
       monthlyCostBase: 'monthly_cost_base',
+      superRate: 'super_rate',
       forecastMrr6: 'forecast_mrr_6',
       forecastMrr12: 'forecast_mrr_12',
       forecastNote: 'forecast_note',

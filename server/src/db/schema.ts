@@ -1400,6 +1400,10 @@ export function initializeDatabase(db: Database.Database): void {
     ['monthly_cost_base', '0'],
     ['pot_ringfence_total', '30000'],
     ['pot_wages_total', '90000'],
+    // Superannuation, as a percentage of wages. A rate rather than a
+    // figure, so it stays correct when wages change — and editable,
+    // because the statutory rate moves.
+    ['super_rate', '12'],
     ['forecast_mrr_6', '0'],
     ['forecast_mrr_12', '0'],
     ['forecast_note', ''],

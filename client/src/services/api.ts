@@ -1312,7 +1312,14 @@ export interface InvestorReport {
     costBase: number;
     costLines: InvestorCost[];
   };
-  costs: { base: number; lines: InvestorCost[] };
+  costs: {
+    base: number;
+    lines: InvestorCost[];
+    linesTotal: number;
+    wagesTotal: number;
+    superRate: number;
+    superAmount: number;
+  };
   plannedSpend: Array<{
     id: number; item: string; estimatedCost: number;
     timing: string | null; purpose: string | null; status: string;
@@ -1349,6 +1356,7 @@ export interface InvestorReportResponse {
 export interface InvestorSettings {
   revenueLeadDays: number;
   monthlyCostBase: number;
+  superRate: number;
   forecastMrr6: number;
   forecastMrr12: number;
   forecastNote: string;

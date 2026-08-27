@@ -654,6 +654,18 @@ export default function InvestorReportPage() {
                         <td className="py-2 text-right text-ink">{aud(c.amount)}</td>
                       </tr>
                     ))}
+                    {report.costs.superAmount > 0 && (
+                      <tr className="border-b border-hair-soft">
+                        <td className="py-2 text-ink-muted">
+                          Superannuation
+                          <span className="text-ink-dim text-xs ml-2">
+                            {report.costs.superRate}% of {aud(report.costs.wagesTotal)} wages
+                          </span>
+                        </td>
+                        <td className="py-2 text-ink-dim text-xs">Derived</td>
+                        <td className="py-2 text-right text-ink">{aud(report.costs.superAmount)}</td>
+                      </tr>
+                    )}
                     <tr className="border-t border-hair">
                       <td className="pt-2" colSpan={2}><Micro>Total each month</Micro></td>
                       <td className="pt-2 text-right text-ink font-medium">{aud(report.costs.base)}</td>
@@ -1037,6 +1049,7 @@ function SettingsPanel({
   onSaved: (s: InvestorSettings) => void;
 }) {
   const [leadDays, setLeadDays] = useState(String(settings.revenueLeadDays));
+  const [superRate, setSuperRate] = useState(String(settings.superRate));
   const [mrr6, setMrr6] = useState(String(settings.forecastMrr6));
   const [mrr12, setMrr12] = useState(String(settings.forecastMrr12));
   const [note, setNote] = useState(settings.forecastNote);
@@ -1050,6 +1063,7 @@ function SettingsPanel({
       const emails = list.split('\n').map((s) => s.trim()).filter(Boolean);
       const saved = await api.updateInvestorSettings({
         revenueLeadDays: Number(leadDays),
+        superRate: Number(superRate) || 0,
         forecastMrr6: Number(mrr6) || 0,
         forecastMrr12: Number(mrr12) || 0,
         forecastNote: note,
@@ -1072,7 +1086,14 @@ function SettingsPanel({
         <input type="number" value={leadDays} onChange={(e) => setLeadDays(e.target.value)}
           className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
       </Field>
-      <p className="text-ink-dim text-xs mt-2">
+      <div className="mt-4">
+        <Field label="Superannuation rate (%)"
+          hint="Added automatically on top of any cost line marked as wages.">
+          <input type="number" value={superRate} onChange={(e) => setSuperRate(e.target.value)}
+            className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
+        </Field>
+      </div>
+      <p className="text-ink-dim text-xs mt-3">
         Monthly running costs are entered as lines on the input screen, not here.
       </p>
       <div className="grid grid-cols-2 gap-4 mt-4">
@@ -1305,6 +1326,11 @@ function InputsPanel({
           Set these once. They carry forward every month, so there is nothing to
           retally — just change a line when a cost actually changes. Runway cannot
           be worked out until something is here.
+          {report.costs.superAmount > 0 && (
+            <> Superannuation of {aud(report.costs.superAmount)} is added
+            automatically at {report.costs.superRate}% of anything marked as
+            wages — don't enter it as a line.</>
+          )}
         </p>
         <div className="grid grid-cols-[1fr_8rem_9rem_auto] gap-2 items-end mb-3">
           <Field label="What">
