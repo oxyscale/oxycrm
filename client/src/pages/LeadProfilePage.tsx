@@ -2343,7 +2343,6 @@ function ClientPanel({
   const [retainerInput, setRetainerInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [busyProjectId, setBusyProjectId] = useState<number | null>(null);
 
   // Retainer editing. Changing what a client pays should never require
   // opening a project — extra work is one thing, a price change another.
@@ -2444,17 +2443,6 @@ function ClientPanel({
     }
   };
 
-  const setProjectStatus = async (projectId: number, status: ProjectStatus) => {
-    setBusyProjectId(projectId);
-    try {
-      await api.updateProject(projectId, { status });
-      await onChanged();
-    } catch (err) {
-      console.error('Failed to update project status:', err);
-    } finally {
-      setBusyProjectId(null);
-    }
-  };
 
   return (
     <div className="bg-paper border border-hair-soft rounded-xl p-5">
@@ -2658,39 +2646,6 @@ function ClientPanel({
                 >
                   {PROJECT_STATUS_LABEL[p.status]}
                 </span>
-              </div>
-              {/* Status controls. "Restore" is the way back for a client
-                  who stopped and later returned — ending every project
-                  drops them out of Active Clients, and bringing one back
-                  to live returns them, history intact. */}
-              <div className="flex items-center gap-2 mt-2">
-                {p.status === 'building' && (
-                  <button
-                    onClick={() => setProjectStatus(p.id, 'live')}
-                    disabled={busyProjectId === p.id}
-                    className="text-[11px] text-sky-ink hover:underline disabled:opacity-40"
-                  >
-                    Mark live
-                  </button>
-                )}
-                {p.status === 'live' && (
-                  <button
-                    onClick={() => setProjectStatus(p.id, 'ended')}
-                    disabled={busyProjectId === p.id}
-                    className="text-[11px] text-ink-dim hover:text-risk disabled:opacity-40"
-                  >
-                    End
-                  </button>
-                )}
-                {p.status === 'ended' && (
-                  <button
-                    onClick={() => setProjectStatus(p.id, 'live')}
-                    disabled={busyProjectId === p.id}
-                    className="text-[11px] text-sky-ink hover:underline disabled:opacity-40"
-                  >
-                    Restore
-                  </button>
-                )}
               </div>
             </div>
           ))}

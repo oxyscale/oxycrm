@@ -64,6 +64,13 @@ export default function ProjectDetailPage() {
   const [editingPaid, setEditingPaid] = useState(false);
   const [paidDraft, setPaidDraft] = useState('');
 
+  // Dates. Signed drives the projected revenue start; a recorded go-live
+  // date overrides that projection.
+  const [editingSigned, setEditingSigned] = useState(false);
+  const [signedDraft, setSignedDraft] = useState('');
+  const [editingLive, setEditingLive] = useState(false);
+  const [liveDraft, setLiveDraft] = useState('');
+
   // Description editing
   const [description, setDescription] = useState('');
   const [descriptionDirty, setDescriptionDirty] = useState(false);
@@ -127,6 +134,24 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error('Failed to rename project:', err);
       setSaveError('Could not save that name. Please try again.');
+    }
+  };
+
+  const commitDate = async (
+    field: 'startDate' | 'liveFrom',
+    value: string,
+    done: (v: false) => void,
+  ) => {
+    if (!project) return;
+    done(false);
+    const next = value || null;
+    if (next === (field === 'startDate' ? project.startDate : project.liveFrom)) return;
+    setSaveError(null);
+    try {
+      setProject(await api.updateProject(project.id, { [field]: next }));
+    } catch (err) {
+      console.error(`Failed to save ${field}:`, err);
+      setSaveError('Could not save that date. Please try again.');
     }
   };
 
@@ -458,37 +483,63 @@ export default function ProjectDetailPage() {
           </>
         )}
         <div className="w-px h-4 bg-hair-soft" />
+        {/* The signed date. Revenue is projected from here, so it is
+            editable rather than fixed at whatever day the record was
+            created. */}
         <div className="flex items-center gap-1.5">
           <Calendar size={14} className="text-ink-dim" />
-          <span className="text-ink-muted text-sm">
-            Start: {formatDate(project.startDate)}
-          </span>
+          <span className="text-ink-dim text-sm">Signed</span>
+          {editingSigned ? (
+            <input
+              autoFocus
+              type="date"
+              defaultValue={project.startDate ?? ''}
+              onChange={(e) => setSignedDraft(e.target.value)}
+              onBlur={() => commitDate('startDate', signedDraft || project.startDate || '', setEditingSigned)}
+              className="bg-cream border border-hair rounded-md px-2 py-0.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.4)]"
+            />
+          ) : (
+            <button
+              onClick={() => { setSignedDraft(project.startDate ?? ''); setEditingSigned(true); }}
+              className="text-ink text-sm font-medium hover:text-sky-ink transition-colors flex items-center gap-1"
+            >
+              {formatDate(project.startDate)}
+              <Pencil size={10} className="text-ink-dim" />
+            </button>
+          )}
         </div>
-        {/* Only one of these ever applies: live shows when it went live,
-            ended shows when it stopped. The old page showed "End" for
-            everyone using the go-live date, which read as finished. */}
-        {project.status === 'live' && project.liveFrom && (
-          <>
-            <div className="w-px h-4 bg-hair-soft" />
-            <div className="flex items-center gap-1.5">
-              <Calendar size={14} className="text-ink-dim" />
-              <span className="text-ink-muted text-sm">
-                Live: {formatDate(project.liveFrom)}
-              </span>
-            </div>
-          </>
-        )}
-        {project.status === 'ended' && project.endDate && (
-          <>
-            <div className="w-px h-4 bg-hair-soft" />
-            <div className="flex items-center gap-1.5">
-              <Calendar size={14} className="text-ink-dim" />
-              <span className="text-ink-muted text-sm">
-                Ended: {formatDate(project.endDate)}
-              </span>
-            </div>
-          </>
-        )}
+
+        <div className="w-px h-4 bg-hair-soft" />
+        {/* Expected or actual go-live. When set it overrides the
+            signed-plus-lead-time projection on the investor report. */}
+        <div className="flex items-center gap-1.5">
+          <Calendar size={14} className="text-ink-dim" />
+          <span className="text-ink-dim text-sm">
+            {project.status === 'live' ? 'Live from' : 'Revenue starts'}
+          </span>
+          {editingLive ? (
+            <input
+              autoFocus
+              type="date"
+              defaultValue={project.liveFrom ?? ''}
+              onChange={(e) => setLiveDraft(e.target.value)}
+              onBlur={() => commitDate('liveFrom', liveDraft || project.liveFrom || '', setEditingLive)}
+              className="bg-cream border border-hair rounded-md px-2 py-0.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.4)]"
+            />
+          ) : (
+            <button
+              onClick={() => { setLiveDraft(project.liveFrom ?? ''); setEditingLive(true); }}
+              className="text-ink text-sm font-medium hover:text-sky-ink transition-colors flex items-center gap-1"
+              title="When this client starts being billed"
+            >
+              {project.liveFrom
+                ? formatDate(project.liveFrom)
+                : <span className="text-ink-dim font-normal">estimated</span>}
+              <Pencil size={10} className="text-ink-dim" />
+            </button>
+          )}
+        </div>
+
         {project.leadId && (
           <>
             <div className="w-px h-4 bg-hair-soft" />

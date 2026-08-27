@@ -149,6 +149,8 @@ interface SignedClient {
   oneOffPaid: number;
   oneOffOutstanding: number;
   revenueStartsOn: string;
+  /** True when projected from the lead time rather than a recorded date. */
+  revenueStartEstimated: boolean;
   daysUntilLive: number;
   isLive: boolean;
 }
@@ -172,7 +174,7 @@ function signedClients(leadTimeDays: number): SignedClient[] {
       COALESCE(NULLIF(TRIM(l.company), ''), l.name) AS company,
       l.name              AS contact,
       (SELECT MIN(p.start_date) FROM projects p WHERE p.lead_id = l.id) AS project_start,
-      (SELECT MIN(p.live_from)  FROM projects p WHERE p.lead_id = l.id AND p.status = 'live') AS live_from,
+      (SELECT MIN(p.live_from)  FROM projects p WHERE p.lead_id = l.id AND p.live_from IS NOT NULL) AS live_from,
       (SELECT COALESCE(SUM(p.build_fee), 0) FROM projects p WHERE p.lead_id = l.id) AS one_off,
       (SELECT COALESCE(SUM(p.build_fee_paid), 0) FROM projects p WHERE p.lead_id = l.id) AS one_off_paid,
       (SELECT MIN(a.created_at) FROM activities a
@@ -192,9 +194,12 @@ function signedClients(leadTimeDays: number): SignedClient[] {
 
   return rows.map((r) => {
     const signedOn = (r.project_start || r.won_at || r.updated_at).slice(0, 10);
+    // A recorded go-live date is a fact or a plan; either beats the
+    // formula. Only fall back to signed + lead time when nothing is set.
     const revenueStartsOn = r.live_from
       ? r.live_from.slice(0, 10)
       : addDays(signedOn, leadTimeDays);
+    const revenueStartEstimated = !r.live_from;
     const daysUntilLive = daysBetween(today, revenueStartsOn);
     return {
       leadId: r.lead_id,
@@ -206,6 +211,7 @@ function signedClients(leadTimeDays: number): SignedClient[] {
       oneOffPaid: r.one_off_paid,
       oneOffOutstanding: Math.max(0, Math.round((r.one_off - r.one_off_paid) * 100) / 100),
       revenueStartsOn,
+      revenueStartEstimated,
       daysUntilLive,
       isLive: daysUntilLive <= 0,
     };
