@@ -1655,6 +1655,30 @@ export function initializeDatabase(db: Database.Database): void {
     }
   }
 
+  // May, after the final reconciliation added $38.18 of telephone and
+  // internet. June to August were already correct, so the average burn
+  // and runway are unchanged — this only matters for a report run for
+  // June or July, where May sits inside the trailing three months.
+  const mayFixed = db
+    .prepare("SELECT value FROM settings WHERE key = 'investor_actuals_v4'")
+    .get() as { value: string } | undefined;
+
+  if (!mayFixed) {
+    try {
+      db.prepare(`
+        UPDATE investor_months
+           SET actual_expenses = 150.45, updated_at = datetime('now')
+         WHERE month = '2026-05' AND status != 'final' AND actual_expenses = 112.27
+      `).run();
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('investor_actuals_v4', ?)"
+      ).run(new Date().toISOString());
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[schema] May correction failed:', err);
+    }
+  }
+
   // Seed the risks the spec calls out, once. Status changes from here on
   // are the user's, so this must never re-run and resurrect a closed row.
   const risksSeeded = db
