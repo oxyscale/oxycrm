@@ -10,7 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import * as api from '../services/api';
-import { parseTimestamp } from '../utils/dates';
+import { parseTimestamp, todayInMelbourne } from '../utils/dates';
 import type { Project, ProjectStatus } from '../types';
 import EyebrowLabel from '../components/ui/EyebrowLabel';
 
@@ -86,6 +86,11 @@ export default function ProjectDetailPage() {
   const [paid, setPaid] = useState('');
   const [signed, setSigned] = useState('');
   const [revenueStart, setRevenueStart] = useState('');
+  const [retainerInput, setRetainerInput] = useState('');
+  const [savingRetainer, setSavingRetainer] = useState(false);
+  /** How many projects this client has. A retainer edit here affects
+   *  all of them, so the page has to be able to say so. */
+  const [siblingProjects, setSiblingProjects] = useState(1);
 
   // Description editing
   const [description, setDescription] = useState('');
@@ -115,6 +120,15 @@ export default function ProjectDetailPage() {
       setPaid(data.buildFeePaid ? String(data.buildFeePaid) : '');
       setSigned(data.startDate ?? '');
       setRevenueStart(data.liveFrom ?? '');
+      setRetainerInput(data.currentRetainer ? String(data.currentRetainer) : '');
+      if (data.leadId) {
+        try {
+          const siblings = await api.getLeadProjects(data.leadId);
+          setSiblingProjects(siblings.length || 1);
+        } catch {
+          setSiblingProjects(1);
+        }
+      }
     } catch (err) {
       console.error('Failed to load project:', err);
       setError('Failed to load project');
@@ -154,6 +168,36 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error('Failed to rename project:', err);
       setSaveError('Could not save that name. Please try again.');
+    }
+  };
+
+  /**
+   * Writes the client's monthly retainer from here.
+   *
+   * The figure still belongs to the CLIENT — a client with two builds
+   * pays one monthly amount, not two — so this saves to the same
+   * retainer history the client record shows. It is only the editing
+   * that moved, not the data.
+   */
+  const saveRetainer = async () => {
+    if (!project?.leadId) return;
+    const amount = Number(retainerInput);
+    if (retainerInput.trim() === '' || !Number.isFinite(amount) || amount < 0) return;
+    if (amount === (project.currentRetainer ?? 0)) return;
+    setSavingRetainer(true);
+    setSaveError(null);
+    try {
+      await api.addRetainer(project.leadId, {
+        monthlyAmount: amount,
+        effectiveFrom: todayInMelbourne(),
+        note: `Set from ${project.name}`,
+      });
+      await loadProject(project.id);
+    } catch (err) {
+      console.error('Failed to save retainer:', err);
+      setSaveError('Could not save the retainer. Please try again.');
+    } finally {
+      setSavingRetainer(false);
     }
   };
 
@@ -246,13 +290,6 @@ export default function ProjectDetailPage() {
     });
   };
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
 
   if (loading) {
     return (
@@ -302,7 +339,6 @@ export default function ProjectDetailPage() {
   }
 
   const cfg = STATUS_CONFIG[project.status];
-  const retainer = project.currentRetainer || 0;
 
   return (
     <div className="p-10 max-w-4xl min-h-full bg-cream">
@@ -381,24 +417,32 @@ export default function ProjectDetailPage() {
           to the client, not the project. Everything else is editable. */}
       <div className="bg-paper border border-hair-soft rounded-xl px-5 py-4 mb-6">
         <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_1.2fr] gap-5">
-          <div>
-            <p className="font-mono text-[10px] font-semibold tracking-[0.18em] uppercase text-ink-dim mb-1.5">
-              Monthly retainer
-            </p>
-            <p className="text-ink text-sm font-medium py-2">
-              {retainer > 0 ? `${formatCurrency(retainer)}/mo` : <span className="text-ink-faint">—</span>}
-            </p>
-            <p className="text-ink-dim text-xs">
-              {project.leadId ? (
-                <button
-                  onClick={() => navigate(`/leads/${project.leadId}`)}
-                  className="hover:text-sky-ink transition-colors"
-                >
-                  set on the client record
-                </button>
-              ) : 'no client linked'}
-            </p>
-          </div>
+          <DetailField
+            label="Monthly retainer"
+            hint={
+              !project.leadId
+                ? 'no client linked'
+                : siblingProjects > 1
+                  ? `applies across all ${siblingProjects} of this client's projects`
+                  : project.retainerSince
+                    ? `since ${formatDate(project.retainerSince)}`
+                    : undefined
+            }
+          >
+            <div className="relative">
+              <input
+                type="number" step="0.01" value={retainerInput}
+                onChange={(e) => setRetainerInput(e.target.value)}
+                onBlur={saveRetainer}
+                disabled={!project.leadId}
+                className={detailInput}
+              />
+              {savingRetainer && (
+                <Loader2 size={13}
+                  className="animate-spin text-ink-dim absolute right-3 top-1/2 -translate-y-1/2" />
+              )}
+            </div>
+          </DetailField>
 
           <DetailField label="Build fee">
             <input
