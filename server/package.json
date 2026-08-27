@@ -5,8 +5,9 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "echo 'Server uses tsx runtime — no compile step needed'",
-    "start": "tsx src/index.ts"
+    "build": "echo 'Server uses tsx runtime \u2014 no compile step needed'",
+    "start": "tsx src/index.ts",
+    "qa": "tsx qa/run.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
