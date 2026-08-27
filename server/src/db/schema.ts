@@ -1415,6 +1415,82 @@ export function initializeDatabase(db: Database.Database): void {
   );
   for (const [k, v] of investorDefaults) insertSetting.run(k, v);
 
+
+  // ─────────────────────────────────────────────────────────────────
+  // One-time import of the expense tracker Jordan has been keeping by
+  // hand (OxyScale_Tracker, last updated 20 Jul 2026). Reconciles to
+  // the sheet exactly: $22,221.50 spent of $30,000, $7,778.50 left.
+  //
+  // Guarded and only runs into empty tables, so re-deploying can never
+  // double the numbers, and anything edited afterwards in the app is
+  // never overwritten.
+  // ─────────────────────────────────────────────────────────────────
+  const trackerSeeded = db
+    .prepare("SELECT value FROM settings WHERE key = 'investor_tracker_import_v1'")
+    .get() as { value: string } | undefined;
+
+  if (!trackerSeeded) {
+    try {
+      const existingPayments = (
+        db.prepare('SELECT COUNT(*) AS n FROM investor_ringfence_payments').get() as { n: number }
+      ).n;
+      const existingDraws = (
+        db.prepare('SELECT COUNT(*) AS n FROM investor_wage_draws').get() as { n: number }
+      ).n;
+
+      if (existingPayments === 0 && existingDraws === 0) {
+        const ringfence: Array<[string, string, number]> = [
+    ["2026-02-06", "Ethos Migration Lawyers \u2014 George's Working Holiday Visa (HARR0019)", 1958.32],
+    ["2026-03-07", "Qantas Airways \u2014 George's flight (LHR-SIN-MEL)", 3354.0],
+    ["2026-03-31", "Abound Business Solutions \u2014 Oxyscale Pty Ltd incorporation + ABN/TFN", 1650.0],
+    ["2026-03-31", "Abound Business Solutions \u2014 Harrad Holdings + Family Trust setup", 1980.0],
+    ["2026-04-01", "Nomad Legal \u2014 Shareholders Agreement", 3356.1],
+    ["2026-04-23", "Yarra Lane \u2014 IT Liability insurance ($2,910.60) + surplus to OxyScale account ($1,089.40)", 4000.0],
+    ["2026-04-28", "Networking Event \u2014 Event tickets", 198.0],
+    ["2026-04-29", "Abound Business Solutions \u2014 Card processing fee", 62.01],
+    ["2026-05-01", "OpenAI \u2014 ChatGPT subscription", 27.27],
+    ["2026-05-07", "Amex \u2014 OxyScale share of Amex interest charge", 137.48],
+    ["2026-05-11", "Apify \u2014 Web scraping subscription", 41.57],
+    ["2026-05-15", "Railway \u2014 Cloud hosting platform", 7.25],
+    ["2026-05-20", "Jack de Marie Smith \u2014 Videography - testimonial interviews + edited videos", 1143.0],
+    ["2026-05-31", "Nomad Legal \u2014 Shareholders agreement - review and amendments (INV-0067)", 742.5],
+    ["2026-06-30", "Abound Business Solutions \u2014 XERO payroll setup + first pay run (Inv 2026-003660)", 1100.0],
+    ["2026-07-20", "Nomad Legal \u2014 MSA (date to confirm)", 2464.0],
+        ];
+        const insertPayment = db.prepare(
+          'INSERT INTO investor_ringfence_payments (paid_on, item, amount) VALUES (?, ?, ?)'
+        );
+        for (const [on, item, amount] of ringfence) insertPayment.run(on, item, amount);
+
+        // Three instalments of $10,000 received against the $90,000
+        // founder wages pot, monthly from the 27 May effective date.
+        const insertDraw = db.prepare(
+          'INSERT INTO investor_wage_draws (drawn_on, item, amount) VALUES (?, ?, ?)'
+        );
+        for (const on of ['2026-05-27', '2026-06-27', '2026-07-27']) {
+          insertDraw.run(on, 'Monthly instalment', 10000);
+        }
+
+        // Founder wages as the known part of the monthly cost base.
+        // Subscriptions are deliberately left for Jordan to enter — the
+        // tracker only records historical one-offs, not a run rate.
+        const insertCost = db.prepare(
+          'INSERT INTO investor_costs (item, amount, category) VALUES (?, ?, ?)'
+        );
+        insertCost.run('Jordan wage', 5000, 'wages');
+        insertCost.run('George wage', 5000, 'wages');
+
+        console.log('[schema] Imported expense tracker: 16 payments, 3 instalments');
+      }
+
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('investor_tracker_import_v1', ?)"
+      ).run(new Date().toISOString());
+    } catch (err) {
+      console.error('[schema] expense tracker import failed:', err);
+    }
+  }
+
   // Seed the risks the spec calls out, once. Status changes from here on
   // are the user's, so this must never re-run and resurrect a closed row.
   const risksSeeded = db
