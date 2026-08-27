@@ -129,18 +129,6 @@ export interface SessionStats {
     noAnswer: number;
     voicemails: number;
 }
-export interface CallIntelligence {
-    id: number;
-    analysisType: 'full' | 'objections' | 'wins';
-    dateRangeStart: string | null;
-    dateRangeEnd: string | null;
-    totalCallsAnalysed: number;
-    commonObjections: string[];
-    winningPatterns: string[];
-    recommendations: string[];
-    rawAnalysis: string | null;
-    createdAt: string;
-}
 export interface CallIntelligenceStats {
     totalCalls: number;
     interestedCalls: number;
@@ -156,16 +144,6 @@ export interface CallLogWithLead extends CallLog {
     leadName: string;
     leadCompany: string | null;
     leadCategory: string | null;
-}
-export interface SendEmailPayload {
-    leadId: number;
-    to: string;
-    cc?: string;
-    bcc?: string;
-    subject: string;
-    body: string;
-    pipelineStage?: PipelineStage;
-    attachments?: string[];
 }
 export interface Note {
     id: number;

@@ -2,13 +2,9 @@ import type {
   Lead,
   CallLog,
   ImportResult,
-  DispositionPayload,
-  SendEmailPayload,
   LeadType,
-  CallIntelligence,
   Note,
   Project,
-  ProjectTask,
   Activity,
   EmailSent,
   EmailDraft,
@@ -118,13 +114,6 @@ export async function importLeadsCSV(
   }
 
   return res.json();
-}
-
-export async function getNextLead(category?: string): Promise<Lead | null> {
-  return request<Lead | null>('/leads/next', {
-    method: 'POST',
-    body: category && category !== 'all' ? JSON.stringify({ category }) : undefined,
-  });
 }
 
 export async function getCategories(): Promise<string[]> {
@@ -333,7 +322,6 @@ export async function deleteLeadSource(
     method: 'DELETE',
   });
 }
-
 
 // ── Duplicate flagging (inline pills on Leads page) ───────────────
 
@@ -587,13 +575,6 @@ export interface DedupeResult {
   }>;
 }
 
-export async function dedupeLeads(dryRun: boolean): Promise<DedupeResult> {
-  return request<DedupeResult>('/leads/dedupe', {
-    method: 'POST',
-    body: JSON.stringify({ dryRun }),
-  });
-}
-
 /**
  * Bulk-clear pipeline_stage (set to NULL) so the kanban is empty.
  * Won/Lost are preserved by default.
@@ -609,7 +590,6 @@ export async function resetPipeline(
     },
   );
 }
-
 
 export async function updateLead(
   id: number,
@@ -637,98 +617,15 @@ export async function markLeadContacted(id: number, contacted: boolean): Promise
   });
 }
 
-export async function disposeLead(
-  payload: DispositionPayload
-): Promise<(Lead & { callLogId: number | null }) | { deleted: true; id: number }> {
-  return request<(Lead & { callLogId: number | null }) | { deleted: true; id: number }>(
-    `/leads/${payload.leadId}/disposition`,
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }
-  );
-}
-
-/**
- * Persists AI-generated summary fields onto an existing call log.
- * Called after the client receives a summary from Claude for a just-dispositioned call.
- */
-export async function updateCallSummary(
-  callLogId: number,
-  data: {
-    summary?: string;
-    keyTopics?: string[];
-    actionItems?: string[];
-    sentiment?: string;
-  }
-): Promise<CallLog> {
-  return request<CallLog>(`/calls/${callLogId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function searchLeadByPhone(phone: string): Promise<(Lead & { lastCallLog: CallLog | null })[]> {
-  return request<(Lead & { lastCallLog: CallLog | null })[]>(`/leads/search?phone=${encodeURIComponent(phone)}`);
-}
-
 /** General text search across lead name, company, phone, and email */
 export async function searchLeads(query: string): Promise<(Lead & { lastCallLog: CallLog | null })[]> {
   return request<(Lead & { lastCallLog: CallLog | null })[]>(`/leads/search?q=${encodeURIComponent(query)}`);
 }
 
-
-
 // ── Call history ───────────────────────────────────────────────
 
 export async function getCallHistory(leadId: number): Promise<CallLog[]> {
   return request<CallLog[]>(`/calls/lead/${leadId}`);
-}
-
-export async function changeCallDisposition(
-  callId: number,
-  disposition: string
-): Promise<CallLog> {
-  return request<CallLog>(`/calls/${callId}/disposition`, {
-    method: 'PATCH',
-    body: JSON.stringify({ disposition }),
-  });
-}
-
-// ── Email ──────────────────────────────────────────────────────
-
-export async function sendEmail(
-  payload: SendEmailPayload
-): Promise<{ success: boolean }> {
-  return request<{ success: boolean }>('/email/send', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-
-
-export async function runAnalysis(params?: {
-  dateFrom?: string;
-  dateTo?: string;
-}): Promise<CallIntelligence> {
-  return request<CallIntelligence>('/intelligence/analyse', {
-    method: 'POST',
-    body: JSON.stringify(params || {}),
-  });
-}
-
-
-export async function deleteAnalysis(id: number): Promise<void> {
-  return request<void>(`/intelligence/analyses/${id}`, {
-    method: 'DELETE',
-  });
-}
-
-// ── Google Calendar ─────────────────────────────────────────
-
-export async function getGoogleAuthUrl(): Promise<{ url: string }> {
-  return request<{ url: string }>('/google/auth');
 }
 
 export async function getGoogleAuthStatus(opts?: { force?: boolean }): Promise<{ authenticated: boolean }> {
@@ -777,44 +674,6 @@ export async function createCalendarEvent(params: {
   );
 }
 
-
-export async function summariseCall(params: {
-  transcript: string;
-  leadName: string;
-  leadCompany?: string | null;
-  isCallback: boolean;
-  previousNotes?: string;
-}): Promise<{
-  summary: string;
-  keyTopics: string[];
-  actionItems: string[];
-  sentiment: string;
-}> {
-  return request<{
-    summary: string;
-    keyTopics: string[];
-    actionItems: string[];
-    sentiment: string;
-  }>('/ai/summarise', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function draftFollowUpEmail(params: {
-  transcript: string;
-  summary: string;
-  leadName: string;
-  leadCompany?: string | null;
-  leadCategory?: string | null;
-  callContext?: string;
-}): Promise<{ subject: string; body: string }> {
-  return request<{ subject: string; body: string }>('/ai/draft-email', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
 export async function composeEmailFromInstructions(params: {
   instructions: string;
   leadId: number;
@@ -824,17 +683,6 @@ export async function composeEmailFromInstructions(params: {
   existingContext?: string;
 }): Promise<{ subject: string; body: string }> {
   return request<{ subject: string; body: string }>('/ai/compose', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-}
-
-export async function draftVoicemailEmail(params: {
-  leadName: string;
-  leadCompany?: string | null;
-  leadCategory?: string | null;
-}): Promise<{ subject: string; body: string }> {
-  return request<{ subject: string; body: string }>('/ai/voicemail-email', {
     method: 'POST',
     body: JSON.stringify(params),
   });
@@ -924,24 +772,6 @@ export async function deleteProject(id: number): Promise<void> {
   return request<void>(`/projects/${id}`, { method: 'DELETE' });
 }
 
-export async function addProjectTask(projectId: number, title: string): Promise<ProjectTask> {
-  return request<ProjectTask>(`/projects/${projectId}/tasks`, {
-    method: 'POST',
-    body: JSON.stringify({ title }),
-  });
-}
-
-export async function updateProjectTask(projectId: number, taskId: number, data: { title?: string; completed?: boolean }): Promise<ProjectTask> {
-  return request<ProjectTask>(`/projects/${projectId}/tasks/${taskId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function deleteProjectTask(projectId: number, taskId: number): Promise<void> {
-  return request<void>(`/projects/${projectId}/tasks/${taskId}`, { method: 'DELETE' });
-}
-
 // ── Activities ───────────────────────────────────────────────
 
 export async function getActivitiesForLead(leadId: number, params?: { limit?: number; offset?: number }): Promise<{ activities: Activity[]; total: number }> {
@@ -975,7 +805,6 @@ export async function updateLeadStage(leadId: number, stage: string | null): Pro
   });
 }
 
-
 export async function getPipelineStats(category?: string): Promise<{
   byStage: Record<string, number>;
   conversionRate: number;
@@ -993,10 +822,6 @@ export async function getPipelineStats(category?: string): Promise<{
 }> {
   const qs = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
   return request(`/pipeline/stats${qs}`);
-}
-
-export async function getFollowUpQueue(): Promise<(Lead & { isOverdue: boolean })[]> {
-  return request<(Lead & { isOverdue: boolean })[]>('/pipeline/follow-ups');
 }
 
 // ── Emails Sent ──────────────────────────────────────────────
@@ -1088,10 +913,6 @@ export async function createEmailDraft(data: {
 export async function getEmailDrafts(status?: string): Promise<EmailBankResponse> {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
   return request<EmailBankResponse>(`/email-drafts${qs}`);
-}
-
-export async function getEmailDraft(id: number): Promise<EmailDraftWithLead> {
-  return request<EmailDraftWithLead>(`/email-drafts/${id}`);
 }
 
 export async function updateEmailDraft(
@@ -1247,7 +1068,6 @@ export type InvestorRunway =
   | { state: 'months'; months: number }
   | { state: 'covered' }
   | { state: 'unknown' };
-
 
 export interface InvestorPipelineRow {
   leadId: number;
@@ -1500,9 +1320,6 @@ export async function updateInvestorRisk(
 export async function deleteInvestorRisk(id: number): Promise<void> {
   await request(`/investor/risks/${id}`, { method: 'DELETE' });
 }
-
-
-
 
 export async function addWageDraw(
   data: { drawnOn: string; item?: string; amount: number },

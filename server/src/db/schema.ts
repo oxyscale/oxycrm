@@ -83,19 +83,6 @@ export function initializeDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_leads_phone
       ON leads(phone);
 
-    -- Call intelligence table: stores AI analysis snapshots
-    CREATE TABLE IF NOT EXISTS call_intelligence (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      analysis_type TEXT NOT NULL,
-      date_range_start TEXT,
-      date_range_end TEXT,
-      total_calls_analysed INTEGER NOT NULL DEFAULT 0,
-      common_objections TEXT,
-      winning_patterns TEXT,
-      recommendations TEXT,
-      raw_analysis TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
   `);
 
   // Migrate old status values to new simplified statuses
@@ -304,23 +291,6 @@ export function initializeDatabase(db: Database.Database): void {
   if (!callLogColumns.some((c) => c.name === 'twilio_call_sid')) {
     db.exec('ALTER TABLE call_logs ADD COLUMN twilio_call_sid TEXT');
   }
-
-  // Legacy Twilio support tables — retained so historical rows / future
-  // schema migrations don't blow up. Not written to by current code.
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS pending_transcripts (
-      call_sid TEXT PRIMARY KEY,
-      transcript TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS call_sessions (
-      call_sid TEXT PRIMARY KEY,
-      phone_to TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
-    )
-  `);
 
   // Add follow_up_date column for scheduling follow-up calls
   if (!columns.some((c) => c.name === 'follow_up_date')) {
@@ -1863,6 +1833,44 @@ export function initializeDatabase(db: Database.Database): void {
       console.log('[schema] Seeded investor report starting risks');
     } catch (err) {
       console.error('[schema] investor risk seed failed:', err);
+    }
+  }
+
+  dropAbandonedTables(db);
+}
+
+/**
+ * Tables left behind by features that no longer exist.
+ *
+ *   call_intelligence   aggregate call analysis, removed with its routes
+ *   pending_transcripts legacy Twilio transcript staging
+ *   call_sessions       legacy Twilio call/number mapping
+ *
+ * Nothing in the codebase reads or writes any of them. They are dropped
+ * only when empty: an unreferenced table is dead weight, but a table
+ * holding rows is somebody's data until proven otherwise, and a
+ * migration is the wrong place to make that call. A table with rows is
+ * left alone and reported so it can be looked at deliberately.
+ */
+function dropAbandonedTables(db: Database.Database): void {
+  const abandoned = ['call_intelligence', 'pending_transcripts', 'call_sessions'];
+  for (const table of abandoned) {
+    try {
+      const exists = db.prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?"
+      ).get(table);
+      if (!exists) continue;
+
+      const { n } = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number };
+      if (n > 0) {
+        console.log(`[schema] ${table} is unused by any code but holds ${n} row(s) — left in place`);
+        continue;
+      }
+      db.exec(`DROP TABLE ${table}`);
+      console.log(`[schema] dropped abandoned table ${table}`);
+    } catch (err) {
+      // Never let housekeeping stop the server booting.
+      console.error(`[schema] could not drop ${table}:`, (err as Error).message);
     }
   }
 }
