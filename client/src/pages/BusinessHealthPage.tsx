@@ -155,7 +155,7 @@ function LineChart({
 
   return (
     <>
-      <svg width={CHART_W} height={CHART_H + (showValues ? 10 : 0)} role="img">
+      <svg width={CHART_W + (spike ? 34 : 0)} height={CHART_H + (showValues ? 10 : 0)} role="img">
         {[0, 0.5, 1].map((f) => (
           <g key={f}>
             <line
@@ -167,13 +167,22 @@ function LineChart({
               fontSize={9} fill="#8a95a0">
               {max * f >= 1000 ? `${Math.round(max * f / 1000)}k` : Math.round(max * f)}
             </text>
+            {/* One-off cash reads against its own axis on the right, so
+                a spike three times a month's revenue can be shown at
+                full height without flattening the line. */}
+            {spike && (
+              <text x={CHART_W - PAD.r + 8} y={PAD.t + ih - f * ih + 3} textAnchor="start"
+                fontSize={9} fill={spike.colour}>
+                {spikeMax * f >= 1000 ? `${Math.round(spikeMax * f / 1000)}k` : Math.round(spikeMax * f)}
+              </text>
+            )}
           </g>
         ))}
         {spike && points.map((p, i) => {
           const v = Number(p[spike.key]) || 0;
           if (v <= 0) return null;
           // Own scale, and never taller than the plot area.
-          const top = PAD.t + ih - (v / spikeMax) * ih * 0.92;
+          const top = PAD.t + ih - (v / spikeMax) * ih;
           return (
             <g key={`sp${i}`}>
               <rect x={x(i) - 3} y={top} width={6} height={PAD.t + ih - top}
@@ -233,7 +242,7 @@ function LineChart({
           <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
             <span className="w-1 h-3 rounded-sm" style={{ background: spike.colour }} />
             {spike.label}
-            <span className="text-ink-dim">(own scale)</span>
+            <span className="text-ink-dim">(right axis)</span>
           </span>
         )}
       </div>
@@ -673,14 +682,47 @@ export default function BusinessHealthPage() {
                     avg={report.forecast.avgClientValue}
                     monthsRemaining={report.forecast.monthsRemaining} />
                 </div>
+            {report.signedNotYetLive.length > 0 && (
+              <div className="mt-8 break-inside-avoid">
+                <div className="flex items-baseline justify-between border-b border-hair pb-1.5 mb-1">
+                  <Micro>Signed, revenue not started</Micro>
+                  <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim tabular-nums">
+                    {aud(t.notYetLiveMrr)}/mo confirmed
+                  </span>
+                </div>
+                {report.signedNotYetLive.map((c) => (
+                  <div key={c.leadId} className="flex items-baseline justify-between gap-6 py-2 border-b border-hair-soft last:border-0">
+                    <span className="text-ink text-sm">{c.company}</span>
+                    <span className="text-ink-muted text-xs tabular-nums whitespace-nowrap">
+                      {aud(c.retainer)}/mo · starts {shortDate(c.revenueStartsOn)}
+                      <span className="text-ink-dim"> ({c.daysUntilLive} days)</span>
+                    </span>
+                  </div>
+                ))}
+                {report.buildFees.dueLater > 0 && (
+                  <p className="text-ink text-sm mt-3">
+                    Plus {aud(report.buildFees.dueLater)} of build fees still to
+                    invoice, all due before those retainers start.
+                  </p>
+                )}
+                <p className="text-ink-dim text-xs mt-3 leading-relaxed">
+                  Revenue starts about {report.settings.revenueLeadDays} days after signing —
+                  roughly a month building, then a month free. The build fee is invoiced
+                  and collected in full by then; the retainer is ongoing management
+                  from that point on.
+                </p>
+              </div>
+            )}
+
                 {report.projection.length > 1 && (
                   <div className="mt-8">
                     <Micro>Projected billing revenue</Micro>
                     <p className="text-ink-dim text-xs mt-1 mb-2 leading-relaxed max-w-[62ch]">
-                      The line is what signed clients will be billing each month,
-                      by the month their revenue starts. The amber spikes are
-                      one-off build fees, landing in the month that client's
-                      retainer begins. The grey line is last month's projection —
+                      Contracted revenue from the CRM, not invoiced revenue.
+                      The blue line is what signed clients will be billing each
+                      month, read against the left axis. Amber spikes are one-off
+                      build fees landing when that client's retainer begins, read
+                      against the right. The grey line is last month's projection —
                       the gap between the lines is what onboarding added.
                     </p>
                     <div className="overflow-x-auto">
@@ -931,7 +973,7 @@ export default function BusinessHealthPage() {
           </Band>
 
           {/* 07 — Pipeline */}
-          <Band n="07" title="What is in play"
+          <Band n="07" title="Balls in the air"
             aside={`${report.pipeline.openCount} opportunities · ${aud(report.pipeline.openPipelineMrr)} a month`}>
             {report.pipeline.byStage.length === 0 ? (
               <p className="text-ink-dim text-sm">Nothing open right now.</p>
@@ -973,37 +1015,6 @@ export default function BusinessHealthPage() {
               </div>
             ))}
 
-            {report.signedNotYetLive.length > 0 && (
-              <div className="mt-8 break-inside-avoid">
-                <div className="flex items-baseline justify-between border-b border-hair pb-1.5 mb-1">
-                  <Micro>Signed, revenue not started</Micro>
-                  <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-ink-dim tabular-nums">
-                    {aud(t.notYetLiveMrr)}/mo confirmed
-                  </span>
-                </div>
-                {report.signedNotYetLive.map((c) => (
-                  <div key={c.leadId} className="flex items-baseline justify-between gap-6 py-2 border-b border-hair-soft last:border-0">
-                    <span className="text-ink text-sm">{c.company}</span>
-                    <span className="text-ink-muted text-xs tabular-nums whitespace-nowrap">
-                      {aud(c.retainer)}/mo · starts {shortDate(c.revenueStartsOn)}
-                      <span className="text-ink-dim"> ({c.daysUntilLive} days)</span>
-                    </span>
-                  </div>
-                ))}
-                {report.buildFees.dueLater > 0 && (
-                  <p className="text-ink text-sm mt-3">
-                    Plus {aud(report.buildFees.dueLater)} of build fees still to
-                    invoice, all due before those retainers start.
-                  </p>
-                )}
-                <p className="text-ink-dim text-xs mt-3 leading-relaxed">
-                  Revenue starts about {report.settings.revenueLeadDays} days after signing —
-                  roughly a month building, then a month free. The build fee is invoiced
-                  and collected in full by then; the retainer is ongoing management
-                  from that point on.
-                </p>
-              </div>
-            )}
           </Band>
 
           {report.buildFees.overdue > 0 && (
