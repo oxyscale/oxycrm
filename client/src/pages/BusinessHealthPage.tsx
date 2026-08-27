@@ -117,16 +117,37 @@ function niceMax(v: number): number {
 
 
 /** Multi-series line chart over labelled months. */
+/** Compact money for chart labels: 13900 -> 13.9k. */
+function compact(n: number): string {
+  if (Math.abs(n) >= 1000) {
+    const k = n / 1000;
+    return `${k % 1 === 0 ? k : k.toFixed(1)}k`;
+  }
+  return String(Math.round(n));
+}
+
 function LineChart({
-  points, series,
+  points, series, showValues = false, spike,
 }: {
   points: Array<{ label: string } & Record<string, unknown>>;
   series: Array<{ key: string; label: string; colour: string }>;
+  /** Print the value above each point of the FIRST series. Only the
+   *  first, because two series that touch would collide. */
+  showValues?: boolean;
+  /** One-off amounts drawn as vertical bars rather than a line, because
+   *  they arrive once rather than every month. */
+  spike?: { key: string; label: string; colour: string };
 }) {
   const max = niceMax(Math.max(
     1,
     ...points.flatMap((p) => series.map((s) => Number(p[s.key]) || 0)),
   ));
+  // Spikes are scaled independently. A one-off fee can be several times
+  // a month's recurring revenue, and sharing the axis would squash the
+  // line into the floor — the trend is the point of the chart.
+  const spikeMax = spike
+    ? niceMax(Math.max(1, ...points.map((p) => Number(p[spike.key]) || 0)))
+    : 1;
   const iw = CHART_W - PAD.l - PAD.r;
   const ih = CHART_H - PAD.t - PAD.b;
   const x = (i: number) => PAD.l + (points.length === 1 ? iw / 2 : (i / (points.length - 1)) * iw);
@@ -134,7 +155,7 @@ function LineChart({
 
   return (
     <>
-      <svg width={CHART_W} height={CHART_H} role="img">
+      <svg width={CHART_W} height={CHART_H + (showValues ? 10 : 0)} role="img">
         {[0, 0.5, 1].map((f) => (
           <g key={f}>
             <line
@@ -148,6 +169,22 @@ function LineChart({
             </text>
           </g>
         ))}
+        {spike && points.map((p, i) => {
+          const v = Number(p[spike.key]) || 0;
+          if (v <= 0) return null;
+          // Own scale, and never taller than the plot area.
+          const top = PAD.t + ih - (v / spikeMax) * ih * 0.92;
+          return (
+            <g key={`sp${i}`}>
+              <rect x={x(i) - 3} y={top} width={6} height={PAD.t + ih - top}
+                fill={spike.colour} rx={1.5} opacity={0.9} />
+              <text x={x(i)} y={top - 6} textAnchor="middle"
+                fontSize={10} fontWeight={600} fill={spike.colour}>
+                {compact(v)}
+              </text>
+            </g>
+          );
+        })}
         {series.map((s) => (
           <g key={s.key}>
             <polyline
@@ -158,6 +195,25 @@ function LineChart({
             {points.map((p, i) => (
               <circle key={i} cx={x(i)} cy={y(Number(p[s.key]) || 0)} r={2.5} fill={s.colour} />
             ))}
+            {showValues && s.key === series[0].key && points.map((p, i) => {
+              // A spike runs vertically through the point, so the label
+              // goes underneath rather than on top of the bar.
+              const collides = spike ? (Number(p[spike.key]) || 0) > 0 : false;
+              return (
+                <text
+                  key={`v${i}`}
+                  // Shifted clear of the bar rather than sitting on it.
+                  x={x(i) + (collides ? 8 : 0)}
+                  y={y(Number(p[s.key]) || 0) + (collides ? 14 : -8)}
+                  textAnchor={collides ? 'start' : 'middle'}
+                  fontSize={10}
+                  fontWeight={600}
+                  fill="#0b0d0e"
+                >
+                  {compact(Number(p[s.key]) || 0)}
+                </text>
+              );
+            })}
           </g>
         ))}
         {points.map((p, i) => (
@@ -173,6 +229,13 @@ function LineChart({
             {s.label}
           </span>
         ))}
+        {spike && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
+            <span className="w-1 h-3 rounded-sm" style={{ background: spike.colour }} />
+            {spike.label}
+            <span className="text-ink-dim">(own scale)</span>
+          </span>
+        )}
       </div>
     </>
   );
@@ -570,8 +633,92 @@ export default function BusinessHealthPage() {
             </div>
           </Band>
 
-          {/* 03 — Investment. Stephen's first ask, so it sits high. */}
-          <Band n="03" title="Where the investment sits">
+          {/* 03 — Where the business is going, before where its money is. */}
+          <Band n="03" title="Where we are heading">
+            {report.forecast.targetMrr <= 0 ? (
+              <p className="text-ink-dim text-sm">
+                No target set yet. Add one in settings and it will appear here.
+              </p>
+            ) : (
+              <>
+              {report.forecast.monthsRemaining !== null
+                && report.forecast.monthsRemaining <= 0 && (
+                <div className="no-print mb-6 rounded-lg px-4 py-3 bg-[rgba(245,158,11,0.10)] border border-[rgba(245,158,11,0.25)]">
+                  <p className="text-ink text-sm">
+                    {report.forecast.monthsRemaining === 0
+                      ? `This is the target month. Set the next one once you know where ${report.forecast.targetMonthLabel} landed.`
+                      : `The ${report.forecast.targetMonthLabel} target has passed. Set a new one so this section keeps meaning something.`}
+                  </p>
+                  <button
+                    onClick={() => setShowSettings(true)}
+                    className="text-sky-ink text-xs font-medium hover:underline mt-1"
+                  >
+                    Set a new target
+                  </button>
+                </div>
+              )}
+              <>
+                <div className="grid grid-cols-3 gap-10">
+                  <Lead label="Today" value={aud(report.forecast.committedMrr)}
+                    note={`${clientsFor(report.forecast.committedMrr, report.forecast.avgClientValue)} · committed monthly revenue`} />
+                  <Lead
+                    label={report.forecast.targetMonthLabel
+                      ? `By ${report.forecast.targetMonthLabel}`
+                      : 'Target'}
+                    value={aud(report.forecast.targetMrr)}
+                    note={`${clientsFor(report.forecast.targetMrr, report.forecast.avgClientValue)} at ${aud(report.forecast.avgClientValue)} a month each`} />
+                  <TargetGap
+                    target={report.forecast.targetMrr}
+                    committed={report.forecast.committedMrr}
+                    avg={report.forecast.avgClientValue}
+                    monthsRemaining={report.forecast.monthsRemaining} />
+                </div>
+                {report.projection.length > 1 && (
+                  <div className="mt-8">
+                    <Micro>Projected billing revenue</Micro>
+                    <p className="text-ink-dim text-xs mt-1 mb-2 leading-relaxed max-w-[62ch]">
+                      The line is what signed clients will be billing each month,
+                      by the month their revenue starts. The amber spikes are
+                      one-off build fees, landing in the month that client's
+                      retainer begins. The grey line is last month's projection —
+                      the gap between the lines is what onboarding added.
+                    </p>
+                    <div className="overflow-x-auto">
+                      <LineChart
+                        showValues
+                        points={report.projection.map((pt, i) => {
+                          const last = prev?.projection?.find((q) => q.month === pt.month);
+                          return {
+                            label: shortLabel(pt.month),
+                            thisMonth: pt.projectedMrr,
+                            ...(last ? { lastMonth: last.projectedMrr } : {}),
+                            buildFeeCash: pt.buildFeeCash,
+                            _i: i,
+                          };
+                        })}
+                        spike={{ key: 'buildFeeCash', label: 'Build fee, one-off', colour: '#f59e0b' }}
+                        series={[
+                          { key: 'thisMonth', label: 'Projected now', colour: '#0a9cd4' },
+                          ...(prev?.projection?.length
+                            ? [{ key: 'lastMonth', label: `As projected in ${prev.monthLabel.split(' ')[0]}`, colour: '#b8bfc6' }]
+                            : []),
+                        ]}
+                      />
+                    </div>
+                  </div>
+                )}
+                {report.forecast.note && (
+                  <p className="text-ink-muted text-sm mt-6 leading-relaxed max-w-[52ch]">
+                    {report.forecast.note}
+                  </p>
+                )}
+              </>
+              </>
+            )}
+          </Band>
+
+          {/* 04 — Investment */}
+          <Band n="04" title="Where the investment sits">
             <div className="grid grid-cols-2 gap-12">
               <Pot
                 name="Build fund"
@@ -643,8 +790,8 @@ export default function BusinessHealthPage() {
             )}
           </Band>
 
-          {/* 04 — What we actually spent, straight from the books. */}
-          <Band n="04" title="What it costs to run"
+          {/* 05 — What we actually spent, straight from the books. */}
+          <Band n="05" title="What it costs to run"
             aside={report.actuals.avgNetBurn !== null
               ? `${aud(report.actuals.avgNetBurn)} average monthly burn`
               : undefined}>
@@ -711,8 +858,8 @@ export default function BusinessHealthPage() {
             )}
           </Band>
 
-          {/* 05 — Lead sources */}
-          <Band n="05" title="Where the leads came from">
+          {/* 06 — Lead sources */}
+          <Band n="06" title="Where the leads came from">
             {report.leadSources.sources.length === 0 ? (
               <p className="text-ink-dim text-sm">No leads created in this window.</p>
             ) : (
@@ -783,8 +930,8 @@ export default function BusinessHealthPage() {
             )}
           </Band>
 
-          {/* 05 — Pipeline */}
-          <Band n="06" title="What is in play"
+          {/* 07 — Pipeline */}
+          <Band n="07" title="What is in play"
             aside={`${report.pipeline.openCount} opportunities · ${aud(report.pipeline.openPipelineMrr)} a month`}>
             {report.pipeline.byStage.length === 0 ? (
               <p className="text-ink-dim text-sm">Nothing open right now.</p>
@@ -860,7 +1007,7 @@ export default function BusinessHealthPage() {
           </Band>
 
           {report.buildFees.overdue > 0 && (
-            <Band n="06b" title="Build fees overdue"
+            <Band n="07b" title="Build fees overdue"
               aside={`${aud(report.buildFees.overdue)} should already be in`}>
               <p className="text-ink-muted text-sm mb-3 leading-relaxed max-w-[62ch]">
                 These clients are billing, which means their build fee should have
@@ -878,67 +1025,6 @@ export default function BusinessHealthPage() {
               ))}
             </Band>
           )}
-
-          {/* 07 — Forecast */}
-          <Band n="07" title="Where we are heading">
-            {report.forecast.targetMrr <= 0 ? (
-              <p className="text-ink-dim text-sm">
-                No target set yet. Add one in settings and it will appear here.
-              </p>
-            ) : (
-              <>
-                <div className="grid grid-cols-3 gap-10">
-                  <Lead label="Today" value={aud(report.forecast.committedMrr)}
-                    note={`${clientsFor(report.forecast.committedMrr, report.forecast.avgClientValue)} · committed monthly revenue`} />
-                  <Lead
-                    label={report.forecast.targetMonthLabel
-                      ? `By ${report.forecast.targetMonthLabel}`
-                      : 'Target'}
-                    value={aud(report.forecast.targetMrr)}
-                    note={`${clientsFor(report.forecast.targetMrr, report.forecast.avgClientValue)} at ${aud(report.forecast.avgClientValue)} a month each`} />
-                  <TargetGap
-                    target={report.forecast.targetMrr}
-                    committed={report.forecast.committedMrr}
-                    avg={report.forecast.avgClientValue}
-                    monthsRemaining={report.forecast.monthsRemaining} />
-                </div>
-                {report.projection.length > 1 && (
-                  <div className="mt-8">
-                    <Micro>Projected billing revenue</Micro>
-                    <p className="text-ink-dim text-xs mt-1 mb-2 leading-relaxed max-w-[62ch]">
-                      What each signed client will be billing, by the month their
-                      revenue starts. The second line is last month's projection —
-                      the gap between them is what onboarding added.
-                    </p>
-                    <div className="overflow-x-auto">
-                      <LineChart
-                        points={report.projection.map((pt, i) => {
-                          const last = prev?.projection?.find((q) => q.month === pt.month);
-                          return {
-                            label: shortLabel(pt.month),
-                            thisMonth: pt.projectedMrr,
-                            ...(last ? { lastMonth: last.projectedMrr } : {}),
-                            _i: i,
-                          };
-                        })}
-                        series={[
-                          { key: 'thisMonth', label: 'Projected now', colour: '#0a9cd4' },
-                          ...(prev?.projection?.length
-                            ? [{ key: 'lastMonth', label: `As projected in ${prev.monthLabel.split(' ')[0]}`, colour: '#b8bfc6' }]
-                            : []),
-                        ]}
-                      />
-                    </div>
-                  </div>
-                )}
-                {report.forecast.note && (
-                  <p className="text-ink-muted text-sm mt-6 leading-relaxed max-w-[52ch]">
-                    {report.forecast.note}
-                  </p>
-                )}
-              </>
-            )}
-          </Band>
 
           <Band n="08" title="What we plan to spend">
             {report.plannedSpend.length === 0 ? (

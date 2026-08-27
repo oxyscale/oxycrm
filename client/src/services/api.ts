@@ -1276,7 +1276,10 @@ export interface InvestorReport {
     stage: string; label: string; openNow: number;
     enteredThisMonth: number; enteredLastMonth: number; change: number;
   }>;
-  projection: Array<{ month: string; monthLabel: string; projectedMrr: number }>;
+  projection: Array<{
+    month: string; monthLabel: string;
+    projectedMrr: number; buildFeeCash: number;
+  }>;
   leadSources: {
     months: string[];
     monthLabels: string[];

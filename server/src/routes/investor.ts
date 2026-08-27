@@ -589,16 +589,28 @@ function buildReport(month: string) {
      *  Snapshotted with the month so a later report can show how the
      *  forecast moved as clients were onboarded. */
     projection: (() => {
-      const out: Array<{ month: string; monthLabel: string; projectedMrr: number }> = [];
+      const out: Array<{
+        month: string; monthLabel: string;
+        projectedMrr: number; buildFeeCash: number;
+      }> = [];
       for (let i = 0; i <= 6; i++) {
         const m = shiftMonth(month, i);
         const { end: mEnd } = monthBounds(m);
+        const { start: mStart } = monthBounds(m);
         out.push({
           month: m,
           monthLabel: monthLabel(m),
           projectedMrr: clients
             .filter((c) => c.revenueStartsOn <= mEnd)
             .reduce((sum, c) => sum + (c.agreedRetainer || c.retainer), 0),
+          // One-off cash, landing in the month the retainer starts —
+          // the fee is collected in full by then. Not part of the
+          // recurring line: it arrives once, not every month.
+          buildFeeCash: Math.round(
+            clients
+              .filter((c) => c.revenueStartsOn >= mStart && c.revenueStartsOn <= mEnd)
+              .reduce((sum, c) => sum + c.oneOffOutstanding, 0) * 100,
+          ) / 100,
         });
       }
       return out;
