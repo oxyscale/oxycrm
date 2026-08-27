@@ -285,11 +285,26 @@ export function initializeDatabase(db: Database.Database): void {
     db.exec('ALTER TABLE leads ADD COLUMN converted_to_project INTEGER DEFAULT 0');
   }
 
-  // Legacy: twilio_call_sid column on call_logs. Kept so historical rows
-  // aren't broken; new rows insert NULL. Safe to ignore.
+  // twilio_call_sid on call_logs. Twilio is gone; calls are logged by
+  // hand now, so nothing has written this column since. Dropped only
+  // when every row is NULL — if any historical row still carries a SID
+  // it stays put and is reported, because that is a record of a real
+  // call and not ours to throw away.
   const callLogColumns = db.prepare("PRAGMA table_info(call_logs)").all() as { name: string }[];
-  if (!callLogColumns.some((c) => c.name === 'twilio_call_sid')) {
-    db.exec('ALTER TABLE call_logs ADD COLUMN twilio_call_sid TEXT');
+  if (callLogColumns.some((c) => c.name === 'twilio_call_sid')) {
+    try {
+      const { n } = db.prepare(
+        'SELECT COUNT(*) AS n FROM call_logs WHERE twilio_call_sid IS NOT NULL'
+      ).get() as { n: number };
+      if (n > 0) {
+        console.log(`[schema] call_logs.twilio_call_sid holds ${n} historical value(s) — left in place`);
+      } else {
+        db.exec('ALTER TABLE call_logs DROP COLUMN twilio_call_sid');
+        console.log('[schema] dropped unused column call_logs.twilio_call_sid');
+      }
+    } catch (err) {
+      console.error('[schema] could not drop twilio_call_sid:', (err as Error).message);
+    }
   }
 
   // Add follow_up_date column for scheduling follow-up calls
@@ -1843,8 +1858,8 @@ export function initializeDatabase(db: Database.Database): void {
  * Tables left behind by features that no longer exist.
  *
  *   call_intelligence   aggregate call analysis, removed with its routes
- *   pending_transcripts legacy Twilio transcript staging
- *   call_sessions       legacy Twilio call/number mapping
+ *   pending_transcripts transcript staging for in-browser calling
+ *   call_sessions       call/number mapping for in-browser calling
  *
  * Nothing in the codebase reads or writes any of them. They are dropped
  * only when empty: an unreferenced table is dead weight, but a table

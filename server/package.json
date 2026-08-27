@@ -23,7 +23,6 @@
     "helmet": "^8.1.0",
     "multer": "^1.4.5-lts.1",
     "nanoid": "^5.1.9",
-    "openai": "^6.34.0",
     "pino": "^9.5.0",
     "pino-pretty": "^13.0.0",
     "resend": "^6.10.0",

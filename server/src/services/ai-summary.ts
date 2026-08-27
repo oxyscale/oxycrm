@@ -723,7 +723,7 @@ Return ONLY valid JSON in this exact format, no other text:
 //   - leads.consolidated_summary                                (rolling history)
 //
 // Fire-and-forget — never throws. Safe to call from webhook handlers where
-// failure must not block the primary flow (e.g. Twilio recording webhook).
+// failure must not block the primary flow.
 export async function summariseAndPersistCall(callLogId: number, leadId: number): Promise<void> {
   try {
     const db = getDb();

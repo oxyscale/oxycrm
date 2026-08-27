@@ -11,8 +11,6 @@ import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import type { Lead, CallLog, ImportResult, DispositionPayload, DuplicateLead, PipelineStage, Temperature } from '../../../shared/types.js';
 import pino from 'pino';
-// summariseAndPersistCall / draftAndStoreEmailForCall were used for the
-// Whisper-on-Twilio-recording path. Manual transcript flow doesn't need them.
 
 const logger = pino({ name: 'leads-routes' });
 const router = Router();
@@ -2616,13 +2614,12 @@ router.post('/:id/disposition', (req, res, next) => {
       const userId = req.user?.id ?? null;
       const transcript = payload.transcript;
 
-      // call_sessions / pending_transcripts / twilio_call_sid were legacy
-      // Twilio plumbing. We still pass NULL for the column so the existing
-      // schema is preserved, but no lookup happens anymore.
+      // Calls are placed by hand and logged here afterwards, so there is
+      // no call reference to record — just the outcome and the transcript.
       const insertResult = db.prepare(`
-        INSERT INTO call_logs (lead_id, user_id, duration, transcript, disposition, twilio_call_sid, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(id, userId, payload.callDuration, transcript, payload.disposition, null, now);
+        INSERT INTO call_logs (lead_id, user_id, duration, transcript, disposition, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, userId, payload.callDuration, transcript, payload.disposition, now);
       createdCallLogId = Number(insertResult.lastInsertRowid);
 
       // Email Bank: for dispositions that warrant a follow-up email, insert a

@@ -68,7 +68,6 @@ export const logger = pino({
 // ============================================================
 const REQUIRED_VARS = [
   'ANTHROPIC_API_KEY',
-  'OPENAI_API_KEY',
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
   'GOOGLE_REDIRECT_URI',
