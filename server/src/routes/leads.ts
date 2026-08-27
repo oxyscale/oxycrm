@@ -504,18 +504,22 @@ router.get('/', (req, res, next) => {
 
     for (const lead of leads) {
       const p = projectMap.get(lead.id);
+      // Every project ended — treat as a lead again so they can be
+      // re-engaged, with the history still on the record.
+      const churned = !!p && !p.has_live && !p.has_building;
       lead.lifecycle = !p
         ? 'lead'
         : p.has_live
           ? 'client'
           : p.has_building
             ? 'in_build'
-            // every project ended — treat as a lead again so they can be
-            // re-engaged, with the history still on the record.
             : 'lead';
       lead.projectId = p?.latest_project_id ?? null;
       lead.projectCount = p?.project_count ?? 0;
-      lead.currentRetainer = retainerMap.get(lead.id) ?? 0;
+      // A churned client is not on a retainer any more. The rows stay in
+      // history, but showing a live rate here would contradict the
+      // report, which stopped counting them the moment the work ended.
+      lead.currentRetainer = churned ? 0 : (retainerMap.get(lead.id) ?? 0);
     }
 
     logger.info({ count: leads.length, filters: { status, leadType, category } }, 'Fetched leads');

@@ -209,6 +209,8 @@ interface SignedClient {
   revenueStartEstimated: boolean;
   daysUntilLive: number;
   isLive: boolean;
+  /** Every project ended. They were a client; they are not billing now. */
+  churned: boolean;
 }
 
 /**
@@ -247,6 +249,13 @@ function signedClients(leadTimeDays: number): SignedClient[] {
          WHERE x.lead_id = l.id
          ORDER BY x.effective_from DESC, x.id DESC LIMIT 1
       ), 0) AS agreed_retainer,
+      -- Delivery state, rolled up the same way the Leads tabs roll it
+      -- up. Revenue has to follow what is actually being delivered: a
+      -- client whose work has ended is not paying a retainer any more,
+      -- and one pulled back into build is not paying it yet.
+      (SELECT COUNT(*) FROM projects p WHERE p.lead_id = l.id) AS project_count,
+      (SELECT COUNT(*) FROM projects p WHERE p.lead_id = l.id AND p.status = 'live') AS live_count,
+      (SELECT COUNT(*) FROM projects p WHERE p.lead_id = l.id AND p.status = 'building') AS building_count,
       l.updated_at
     FROM leads l
     LEFT JOIN current_retainers r ON r.lead_id = l.id
@@ -256,6 +265,7 @@ function signedClients(leadTimeDays: number): SignedClient[] {
     project_start: string | null; live_from: string | null; one_off: number;
     won_at: string | null; retainer: number; agreed_retainer: number;
     updated_at: string; one_off_paid: number;
+    project_count: number; live_count: number; building_count: number;
   }>;
 
   return rows.map((r) => {
@@ -267,6 +277,17 @@ function signedClients(leadTimeDays: number): SignedClient[] {
       : addDays(signedOn, leadTimeDays);
     const revenueStartEstimated = !r.live_from;
     const daysUntilLive = daysBetween(today, revenueStartsOn);
+
+    // Only meaningful once there is delivery to read. A client on a
+    // retainer with no project recorded keeps the old date-based
+    // behaviour rather than being wrongly written off.
+    const hasProjects = r.project_count > 0;
+    const churned = hasProjects && r.live_count === 0 && r.building_count === 0;
+    // live_from is not cleared when a project is pulled back into
+    // build, so the date alone would keep saying "live". Require a live
+    // project before counting anyone as billing.
+    const isLive = churned ? false : (hasProjects ? r.live_count > 0 : daysUntilLive <= 0);
+
     return {
       leadId: r.lead_id,
       company: r.company,
@@ -280,7 +301,8 @@ function signedClients(leadTimeDays: number): SignedClient[] {
       revenueStartsOn,
       revenueStartEstimated,
       daysUntilLive,
-      isLive: daysUntilLive <= 0,
+      isLive,
+      churned,
     };
   });
 }
@@ -406,8 +428,13 @@ function buildReport(month: string) {
 
   // ── clients + MRR split by revenue start ──
   const clients = signedClients(settings.revenueLeadDays);
-  const crmLiveMrr = clients.filter((c) => c.isLive).reduce((s, c) => s + c.retainer, 0);
-  const notYetLiveMrr = clients.filter((c) => !c.isLive).reduce((s, c) => s + c.retainer, 0);
+  const active = clients.filter((c) => !c.churned);
+  const churnedCount = clients.length - active.length;
+  const crmLiveMrr = active.filter((c) => c.isLive).reduce((s, c) => s + c.retainer, 0);
+  // Signed and agreed but not yet billing. Uses the agreed rate, since a
+  // retainer starting on go-live has no current row yet.
+  const notYetLiveMrr = active.filter((c) => !c.isLive)
+    .reduce((s, c) => s + (c.retainer || c.agreedRetainer), 0);
   // The override exists because the CRM can lag reality; a value of 0 is
   // a legitimate override, so only NULL falls back.
   const liveMrr = inputs?.live_mrr_override ?? crmLiveMrr;
@@ -489,12 +516,17 @@ function buildReport(month: string) {
   const openPipelineOneOff = openRows.reduce((s, r) => s + r.one_off, 0);
 
   // ── signed this month ──
-  const signedThisMonthList = clients.filter(
+  // Signed and still with us. Someone who signed and left inside the
+  // same month is not new revenue.
+  const signedThisMonthList = active.filter(
     (c) => c.signedOn >= start && c.signedOn <= end,
   );
   const signedThisMonth = {
     count: signedThisMonthList.length,
-    mrr: signedThisMonthList.reduce((s, c) => s + c.retainer, 0),
+    // The agreed rate, not the current one: a client signed this month
+    // whose retainer starts on go-live has no current row yet, and
+    // reporting them as zero new revenue would be wrong.
+    mrr: signedThisMonthList.reduce((s, c) => s + (c.retainer || c.agreedRetainer), 0),
     oneOff: signedThisMonthList.reduce((s, c) => s + c.oneOff, 0),
   };
 
@@ -681,6 +713,8 @@ function buildReport(month: string) {
      *  so a fee still outstanding past that date is money that should
      *  already be in. */
     buildFees: (() => {
+      // Churned clients stay in this list on purpose — an unpaid build
+      // fee is still owed after the work stops.
       const withFee = clients.filter((c) => c.oneOffOutstanding > 0);
       const overdue = withFee.filter((c) => c.revenueStartsOn <= today);
       return {
