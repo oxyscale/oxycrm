@@ -914,13 +914,6 @@ export default function LeadProfilePage() {
       : leadProjects.some((p) => p.status === 'building')
         ? 'in_build'
         : 'lead';
-  // Retainer in effect today. Future-dated changes don't count yet.
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const currentRetainer =
-    retainers
-      .filter((r) => r.effectiveFrom <= todayIso)
-      .sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : a.effectiveFrom > b.effectiveFrom ? -1 : b.id - a.id))[0]
-      ?.monthlyAmount ?? 0;
 
   // ── Render ─────────────────────────────────────────────────
 
@@ -2072,33 +2065,31 @@ export default function LeadProfilePage() {
                 )}
               </div>
 
-              {/* Money. For a prospect this is an estimate of what they'd
-                  pay monthly; once they're a client the real figure comes
-                  from the retainer history below and this is read-only. */}
+              {/* Money, for prospects only. Once they sign, the agreed
+                  retainer in the Client panel below is the figure — and
+                  it is the only one, so there is nothing to reconcile. */}
+              {lifecycle !== 'client' && (
               <div>
                 <p className="text-ink-dim text-[11px] uppercase tracking-wider mb-0.5">
-                  {lifecycle === 'client' ? 'Monthly Revenue' : 'Estimated Monthly Revenue'}
+                  Estimated monthly revenue
                 </p>
-                {lifecycle === 'client' ? (
-                  <p className="text-ink text-sm font-medium">
-                    {currentRetainer > 0
-                      ? <>${currentRetainer.toLocaleString('en-AU')}<span className="text-ink-dim font-normal">/mo</span></>
-                      : <span className="text-ink-dim italic font-normal">Not set</span>}
-                  </p>
-                ) : (
-                  <DealValueEditor
-                    value={lead.dealValue ?? 0}
-                    onSave={async (val) => {
-                      try {
-                        const updated = await api.updateLead(lead.id, { dealValue: val } as Partial<Lead>);
-                        setLead(updated);
-                      } catch (err) {
-                        console.error('Failed to update deal value:', err);
-                      }
-                    }}
-                  />
-                )}
+                {/* Prospects only. Once they sign, the agreed retainer in
+                    the Client panel below is the real figure — showing
+                    both on one page meant two "Monthly Revenue" fields
+                    that looked like they should agree and couldn't. */}
+                <DealValueEditor
+                  value={lead.dealValue ?? 0}
+                  onSave={async (val) => {
+                    try {
+                      const updated = await api.updateLead(lead.id, { dealValue: val } as Partial<Lead>);
+                      setLead(updated);
+                    } catch (err) {
+                      console.error('Failed to update deal value:', err);
+                    }
+                  }}
+                />
               </div>
+              )}
 
               {/* Last Called removed (July 2026) — call and contact dates
                   live in the notes and activity timeline, which carry the

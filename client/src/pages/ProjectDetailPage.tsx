@@ -352,14 +352,32 @@ export default function ProjectDetailPage() {
       <div className="flex items-center flex-wrap gap-x-6 gap-y-2 mb-6 bg-paper border border-hair-soft rounded-xl px-5 py-3">
         {/* Money comes from the client's retainer history, not the legacy
             one-off value field that was showing $0 for everyone. */}
+        {/* Read-only on purpose. The retainer belongs to the CLIENT, not
+            the project — a client with two builds has one monthly figure,
+            not two. This displays it and points at where to change it. */}
         <div className="flex items-center gap-1.5">
           <DollarSign size={14} className="text-ink-dim" />
-          <span className="text-ink text-sm font-medium">
-            {retainer > 0 ? `${formatCurrency(retainer)}/mo` : 'No retainer set'}
-          </span>
-          {project.retainerSince && (
-            <span className="text-ink-dim text-xs">
-              since {formatDate(project.retainerSince)}
+          {retainer > 0 ? (
+            <>
+              <span className="text-ink text-sm font-medium">
+                {formatCurrency(retainer)}/mo
+              </span>
+              <span className="text-ink-dim text-xs">
+                {project.retainerSince
+                  ? `from the client record, since ${formatDate(project.retainerSince)}`
+                  : 'from the client record'}
+              </span>
+            </>
+          ) : project.leadId ? (
+            <button
+              onClick={() => navigate(`/leads/${project.leadId}`)}
+              className="text-ink-dim text-sm hover:text-sky-ink transition-colors"
+            >
+              Retainer is set on the client record
+            </button>
+          ) : (
+            <span className="text-ink-dim text-sm">
+              No client linked, so no retainer
             </span>
           )}
         </div>
