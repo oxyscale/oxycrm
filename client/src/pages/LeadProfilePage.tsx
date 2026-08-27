@@ -2341,6 +2341,9 @@ function ClientPanel({
   const [name, setName] = useState('');
   const [brief, setBrief] = useState('');
   const [retainerInput, setRetainerInput] = useState('');
+  // When the deal was actually done. Defaulting this to today made every
+  // client entered in one sitting look like it signed that month.
+  const [signedOn, setSignedOn] = useState(todayInMelbourne());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -2364,6 +2367,7 @@ function ClientPanel({
     setName('');
     setBrief('');
     setRetainerInput('');
+    setSignedOn(todayInMelbourne());
     setError(null);
   };
 
@@ -2375,6 +2379,7 @@ function ClientPanel({
       await api.startProject(lead.id, {
         name: name.trim() || undefined,
         description: brief.trim() || null,
+        startDate: signedOn || undefined,
         // A first project SETS the retainer; later work ADDS to it, so
         // the same input means "what this is worth per month" either way.
         ...(Number.isFinite(amount) && amount !== 0
@@ -2599,6 +2604,21 @@ function ClientPanel({
                 {Math.max(0, currentAmount + parseFloat(retainerInput)).toLocaleString('en-AU')}/mo
               </p>
             )}
+          </div>
+          <div>
+            <label className="block text-ink-dim text-[10px] font-medium uppercase tracking-wider mb-1.5">
+              Signed on
+            </label>
+            <input
+              type="date"
+              value={signedOn}
+              onChange={(e) => setSignedOn(e.target.value)}
+              className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]"
+            />
+            <p className="text-ink-dim text-xs mt-1">
+              Back-date it if the deal was done earlier. Revenue start is
+              projected from here.
+            </p>
           </div>
           {error && <p className="text-risk text-xs">{error}</p>}
           <div className="flex items-center gap-2 pt-1">
