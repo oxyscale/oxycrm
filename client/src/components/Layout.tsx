@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { Home, Users, Kanban, Briefcase, HelpCircle, Settings, Inbox, LogOut, FileText, ListChecks, Activity } from 'lucide-react';
+import { Home, Users, Kanban, Briefcase, HelpCircle, Settings, Inbox, LogOut, FileText, ListChecks, HeartPulse } from 'lucide-react';
 import SearchBar from './SearchBar';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -15,7 +15,7 @@ const navItems = [
   { path: '/email-bank', icon: Inbox, label: 'Email Bank' },
   { path: '/projects', icon: Briefcase, label: 'Active' },
   { path: '/reports', icon: FileText, label: 'Reports' },
-  { path: '/health', icon: Activity, label: 'Health' },
+  { path: '/health', icon: HeartPulse, label: 'Health' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
