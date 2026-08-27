@@ -1335,6 +1335,10 @@ export function initializeDatabase(db: Database.Database): void {
       -- what actually came in. Facts, not a modelled run rate.
       actual_expenses    REAL,
       actual_revenue     REAL,
+      -- Total current liabilities from the balance sheet: PAYG withheld,
+      -- super payable, wages payable, net of any GST refund. Money in
+      -- the bank that belongs to someone else.
+      current_liabilities REAL,
       status             TEXT NOT NULL DEFAULT 'draft',
       snapshot           TEXT,                  -- JSON, written on finalise
       finalised_at       TEXT,
@@ -1394,6 +1398,7 @@ export function initializeDatabase(db: Database.Database): void {
   // For databases created before actuals were captured.
   addColumnIfMissing(db, 'investor_months', 'actual_expenses', 'REAL');
   addColumnIfMissing(db, 'investor_months', 'actual_revenue', 'REAL');
+  addColumnIfMissing(db, 'investor_months', 'current_liabilities', 'REAL');
 
   // Defaults, written once. Changing them later is a settings edit, not
   // a code change — the 60-day lead time in particular lives in exactly
@@ -1784,6 +1789,28 @@ export function initializeDatabase(db: Database.Database): void {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[schema] forecast migration failed:', err);
+    }
+  }
+
+  // August's current liabilities, from the balance sheet at 27 Aug 2026:
+  // PAYG 4,031 + super 840 + wages 22, net of a 136.99 GST refund.
+  const liabSeeded = db
+    .prepare("SELECT value FROM settings WHERE key = 'investor_liabilities_aug26_v1'")
+    .get() as { value: string } | undefined;
+
+  if (!liabSeeded) {
+    try {
+      db.prepare(`
+        UPDATE investor_months
+           SET current_liabilities = 4756.01, updated_at = datetime('now')
+         WHERE month = '2026-08' AND status != 'final' AND current_liabilities IS NULL
+      `).run();
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('investor_liabilities_aug26_v1', ?)"
+      ).run(new Date().toISOString());
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[schema] liabilities seed failed:', err);
     }
   }
 

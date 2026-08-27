@@ -1267,6 +1267,8 @@ export interface InvestorReport {
     committedMrr: number;
     notYetLiveMrr: number;
     bankBalance: number;
+    currentLiabilities: number;
+    freeCash: number;
     runway: InvestorRunway;
     forecastRunway: InvestorRunway;
     openPipelineMrr: number;
@@ -1320,7 +1322,8 @@ export interface InvestorReport {
     };
   };
   position: {
-    bankBalance: number; liveMrr: number; committedMrr: number;
+    bankBalance: number; currentLiabilities: number; freeCash: number;
+    liveMrr: number; committedMrr: number;
     committedIncoming: number;
     runway: InvestorRunway; forecastRunway: InvestorRunway;
     avgNetBurn: number | null;
@@ -1347,6 +1350,7 @@ export interface InvestorReport {
     potWagesDrawn: number;
     actualExpenses: number | null;
     actualRevenue: number | null;
+    currentLiabilities: number | null;
   };
 }
 
@@ -1398,6 +1402,7 @@ export async function saveInvestorInputs(
     bankBalance?: number | null; liveMrrOverride?: number | null;
     potWagesDrawn?: number;
     actualExpenses?: number | null; actualRevenue?: number | null;
+    currentLiabilities?: number | null;
   },
 ): Promise<InvestorReport> {
   return request(`/investor/report/${month}/inputs`, { method: 'PATCH', body: JSON.stringify(data) });

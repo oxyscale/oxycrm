@@ -354,6 +354,7 @@ function buildReport(month: string) {
   ).get(month) as {
     month: string; bank_balance: number | null; live_mrr_override: number | null;
     pot_wages_drawn: number; status: string; snapshot: string | null; finalised_at: string | null;
+    current_liabilities: number | null;
   } | undefined;
 
   // ── clients + MRR split by revenue start ──
@@ -525,9 +526,14 @@ function buildReport(month: string) {
 
   // ── position ──
   const bankBalance = inputs?.bank_balance ?? 0;
+  // PAYG withheld, super and wages payable are sitting in the bank but
+  // belong to the ATO, the funds and the staff. Netting them off is the
+  // difference between what the account says and what can be spent.
+  const currentLiabilities = inputs?.current_liabilities ?? 0;
+  const freeCash = Math.round((bankBalance - currentLiabilities) * 100) / 100;
   // Remaining wage pot is committed incoming cash, so it counts toward
   // runway — but it is deliberately reported separately from the bank.
-  const cashAvailable = bankBalance + investment.wages.remaining;
+  const cashAvailable = freeCash + investment.wages.remaining;
   const runway = safeRunway(cashAvailable, avgNetBurn);
   // Forecast assumes the not-yet-live retainers land, reducing the burn
   // by that amount each month.
@@ -579,6 +585,8 @@ function buildReport(month: string) {
       committedMrr,
       notYetLiveMrr,
       bankBalance,
+      currentLiabilities,
+      freeCash,
       runway,
       forecastRunway,
       openPipelineMrr,
@@ -649,6 +657,8 @@ function buildReport(month: string) {
     investment,
     position: {
       bankBalance,
+      currentLiabilities,
+      freeCash,
       liveMrr,
       committedMrr,
       committedIncoming: investment.wages.remaining,
@@ -671,6 +681,7 @@ function buildReport(month: string) {
       potWagesDrawn: wagesDrawn,
       actualExpenses: thisMonthActual?.expenses ?? null,
       actualRevenue: thisMonthActual?.revenue ?? null,
+      currentLiabilities: inputs?.current_liabilities ?? null,
     },
   };
 }
@@ -800,6 +811,7 @@ const inputsSchema = z.object({
   potWagesDrawn: z.number().min(0).optional(),
   actualExpenses: z.number().min(0).nullable().optional(),
   actualRevenue: z.number().min(0).nullable().optional(),
+  currentLiabilities: z.number().nullable().optional(),
 });
 
 /** PATCH /api/investor/report/:month/inputs */
@@ -844,6 +856,10 @@ router.patch('/report/:month/inputs', (req, res, next) => {
     }
     if (body.actualRevenue !== undefined) {
       sets.push('actual_revenue = @actualRevenue'); params.actualRevenue = body.actualRevenue;
+    }
+    if (body.currentLiabilities !== undefined) {
+      sets.push('current_liabilities = @currentLiabilities');
+      params.currentLiabilities = body.currentLiabilities;
     }
     if (sets.length) {
       sets.push("updated_at = datetime('now')");

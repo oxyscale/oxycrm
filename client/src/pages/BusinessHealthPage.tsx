@@ -610,7 +610,9 @@ export default function BusinessHealthPage() {
             <div className="grid grid-cols-3 gap-10">
               <Lead label="In the bank" value={aud(t.bankBalance)}
                 delta={<Delta current={t.bankBalance} previous={pt?.bankBalance} money />}
-                note={`Plus ${aud(report.position.committedIncoming)} still to come from the wages pot`} />
+                note={t.currentLiabilities > 0
+                  ? `${aud(t.freeCash)} of it is free — ${aud(t.currentLiabilities)} is owed to the ATO and super. Plus ${aud(report.position.committedIncoming)} still to come from the wages pot.`
+                  : `Plus ${aud(report.position.committedIncoming)} still to come from the wages pot`} />
               <Lead label="Runway"
                 value={runwayValue(t.runway)}
                 unit={t.runway.state === 'months' ? 'months' : undefined}
@@ -892,9 +894,10 @@ export default function BusinessHealthPage() {
                 <p className="text-ink-dim text-xs mt-4 leading-relaxed max-w-[62ch]">
                   Reconciled from the accounts each month, so wages and
                   superannuation are already inside these figures. Runway is{' '}
-                  {aud(t.bankBalance)} in the bank plus{' '}
-                  {aud(report.position.committedIncoming)} still to come from the
-                  wages pot, divided by the average monthly burn above.
+                  {aud(t.freeCash)} of free cash — the bank balance less{' '}
+                  {aud(t.currentLiabilities)} of PAYG, super and wages still to be
+                  paid out — plus {aud(report.position.committedIncoming)} still to
+                  come from the wages pot, divided by the average monthly burn.
                 </p>
               </>
             )}
@@ -1383,6 +1386,9 @@ function InputsPanel({
   const [actualRevenue, setActualRevenue] = useState(
     report.inputs.actualRevenue?.toString() ?? '',
   );
+  const [liabilities, setLiabilities] = useState(
+    report.inputs.currentLiabilities?.toString() ?? '',
+  );
 
   const [drawDate, setDrawDate] = useState(report.periodEnd);
   const [drawAmount, setDrawAmount] = useState('');
@@ -1419,6 +1425,7 @@ function InputsPanel({
         liveMrrOverride: mrrOverride === '' ? null : Number(mrrOverride),
         actualExpenses: actualExpenses === '' ? null : Number(actualExpenses),
         actualRevenue: actualRevenue === '' ? null : Number(actualRevenue),
+        currentLiabilities: liabilities === '' ? null : Number(liabilities),
       });
       setSaved(true);
       onChanged();
@@ -1483,11 +1490,11 @@ function InputsPanel({
           P&L once everything is reconciled. */}
       <FormSection title={`Every month — ${report.monthLabel}`}>
         <p className="text-ink-dim text-xs mb-4 leading-relaxed">
-          Reconcile everything in Xero, open the P&amp;L, then fill in these
-          three. Nothing below this needs touching unless something has
-          actually changed.
+          Reconcile everything in Xero, then take the first three off the P&amp;L
+          and the fourth off the balance sheet. Nothing below this needs
+          touching unless something has actually changed.
         </p>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <Field label="1 · Bank balance" hint="At month end.">
             <input type="number" step="0.01" value={bank} onChange={(e) => setBank(e.target.value)}
               placeholder="0.00" className={input} />
@@ -1501,6 +1508,12 @@ function InputsPanel({
           <Field label="3 · Revenue received" hint="Total trading income.">
             <input type="number" step="0.01" value={actualRevenue}
               onChange={(e) => setActualRevenue(e.target.value)}
+              placeholder="0.00" className={input} />
+          </Field>
+          <Field label="4 · Total current liabilities"
+            hint="Off the balance sheet. PAYG, super and wages owed — money in the bank that is not yours.">
+            <input type="number" step="0.01" value={liabilities}
+              onChange={(e) => setLiabilities(e.target.value)}
               placeholder="0.00" className={input} />
           </Field>
         </div>
