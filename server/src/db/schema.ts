@@ -1467,9 +1467,14 @@ export function initializeDatabase(db: Database.Database): void {
         const insertDraw = db.prepare(
           'INSERT INTO investor_wage_draws (drawn_on, item, amount) VALUES (?, ?, ?)'
         );
-        for (const on of ['2026-05-27', '2026-06-27', '2026-07-27']) {
-          insertDraw.run(on, 'Monthly instalment', 10000);
-        }
+        // Actual receipts, taken from the bank feed. They are not on a
+        // fixed day of the month, and came from two different senders.
+        const instalments: Array<[string, string]> = [
+          ['2026-06-01', 'Investment contribution — SBJS'],
+          ['2026-07-01', 'July payment — Miller Leith'],
+          ['2026-08-04', 'Monthly investment — SBJS Group'],
+        ];
+        for (const [on, label] of instalments) insertDraw.run(on, label, 10000);
 
         // Founder wages as the known part of the monthly cost base.
         // Subscriptions are deliberately left for Jordan to enter — the
@@ -1488,6 +1493,45 @@ export function initializeDatabase(db: Database.Database): void {
       ).run(new Date().toISOString());
     } catch (err) {
       console.error('[schema] expense tracker import failed:', err);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // The first import dated the wage instalments to the 27th of each
+  // month, inferred from the effective date. The bank feed shows they
+  // actually landed 1 Jun, 1 Jul and 4 Aug, from two different senders.
+  //
+  // Rewrites only rows still carrying the assumed dates and amounts, so
+  // anything already corrected or added by hand is left alone.
+  // ─────────────────────────────────────────────────────────────────
+  const wageDatesFixed = db
+    .prepare("SELECT value FROM settings WHERE key = 'investor_wage_dates_v2'")
+    .get() as { value: string } | undefined;
+
+  if (!wageDatesFixed) {
+    try {
+      const fixes: Array<[string, string, string]> = [
+        ['2026-05-27', '2026-06-01', 'Investment contribution — SBJS'],
+        ['2026-06-27', '2026-07-01', 'July payment — Miller Leith'],
+        ['2026-07-27', '2026-08-04', 'Monthly investment — SBJS Group'],
+      ];
+      const fix = db.prepare(
+        `UPDATE investor_wage_draws
+            SET drawn_on = ?, item = ?
+          WHERE drawn_on = ? AND amount = 10000 AND item = 'Monthly instalment'`,
+      );
+      let moved = 0;
+      for (const [from, to, label] of fixes) moved += fix.run(to, label, from).changes;
+      if (moved > 0) {
+        // eslint-disable-next-line no-console
+        console.log(`[schema] Corrected ${moved} wage instalment dates from the bank feed`);
+      }
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('investor_wage_dates_v2', ?)"
+      ).run(new Date().toISOString());
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[schema] wage date correction failed:', err);
     }
   }
 
