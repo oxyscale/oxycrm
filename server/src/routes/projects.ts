@@ -31,6 +31,7 @@ interface ProjectRow {
   live_from: string | null;
   free_days: number;
   build_fee: number;
+  build_fee_paid: number;
   created_at: string;
   updated_at: string;
 }
@@ -58,6 +59,7 @@ function mapProjectRow(row: ProjectRow): Project {
     liveFrom: row.live_from,
     freeDays: row.free_days ?? 30,
     buildFee: row.build_fee ?? 0,
+    buildFeePaid: row.build_fee_paid ?? 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -95,6 +97,7 @@ const updateProjectSchema = z.object({
   status: z.enum(['building', 'live', 'ended']).optional(),
   freeDays: z.number().int().min(0).max(365).optional(),
   buildFee: z.number().min(0).optional(),
+  buildFeePaid: z.number().min(0).optional(),
   liveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   notes: z.string().nullable().optional(),
   value: z.number().min(0).optional(),
@@ -352,6 +355,10 @@ router.patch('/:id', (req, res, next) => {
     if (updates.buildFee !== undefined) {
       setClauses.push('build_fee = @buildFee');
       params.buildFee = updates.buildFee;
+    }
+    if (updates.buildFeePaid !== undefined) {
+      setClauses.push('build_fee_paid = @buildFeePaid');
+      params.buildFeePaid = updates.buildFeePaid;
     }
     if (updates.freeDays !== undefined) {
       setClauses.push('free_days = @freeDays');

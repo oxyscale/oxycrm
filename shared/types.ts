@@ -246,9 +246,12 @@ export interface Project {
   /** Length of the complimentary period after go-live, in days.
    *  Not surfaced yet — kept for a later revision. */
   freeDays: number;
-  /** Upfront one-off fee for building this, separate from the monthly
-   *  retainer. Together they are the full revenue picture. */
+  /** Total agreed one-off fee for building this, separate from the
+   *  monthly retainer. */
   buildFee: number;
+  /** How much of that fee has been invoiced so far. Builds are billed in
+   *  parts, so total and received are different numbers. */
+  buildFeePaid: number;
   createdAt: string;
   updatedAt: string;
   tasks?: ProjectTask[];

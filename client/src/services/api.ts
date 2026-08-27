@@ -1236,6 +1236,8 @@ export interface InvestorSignedClient {
   signedOn: string;
   retainer: number;
   oneOff: number;
+  oneOffPaid: number;
+  oneOffOutstanding: number;
   revenueStartsOn: string;
   daysUntilLive: number;
   isLive: boolean;

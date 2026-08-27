@@ -58,9 +58,11 @@ export default function ProjectDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
 
-  // Build fee editing
+  // Build fee editing — total agreed, and how much has been invoiced.
   const [editingFee, setEditingFee] = useState(false);
   const [feeDraft, setFeeDraft] = useState('');
+  const [editingPaid, setEditingPaid] = useState(false);
+  const [paidDraft, setPaidDraft] = useState('');
 
   // Description editing
   const [description, setDescription] = useState('');
@@ -125,6 +127,20 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error('Failed to rename project:', err);
       setSaveError('Could not save that name. Please try again.');
+    }
+  };
+
+  const commitPaid = async () => {
+    if (!project) return;
+    const amount = Number(paidDraft);
+    setEditingPaid(false);
+    if (!Number.isFinite(amount) || amount < 0 || amount === project.buildFeePaid) return;
+    setSaveError(null);
+    try {
+      setProject(await api.updateProject(project.id, { buildFeePaid: amount }));
+    } catch (err) {
+      console.error('Failed to save invoiced amount:', err);
+      setSaveError('Could not save that amount. Please try again.');
     }
   };
 
@@ -383,6 +399,46 @@ export default function ProjectDetailPage() {
             </button>
           )}
         </div>
+        {project.buildFee > 0 && (
+          <>
+            <div className="w-px h-4 bg-hair-soft" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-ink-dim text-sm">Invoiced</span>
+              {editingPaid ? (
+                <>
+                  <span className="text-ink-dim text-sm">$</span>
+                  <input
+                    autoFocus
+                    type="number"
+                    value={paidDraft}
+                    onChange={(e) => setPaidDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitPaid();
+                      if (e.key === 'Escape') setEditingPaid(false);
+                    }}
+                    onBlur={commitPaid}
+                    className="w-24 bg-cream border border-hair rounded-md px-2 py-0.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.4)]"
+                  />
+                </>
+              ) : (
+                <button
+                  onClick={() => {
+                    setPaidDraft(project.buildFeePaid ? String(project.buildFeePaid) : '');
+                    setEditingPaid(true);
+                  }}
+                  className="text-ink text-sm font-medium hover:text-sky-ink transition-colors flex items-center gap-1"
+                  title="How much of the build fee has been invoiced"
+                >
+                  {formatCurrency(project.buildFeePaid)}
+                  <span className="text-ink-dim font-normal">
+                    of {formatCurrency(project.buildFee)}
+                  </span>
+                  <Pencil size={10} className="text-ink-dim" />
+                </button>
+              )}
+            </div>
+          </>
+        )}
         <div className="w-px h-4 bg-hair-soft" />
         <div className="flex items-center gap-1.5">
           <Calendar size={14} className="text-ink-dim" />

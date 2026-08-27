@@ -1028,6 +1028,12 @@ export function initializeDatabase(db: Database.Database): void {
   // earlier migration seeded retainers from that, so reusing it would
   // double-count anyone caught by it.
   addColumnIfMissing(db, 'projects', 'build_fee', 'REAL NOT NULL DEFAULT 0');
+  // How much of the build fee has actually been invoiced. Builds are
+  // billed in parts — half up front, the rest on delivery — and how long
+  // a build takes is not known when it is signed. Tracking total and
+  // received separately is what makes the outstanding balance real
+  // rather than assumed.
+  addColumnIfMissing(db, 'projects', 'build_fee_paid', 'REAL NOT NULL DEFAULT 0');
 
   // Backfill go-live dates for clients who were already live before the
   // column existed. Until Aug 2026 the go-live handler stamped end_date,

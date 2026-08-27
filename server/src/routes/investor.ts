@@ -146,6 +146,8 @@ interface SignedClient {
   signedOn: string;
   retainer: number;
   oneOff: number;
+  oneOffPaid: number;
+  oneOffOutstanding: number;
   revenueStartsOn: string;
   daysUntilLive: number;
   isLive: boolean;
@@ -172,6 +174,7 @@ function signedClients(leadTimeDays: number): SignedClient[] {
       (SELECT MIN(p.start_date) FROM projects p WHERE p.lead_id = l.id) AS project_start,
       (SELECT MIN(p.live_from)  FROM projects p WHERE p.lead_id = l.id AND p.status = 'live') AS live_from,
       (SELECT COALESCE(SUM(p.build_fee), 0) FROM projects p WHERE p.lead_id = l.id) AS one_off,
+      (SELECT COALESCE(SUM(p.build_fee_paid), 0) FROM projects p WHERE p.lead_id = l.id) AS one_off_paid,
       (SELECT MIN(a.created_at) FROM activities a
         WHERE a.lead_id = l.id AND a.type = 'stage_change'
           AND (a.title IN ('Moved to Won', 'Converted to project')
@@ -184,7 +187,7 @@ function signedClients(leadTimeDays: number): SignedClient[] {
   `).all() as Array<{
     lead_id: number; company: string; contact: string;
     project_start: string | null; live_from: string | null; one_off: number;
-    won_at: string | null; retainer: number; updated_at: string;
+    won_at: string | null; retainer: number; updated_at: string; one_off_paid: number;
   }>;
 
   return rows.map((r) => {
@@ -200,6 +203,8 @@ function signedClients(leadTimeDays: number): SignedClient[] {
       signedOn,
       retainer: r.retainer,
       oneOff: r.one_off,
+      oneOffPaid: r.one_off_paid,
+      oneOffOutstanding: Math.max(0, Math.round((r.one_off - r.one_off_paid) * 100) / 100),
       revenueStartsOn,
       daysUntilLive,
       isLive: daysUntilLive <= 0,

@@ -392,7 +392,7 @@ export default function InvestorReportPage() {
   const t = report.tiles;
   const pt = prev?.tiles;
   // One-off fees still to be invoiced on the builds in flight.
-  const upcomingBuildFees = report.signedNotYetLive.reduce((sum, c) => sum + c.oneOff, 0);
+  const upcomingBuildFees = report.signedNotYetLive.reduce((sum, c) => sum + c.oneOffOutstanding, 0);
   const lsTotals = report.leadSources.totals;
   const leadsInThisMonth = lsTotals[lsTotals.length - 1] ?? 0;
   const prevLeadsIn = lsTotals.length > 1 ? lsTotals[lsTotals.length - 2] : undefined;
@@ -846,7 +846,7 @@ export default function InvestorReportPage() {
                 ))}
                 {upcomingBuildFees > 0 && (
                   <p className="text-ink text-sm mt-3">
-                    Plus {aud(upcomingBuildFees)} in build fees due on delivery.
+                    Plus {aud(upcomingBuildFees)} of build fees still to invoice.
                   </p>
                 )}
                 <p className="text-ink-dim text-xs mt-3 leading-relaxed">
