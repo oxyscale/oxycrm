@@ -1494,6 +1494,23 @@ export async function createShareLink(
   });
 }
 
+export interface ShareLink {
+  token: string;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  viewCount: number;
+  lastViewedAt: string | null;
+}
+
+export async function listShareLinks(month: string): Promise<ShareLink[]> {
+  return request(`/investor/report/${month}/share`);
+}
+
+export async function revokeShareLink(token: string): Promise<{ success: true }> {
+  return request(`/investor/share/${token}`, { method: 'DELETE' });
+}
+
 export async function emailInvestorReport(
   month: string,
   data: { html: string; text?: string; subject?: string; to?: string[] },

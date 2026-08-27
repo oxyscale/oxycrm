@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Loader2, Lock, Unlock, Printer, Send, Plus, Trash2, Check, X,
-  ArrowUp, ArrowDown, Minus, Settings as SettingsIcon,
+  ArrowUp, ArrowDown, Minus, Settings as SettingsIcon, AlertTriangle,
 } from 'lucide-react';
 import * as api from '../services/api';
 import type {
@@ -582,6 +582,7 @@ export default function BusinessHealthPage() {
 
       {showCompose && settings && report && (
         <ComposePanel
+          locked={locked}
           report={report}
           recipients={settings.distributionList}
           busy={busy}
@@ -1322,11 +1323,12 @@ function FormSection({
  * wall of figures with no greeting reads as automated.
  */
 function ComposePanel({
-  report, recipients, busy, onCancel, onSend,
+  report, recipients, busy, locked, onCancel, onSend,
 }: {
   report: InvestorReport;
   recipients: string[];
   busy: boolean;
+  locked: boolean;
   onCancel: () => void;
   onSend: (to: string[], note: string, subject: string) => void;
 }) {
@@ -1354,6 +1356,17 @@ function ComposePanel({
           <X size={16} />
         </button>
       </div>
+
+      {!locked && (
+        <div className="flex items-start gap-2.5 mb-4 rounded-lg border border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.06)] px-3 py-2.5">
+          <AlertTriangle size={14} className="text-[#b45309] flex-shrink-0 mt-0.5" />
+          <p className="text-[#7c4a06] text-xs leading-relaxed">
+            This month is still a draft, so the copy they open will be stamped
+            <span className="font-medium"> Draft</span>. Finalise it first if you
+            want the numbers locked.
+          </p>
+        </div>
+      )}
 
       <Field label="Subject">
         <input value={subject} onChange={(e) => setSubject(e.target.value)}
@@ -1393,6 +1406,8 @@ function ComposePanel({
         ))}
       </div>
 
+      <ShareLinks month={report.month} />
+
       <div className="flex items-center justify-between gap-3 mt-5">
         <p className="text-ink-dim text-xs max-w-[26rem] leading-relaxed">
           They get a short note and a button. It opens this report in their
@@ -1409,6 +1424,71 @@ function ComposePanel({
             {selected.length === 1 ? 'Send to 1' : `Send to ${selected.length}`}
           </PillButton>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Links already out in the world for this month. A link cannot be
+ * un-sent, but it can be killed — which is the whole point of showing
+ * them here rather than burying them in settings.
+ */
+function ShareLinks({ month }: { month: string }) {
+  const [links, setLinks] = useState<api.ShareLink[] | null>(null);
+  const [working, setWorking] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setLinks(await api.listShareLinks(month));
+    } catch {
+      setLinks([]);
+    }
+  }, [month]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const revoke = async (token: string) => {
+    if (!window.confirm('Revoke this link? Anyone holding it will stop being able to open the report.')) return;
+    setWorking(token);
+    try {
+      await api.revokeShareLink(token);
+      await load();
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  const now = Date.now();
+  const live = (links ?? []).filter(
+    (l) => !l.revokedAt && new Date(l.expiresAt).getTime() > now,
+  );
+  if (live.length === 0) return null;
+
+  const day = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+
+  return (
+    <div className="mt-5 pt-4 border-t border-hair-soft">
+      <Micro>Links already out there</Micro>
+      <div className="mt-2 space-y-1.5">
+        {live.map((l) => (
+          <div key={l.token} className="flex items-center justify-between gap-3">
+            <p className="text-ink-muted text-xs leading-relaxed truncate">
+              Sent {day(l.createdAt)} &middot;{' '}
+              {l.viewCount === 0
+                ? 'not opened yet'
+                : `opened ${l.viewCount} time${l.viewCount === 1 ? '' : 's'}`}
+              {' '}&middot; expires {day(l.expiresAt)}
+            </p>
+            <button
+              onClick={() => revoke(l.token)}
+              disabled={working === l.token}
+              className="flex-shrink-0 text-xs text-ink-dim hover:text-[#b91c1c] disabled:opacity-40">
+              {working === l.token ? 'Revoking' : 'Revoke'}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );

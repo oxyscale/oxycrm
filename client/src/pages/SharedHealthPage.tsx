@@ -96,8 +96,17 @@ export default function SharedHealthPage() {
       </div>
 
       <div className="print-page-padding px-6 py-8">
-        {/* Our own rendered markup, captured after React escaped it. */}
-        <div dangerouslySetInnerHTML={{ __html: data.html }} />
+        {/*
+          Same wrapper the app uses, so the document reads identically here
+          and prints identically from here. The print stylesheet keys off
+          .print-document for margins and type size, so this class is not
+          decoration — without it the shared PDF comes out different from
+          the one produced inside the app.
+        */}
+        <div
+          className="print-document bg-paper border border-hair-soft rounded-2xl px-12 py-10 max-w-[900px] mx-auto"
+          dangerouslySetInnerHTML={{ __html: data.html }}
+        />
       </div>
 
       <div className="no-print max-w-[900px] mx-auto px-6 pb-10">
