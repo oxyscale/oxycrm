@@ -1270,25 +1270,26 @@ function InputsPanel({
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <FormSection title={`Figures for ${report.monthLabel}`}>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Bank balance at month end">
-            <input type="number" value={bank} onChange={(e) => setBank(e.target.value)}
-              placeholder="0" className={input} />
+      {/* The monthly job, and nothing else. Three numbers off the Xero
+          P&L once everything is reconciled. */}
+      <FormSection title={`Every month — ${report.monthLabel}`}>
+        <p className="text-ink-dim text-xs mb-4 leading-relaxed">
+          Reconcile everything in Xero, open the P&amp;L, then fill in these
+          three. Nothing below this needs touching unless something has
+          actually changed.
+        </p>
+        <div className="grid grid-cols-3 gap-4">
+          <Field label="1 · Bank balance" hint="At month end.">
+            <input type="number" step="0.01" value={bank} onChange={(e) => setBank(e.target.value)}
+              placeholder="0.00" className={input} />
           </Field>
-          <Field label="Live MRR override"
-            hint={`CRM says ${aud(report.inputs.crmLiveMrr)}. Leave blank to use it.`}>
-            <input type="number" value={mrrOverride} onChange={(e) => setMrrOverride(e.target.value)}
-              placeholder={String(report.inputs.crmLiveMrr)} className={input} />
-          </Field>
-          <Field label="Total expenses this month"
-            hint="Straight off the Xero P&L. Wages and super are already inside it, so nothing gets added on top.">
+          <Field label="2 · Total expenses"
+            hint="Total operating expenses. Wages and super are already inside it.">
             <input type="number" step="0.01" value={actualExpenses}
               onChange={(e) => setActualExpenses(e.target.value)}
               placeholder="0.00" className={input} />
           </Field>
-          <Field label="Revenue received this month"
-            hint="Total trading income for the month.">
+          <Field label="3 · Revenue received" hint="Total trading income.">
             <input type="number" step="0.01" value={actualRevenue}
               onChange={(e) => setActualRevenue(e.target.value)}
               placeholder="0.00" className={input} />
@@ -1297,10 +1298,32 @@ function InputsPanel({
         <div className="flex items-center gap-3 mt-4">
           <PillButton variant="primary" size="md" trailing="none"
             icon={saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-            onClick={saveFigures}>Save figures</PillButton>
+            onClick={saveFigures}>Save</PillButton>
           {saved && <span className="text-[#0f9d70] text-xs">Saved.</span>}
         </div>
+
+        {/* Escape hatch, not part of the monthly routine. */}
+        <details className="mt-5 pt-4 border-t border-hair-soft">
+          <summary className="text-ink-dim text-xs cursor-pointer hover:text-ink-muted">
+            Live MRR is pulling {aud(report.inputs.crmLiveMrr)} from the CRM — override it
+          </summary>
+          <div className="mt-3 max-w-xs">
+            <Field label="Live MRR override" hint="Leave blank to trust the CRM.">
+              <input type="number" value={mrrOverride} onChange={(e) => setMrrOverride(e.target.value)}
+                placeholder={String(report.inputs.crmLiveMrr)} className={input} />
+            </Field>
+          </div>
+        </details>
       </FormSection>
+
+      <div className="pt-4 pb-1">
+        <p className="font-mono text-[10px] font-semibold tracking-[0.2em] uppercase text-ink-dim">
+          Only when something changes
+        </p>
+        <p className="text-ink-dim text-xs mt-1.5">
+          These carry forward on their own. Skip them most months.
+        </p>
+      </div>
 
       <FormSection title="Ring fence payments this month"
         right={`${aud(report.investment.ringfence.remaining)} left`}>
