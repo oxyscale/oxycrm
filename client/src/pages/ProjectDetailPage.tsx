@@ -2,9 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
-  Calendar,
-  DollarSign,
-  ExternalLink,
   FolderKanban,
   Loader2,
   Pencil,
@@ -43,6 +40,30 @@ const STATUS_CONFIG: Record<
 
 const STATUS_ORDER: ProjectStatus[] = ['building', 'live', 'ended'];
 
+const detailInput =
+  'w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink ' +
+  'placeholder-ink-faint focus:outline-none focus:border-[rgba(10,156,212,0.35)] transition-all';
+
+/** Date-only addition, for showing the default revenue start. */
+function addDays(iso: string, days: number): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) + days * 86400000).toISOString().slice(0, 10);
+}
+
+function DetailField({
+  label, hint, children,
+}: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="font-mono text-[10px] font-semibold tracking-[0.18em] uppercase text-ink-dim mb-1.5">
+        {label}
+      </p>
+      {children}
+      {hint && <p className="text-ink-dim text-xs mt-1">{hint}</p>}
+    </div>
+  );
+}
+
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -58,18 +79,13 @@ export default function ProjectDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
 
-  // Build fee editing — total agreed, and how much has been invoiced.
-  const [editingFee, setEditingFee] = useState(false);
-  const [feeDraft, setFeeDraft] = useState('');
-  const [editingPaid, setEditingPaid] = useState(false);
-  const [paidDraft, setPaidDraft] = useState('');
-
-  // Dates. Signed drives the projected revenue start; a recorded go-live
-  // date overrides that projection.
-  const [editingSigned, setEditingSigned] = useState(false);
-  const [signedDraft, setSignedDraft] = useState('');
-  const [editingLive, setEditingLive] = useState(false);
-  const [liveDraft, setLiveDraft] = useState('');
+  // The detail fields are plain always-visible inputs rather than
+  // click-to-reveal. An empty box reads as "nothing here yet" without
+  // needing a word for it.
+  const [fee, setFee] = useState('');
+  const [paid, setPaid] = useState('');
+  const [signed, setSigned] = useState('');
+  const [revenueStart, setRevenueStart] = useState('');
 
   // Description editing
   const [description, setDescription] = useState('');
@@ -95,6 +111,10 @@ export default function ProjectDetailPage() {
       setProject(data);
       setDescription(data.description || '');
       setNotes(data.notes || '');
+      setFee(data.buildFee ? String(data.buildFee) : '');
+      setPaid(data.buildFeePaid ? String(data.buildFeePaid) : '');
+      setSigned(data.startDate ?? '');
+      setRevenueStart(data.liveFrom ?? '');
     } catch (err) {
       console.error('Failed to load project:', err);
       setError('Failed to load project');
@@ -137,49 +157,33 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const commitDate = async (
-    field: 'startDate' | 'liveFrom',
-    value: string,
-    done: (v: false) => void,
+  /**
+   * Saves one field of the detail bar on blur. Everything in there is a
+   * single value, so one handler covers all of them and an empty box
+   * means null rather than zero.
+   */
+  const saveField = async (
+    field: 'buildFee' | 'buildFeePaid' | 'startDate' | 'liveFrom',
+    raw: string,
   ) => {
     if (!project) return;
-    done(false);
-    const next = value || null;
-    if (next === (field === 'startDate' ? project.startDate : project.liveFrom)) return;
+    const isMoney = field === 'buildFee' || field === 'buildFeePaid';
+    const next = raw.trim() === '' ? (isMoney ? 0 : null) : (isMoney ? Number(raw) : raw);
+    if (isMoney && (!Number.isFinite(next as number) || (next as number) < 0)) return;
+
+    const current =
+      field === 'buildFee' ? project.buildFee
+      : field === 'buildFeePaid' ? project.buildFeePaid
+      : field === 'startDate' ? project.startDate
+      : project.liveFrom;
+    if (next === current) return;
+
     setSaveError(null);
     try {
       setProject(await api.updateProject(project.id, { [field]: next }));
     } catch (err) {
       console.error(`Failed to save ${field}:`, err);
-      setSaveError('Could not save that date. Please try again.');
-    }
-  };
-
-  const commitPaid = async () => {
-    if (!project) return;
-    const amount = Number(paidDraft);
-    setEditingPaid(false);
-    if (!Number.isFinite(amount) || amount < 0 || amount === project.buildFeePaid) return;
-    setSaveError(null);
-    try {
-      setProject(await api.updateProject(project.id, { buildFeePaid: amount }));
-    } catch (err) {
-      console.error('Failed to save invoiced amount:', err);
-      setSaveError('Could not save that amount. Please try again.');
-    }
-  };
-
-  const commitFee = async () => {
-    if (!project) return;
-    const amount = Number(feeDraft);
-    setEditingFee(false);
-    if (!Number.isFinite(amount) || amount < 0 || amount === project.buildFee) return;
-    setSaveError(null);
-    try {
-      setProject(await api.updateProject(project.id, { buildFee: amount }));
-    } catch (err) {
-      console.error('Failed to save build fee:', err);
-      setSaveError('Could not save the build fee. Please try again.');
+      setSaveError('Could not save that. Please try again.');
     }
   };
 
@@ -373,187 +377,70 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      {/* Info bar */}
-      <div className="flex items-center flex-wrap gap-x-6 gap-y-2 mb-6 bg-paper border border-hair-soft rounded-xl px-5 py-3">
-        {/* Money comes from the client's retainer history, not the legacy
-            one-off value field that was showing $0 for everyone. */}
-        {/* Read-only on purpose. The retainer belongs to the CLIENT, not
-            the project — a client with two builds has one monthly figure,
-            not two. This displays it and points at where to change it. */}
-        <div className="flex items-center gap-1.5">
-          <DollarSign size={14} className="text-ink-dim" />
-          {retainer > 0 ? (
-            <>
-              <span className="text-ink text-sm font-medium">
-                {formatCurrency(retainer)}/mo
-              </span>
-              <span className="text-ink-dim text-xs">
-                {project.retainerSince
-                  ? `from the client record, since ${formatDate(project.retainerSince)}`
-                  : 'from the client record'}
-              </span>
-            </>
-          ) : project.leadId ? (
-            <button
-              onClick={() => navigate(`/leads/${project.leadId}`)}
-              className="text-ink-dim text-sm hover:text-sky-ink transition-colors"
-            >
-              Retainer is set on the client record
-            </button>
-          ) : (
-            <span className="text-ink-dim text-sm">
-              No client linked, so no retainer
-            </span>
-          )}
-        </div>
-        <div className="w-px h-4 bg-hair-soft" />
-        {/* One-off build fee. Kept separate from the monthly retainer —
-            they are different kinds of money and shouldn't be added up
-            into a single misleading figure. */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-ink-dim text-sm">Build fee</span>
-          {editingFee ? (
-            <>
-              <span className="text-ink-dim text-sm">$</span>
-              <input
-                autoFocus
-                type="number"
-                value={feeDraft}
-                onChange={(e) => setFeeDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitFee();
-                  if (e.key === 'Escape') setEditingFee(false);
-                }}
-                onBlur={commitFee}
-                className="w-24 bg-cream border border-hair rounded-md px-2 py-0.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.4)]"
-              />
-            </>
-          ) : (
-            <button
-              onClick={() => {
-                setFeeDraft(project.buildFee ? String(project.buildFee) : '');
-                setEditingFee(true);
-              }}
-              className="text-ink text-sm font-medium hover:text-sky-ink transition-colors flex items-center gap-1"
-              title="Set the upfront build fee"
-            >
-              {project.buildFee > 0 ? formatCurrency(project.buildFee) : 'not set'}
-              <Pencil size={10} className="text-ink-dim" />
-            </button>
-          )}
-        </div>
-        {project.buildFee > 0 && (
-          <>
-            <div className="w-px h-4 bg-hair-soft" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-ink-dim text-sm">Invoiced</span>
-              {editingPaid ? (
-                <>
-                  <span className="text-ink-dim text-sm">$</span>
-                  <input
-                    autoFocus
-                    type="number"
-                    value={paidDraft}
-                    onChange={(e) => setPaidDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitPaid();
-                      if (e.key === 'Escape') setEditingPaid(false);
-                    }}
-                    onBlur={commitPaid}
-                    className="w-24 bg-cream border border-hair rounded-md px-2 py-0.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.4)]"
-                  />
-                </>
-              ) : (
+      {/* Detail bar. The retainer is shown, not asked for — it belongs
+          to the client, not the project. Everything else is editable. */}
+      <div className="bg-paper border border-hair-soft rounded-xl px-5 py-4 mb-6">
+        <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr_1fr_1.2fr] gap-5">
+          <div>
+            <p className="font-mono text-[10px] font-semibold tracking-[0.18em] uppercase text-ink-dim mb-1.5">
+              Monthly retainer
+            </p>
+            <p className="text-ink text-sm font-medium py-2">
+              {retainer > 0 ? `${formatCurrency(retainer)}/mo` : <span className="text-ink-faint">—</span>}
+            </p>
+            <p className="text-ink-dim text-xs">
+              {project.leadId ? (
                 <button
-                  onClick={() => {
-                    setPaidDraft(project.buildFeePaid ? String(project.buildFeePaid) : '');
-                    setEditingPaid(true);
-                  }}
-                  className="text-ink text-sm font-medium hover:text-sky-ink transition-colors flex items-center gap-1"
-                  title="How much of the build fee has been invoiced"
+                  onClick={() => navigate(`/leads/${project.leadId}`)}
+                  className="hover:text-sky-ink transition-colors"
                 >
-                  {formatCurrency(project.buildFeePaid)}
-                  <span className="text-ink-dim font-normal">
-                    of {formatCurrency(project.buildFee)}
-                  </span>
-                  <Pencil size={10} className="text-ink-dim" />
+                  set on the client record
                 </button>
-              )}
-            </div>
-          </>
-        )}
-        <div className="w-px h-4 bg-hair-soft" />
-        {/* The signed date. Revenue is projected from here, so it is
-            editable rather than fixed at whatever day the record was
-            created. */}
-        <div className="flex items-center gap-1.5">
-          <Calendar size={14} className="text-ink-dim" />
-          <span className="text-ink-dim text-sm">Signed</span>
-          {editingSigned ? (
-            <input
-              autoFocus
-              type="date"
-              defaultValue={project.startDate ?? ''}
-              onChange={(e) => setSignedDraft(e.target.value)}
-              onBlur={() => commitDate('startDate', signedDraft || project.startDate || '', setEditingSigned)}
-              className="bg-cream border border-hair rounded-md px-2 py-0.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.4)]"
-            />
-          ) : (
-            <button
-              onClick={() => { setSignedDraft(project.startDate ?? ''); setEditingSigned(true); }}
-              className="text-ink text-sm font-medium hover:text-sky-ink transition-colors flex items-center gap-1"
-            >
-              {formatDate(project.startDate)}
-              <Pencil size={10} className="text-ink-dim" />
-            </button>
-          )}
-        </div>
+              ) : 'no client linked'}
+            </p>
+          </div>
 
-        <div className="w-px h-4 bg-hair-soft" />
-        {/* Expected or actual go-live. When set it overrides the
-            signed-plus-lead-time projection on the investor report. */}
-        <div className="flex items-center gap-1.5">
-          <Calendar size={14} className="text-ink-dim" />
-          <span className="text-ink-dim text-sm">
-            {project.status === 'live' ? 'Live from' : 'Revenue starts'}
-          </span>
-          {editingLive ? (
+          <DetailField label="Build fee">
             <input
-              autoFocus
-              type="date"
-              defaultValue={project.liveFrom ?? ''}
-              onChange={(e) => setLiveDraft(e.target.value)}
-              onBlur={() => commitDate('liveFrom', liveDraft || project.liveFrom || '', setEditingLive)}
-              className="bg-cream border border-hair rounded-md px-2 py-0.5 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.4)]"
+              type="number" step="0.01" value={fee}
+              onChange={(e) => setFee(e.target.value)}
+              onBlur={() => saveField('buildFee', fee)}
+              className={detailInput}
             />
-          ) : (
-            <button
-              onClick={() => { setLiveDraft(project.liveFrom ?? ''); setEditingLive(true); }}
-              className="text-ink text-sm font-medium hover:text-sky-ink transition-colors flex items-center gap-1"
-              title="When this client starts being billed"
-            >
-              {project.liveFrom
-                ? formatDate(project.liveFrom)
-                : <span className="text-ink-dim font-normal">estimated</span>}
-              <Pencil size={10} className="text-ink-dim" />
-            </button>
-          )}
-        </div>
+          </DetailField>
 
-        {project.leadId && (
-          <>
-            <div className="w-px h-4 bg-hair-soft" />
-            {/* Straight to the client record. The old link went to the
-                leads list, which filters clients out by default. */}
-            <button
-              onClick={() => navigate(`/leads/${project.leadId}`)}
-              className="flex items-center gap-1.5 text-sky-ink text-sm hover:underline"
-            >
-              <ExternalLink size={12} />
-              Client record
-            </button>
-          </>
-        )}
+          <DetailField label="Invoiced">
+            <input
+              type="number" step="0.01" value={paid}
+              onChange={(e) => setPaid(e.target.value)}
+              onBlur={() => saveField('buildFeePaid', paid)}
+              className={detailInput}
+            />
+          </DetailField>
+
+          <DetailField label="Signed">
+            <input
+              type="date" value={signed}
+              onChange={(e) => setSigned(e.target.value)}
+              onBlur={() => saveField('startDate', signed)}
+              className={detailInput}
+            />
+          </DetailField>
+
+          <DetailField
+            label="Est. revenue start"
+            hint={!project.liveFrom && project.startDate
+              ? `defaults to ${formatDate(addDays(project.startDate, 60))}`
+              : undefined}
+          >
+            <input
+              type="date" value={revenueStart}
+              onChange={(e) => setRevenueStart(e.target.value)}
+              onBlur={() => saveField('liveFrom', revenueStart)}
+              className={detailInput}
+            />
+          </DetailField>
+        </div>
       </div>
 
       {/* Status selector */}
