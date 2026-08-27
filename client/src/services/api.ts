@@ -196,6 +196,46 @@ export async function addRetainer(
   });
 }
 
+export interface RetainerEntry {
+  id: number;
+  monthlyAmount: number;
+  effectiveFrom: string;
+  note: string | null;
+  createdAt: string;
+  flags: string[];
+}
+
+export interface RetainerClient {
+  leadId: number;
+  name: string;
+  current: number;
+  currentFrom: string | null;
+  upcoming: RetainerEntry[];
+  entries: RetainerEntry[];
+  issues: number;
+}
+
+export async function getRetainerOverview(): Promise<{
+  clients: RetainerClient[]; totalCurrent: number; issueCount: number;
+}> {
+  return request('/leads/retainers/overview');
+}
+
+/**
+ * Moves an existing row instead of adding another one. Use this when a
+ * date changes — adding a second row leaves the original still firing.
+ */
+export async function updateRetainer(
+  leadId: number,
+  retainerId: number,
+  data: { monthlyAmount?: number; effectiveFrom?: string; note?: string | null },
+): Promise<{ id: number; monthlyAmount: number; effectiveFrom: string }> {
+  return request(`/leads/${leadId}/retainers/${retainerId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function deleteRetainer(leadId: number, retainerId: number): Promise<{ success: true }> {
   return request(`/leads/${leadId}/retainers/${retainerId}`, { method: 'DELETE' });
 }

@@ -542,6 +542,94 @@ router.get('/', (req, res, next) => {
  * the current figure and the audit trail of what they've been billed
  * and why it moved.
  */
+/**
+ * GET /api/leads/retainers/overview
+ *
+ * Every client that has ever had a retainer, with its full dated
+ * timeline and anything that looks wrong. Billing history accumulates
+ * quietly — a typo, a change recorded twice, a scheduled rise that was
+ * superseded but never removed — and none of it is visible from any one
+ * client's page. This is the one place to see the lot.
+ *
+ * Flags describe shape, not intent. A flagged row is worth a look, not
+ * necessarily a delete.
+ */
+router.get('/retainers/overview', (_req, res, next) => {
+  try {
+    const db = getDb();
+    const today = new Date().toISOString().slice(0, 10);
+
+    const rows = db.prepare(`
+      SELECT cr.id, cr.lead_id AS leadId, cr.monthly_amount AS monthlyAmount,
+             cr.effective_from AS effectiveFrom, cr.note, cr.created_at AS createdAt,
+             l.name AS leadName, l.company
+        FROM client_retainers cr
+        JOIN leads l ON l.id = cr.lead_id
+       ORDER BY cr.lead_id, cr.effective_from ASC, cr.id ASC
+    `).all() as Array<{
+      id: number; leadId: number; monthlyAmount: number; effectiveFrom: string;
+      note: string | null; createdAt: string; leadName: string; company: string | null;
+    }>;
+
+    const byLead = new Map<number, typeof rows>();
+    for (const r of rows) {
+      const list = byLead.get(r.leadId);
+      if (list) list.push(r); else byLead.set(r.leadId, [r]);
+    }
+
+    const clients = [...byLead.entries()].map(([leadId, history]) => {
+      const entries = history.map((r, i) => {
+        const prev = i > 0 ? history[i - 1] : null;
+        const next = i < history.length - 1 ? history[i + 1] : null;
+        const flags: string[] = [];
+
+        // Two rows dated the same day: only the later one is ever read,
+        // so the other is dead weight that makes the history misleading.
+        if (prev?.effectiveFrom === r.effectiveFrom || next?.effectiveFrom === r.effectiveFrom) {
+          flags.push('same_day');
+        }
+        // Records a change that changes nothing.
+        if (prev && prev.monthlyAmount === r.monthlyAmount) flags.push('no_change');
+        // Replaced within a fortnight by a different amount — the shape
+        // a fat-fingered figure leaves behind.
+        if (next && next.monthlyAmount !== r.monthlyAmount) {
+          const days = (Date.parse(next.effectiveFrom) - Date.parse(r.effectiveFrom)) / 86_400_000;
+          if (days >= 0 && days <= 14) flags.push('short_lived');
+        }
+        if (r.monthlyAmount <= 0) flags.push('zero');
+        if (r.effectiveFrom > today) flags.push('scheduled');
+
+        return {
+          id: r.id, monthlyAmount: r.monthlyAmount, effectiveFrom: r.effectiveFrom,
+          note: r.note, createdAt: r.createdAt, flags,
+        };
+      });
+
+      const inEffect = [...entries].reverse().find((e) => e.effectiveFrom <= today) ?? null;
+      const upcoming = entries.filter((e) => e.effectiveFrom > today);
+
+      return {
+        leadId,
+        name: history[0].company || history[0].leadName,
+        current: inEffect ? inEffect.monthlyAmount : 0,
+        currentFrom: inEffect ? inEffect.effectiveFrom : null,
+        upcoming,
+        entries,
+        issues: entries.reduce(
+          (n, e) => n + e.flags.filter((f) => f !== 'scheduled').length, 0),
+      };
+    }).sort((a, b) => (b.issues - a.issues) || (b.current - a.current));
+
+    res.json({
+      clients,
+      totalCurrent: clients.reduce((sum, c) => sum + c.current, 0),
+      issueCount: clients.reduce((sum, c) => sum + c.issues, 0),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/:id/retainers', (req, res, next) => {
   try {
     const db = getDb();
@@ -621,6 +709,77 @@ router.post('/:id/retainers', (req, res, next) => {
     const newId = insert();
     logger.info({ leadId: id, amount: payload.monthlyAmount, effectiveFrom }, 'Retainer recorded');
     res.status(201).json({ id: newId, leadId: id, monthlyAmount: payload.monthlyAmount, effectiveFrom });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /api/leads/:id/retainers/:retainerId
+ *
+ * Moves an existing retainer row rather than stacking another one on
+ * top. This exists because a date that slips is not the same as a
+ * second change: if a rise scheduled for the 10th actually lands on the
+ * 20th and you record that as a new row, the row for the 10th is still
+ * sitting there and still fires, so the report bills the rise ten days
+ * early and says nothing. Editing the row in place is the only way the
+ * date you last set is the date that counts.
+ */
+const updateRetainerSchema = z.object({
+  monthlyAmount: z.number().min(0).optional(),
+  effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  note: z.string().nullable().optional(),
+}).refine(
+  (v) => v.monthlyAmount !== undefined || v.effectiveFrom !== undefined || v.note !== undefined,
+  { message: 'Nothing to change' },
+);
+
+router.patch('/:id/retainers/:retainerId', (req, res, next) => {
+  try {
+    const db = getDb();
+    const id = parseInt(req.params.id, 10);
+    const retainerId = parseInt(req.params.retainerId, 10);
+    if (isNaN(id) || isNaN(retainerId)) throw new ApiError(400, 'Invalid ID');
+
+    const existing = db.prepare(
+      'SELECT id, monthly_amount, effective_from FROM client_retainers WHERE id = ? AND lead_id = ?'
+    ).get(retainerId, id) as
+      { id: number; monthly_amount: number; effective_from: string } | undefined;
+    if (!existing) throw new ApiError(404, 'Retainer entry not found');
+
+    const payload = updateRetainerSchema.parse(req.body);
+    const amount = payload.monthlyAmount ?? existing.monthly_amount;
+    const effectiveFrom = payload.effectiveFrom ?? existing.effective_from;
+    const actor = req.user?.name || null;
+
+    const apply = db.transaction(() => {
+      db.prepare(`
+        UPDATE client_retainers SET monthly_amount = ?, effective_from = ?
+             ${payload.note !== undefined ? ', note = ?' : ''}
+         WHERE id = ? AND lead_id = ?
+      `).run(...(payload.note !== undefined
+        ? [amount, effectiveFrom, payload.note, retainerId, id]
+        : [amount, effectiveFrom, retainerId, id]));
+
+      // Only worth a timeline entry when something actually moved.
+      const movedAmount = amount !== existing.monthly_amount;
+      const movedDate = effectiveFrom !== existing.effective_from;
+      if (movedAmount || movedDate) {
+        const parts: string[] = [];
+        if (movedAmount) {
+          parts.push(`$${existing.monthly_amount.toLocaleString('en-AU')} to $${amount.toLocaleString('en-AU')}`);
+        }
+        if (movedDate) parts.push(`start moved from ${existing.effective_from} to ${effectiveFrom}`);
+        db.prepare(`
+          INSERT INTO activities (lead_id, type, title, description, created_at, created_by)
+          VALUES (?, 'stage_change', ?, ?, ?, ?)
+        `).run(id, 'Retainer corrected', parts.join(' · '), new Date().toISOString(), actor);
+      }
+    });
+
+    apply();
+    logger.info({ leadId: id, retainerId, amount, effectiveFrom }, 'Retainer entry updated');
+    res.json({ id: retainerId, leadId: id, monthlyAmount: amount, effectiveFrom });
   } catch (err) {
     next(err);
   }

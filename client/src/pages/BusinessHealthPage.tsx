@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Loader2, Lock, Unlock, Printer, Send, Plus, Trash2, Check, X,
-  ArrowUp, ArrowDown, Minus, Settings as SettingsIcon, AlertTriangle,
+  ArrowUp, ArrowDown, Minus, Settings as SettingsIcon, AlertTriangle, Receipt,
 } from 'lucide-react';
 import * as api from '../services/api';
+import RetainerAudit from '../components/RetainerAudit';
 import type {
   InvestorReportResponse, InvestorReport, InvestorHistoryPoint, InvestorSettings,
 } from '../services/api';
@@ -344,6 +345,7 @@ export default function BusinessHealthPage() {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<'report' | 'inputs'>('report');
   const [showSettings, setShowSettings] = useState(false);
+  const [showRetainers, setShowRetainers] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -535,7 +537,14 @@ export default function BusinessHealthPage() {
             ))}
           </select>
           <button
-            onClick={() => setShowSettings((v) => !v)}
+            onClick={() => { setShowRetainers((v) => !v); setShowSettings(false); }}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-hair-soft text-ink-muted hover:text-ink text-sm transition-colors"
+            title="Check every retainer feeding monthly revenue"
+          >
+            <Receipt size={14} /> Retainers
+          </button>
+          <button
+            onClick={() => { setShowSettings((v) => !v); setShowRetainers(false); }}
             className="p-2 rounded-lg border border-hair-soft text-ink-dim hover:text-ink transition-colors"
             title="Report settings"
           >
@@ -589,6 +598,10 @@ export default function BusinessHealthPage() {
           onCancel={() => setShowCompose(false)}
           onSend={sendReport}
         />
+      )}
+
+      {showRetainers && (
+        <RetainerAudit onClose={() => { setShowRetainers(false); load(month); }} />
       )}
 
       {showSettings && settings && (
