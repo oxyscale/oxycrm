@@ -1325,6 +1325,10 @@ export function initializeDatabase(db: Database.Database): void {
       bank_balance       REAL,
       live_mrr_override  REAL,                  -- NULL = trust the CRM
       pot_wages_drawn    REAL NOT NULL DEFAULT 0,
+      -- Reconciled from Xero at month end: what actually went out and
+      -- what actually came in. Facts, not a modelled run rate.
+      actual_expenses    REAL,
+      actual_revenue     REAL,
       status             TEXT NOT NULL DEFAULT 'draft',
       snapshot           TEXT,                  -- JSON, written on finalise
       finalised_at       TEXT,
@@ -1363,17 +1367,6 @@ export function initializeDatabase(db: Database.Database): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    -- What it costs to run the business each month. Held as lines
-    -- rather than one number so the figure is self-documenting, and
-    -- carried forward month to month rather than retallied from zero.
-    CREATE TABLE IF NOT EXISTS investor_costs (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      item       TEXT NOT NULL,
-      amount     REAL NOT NULL DEFAULT 0,
-      category   TEXT NOT NULL DEFAULT 'other',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
 
     -- Instalments received out of the founder wages pot. Mirrors the
     -- ring fence: dated rows that add up, rather than a running total
@@ -1391,6 +1384,10 @@ export function initializeDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_wage_draws_on
       ON investor_wage_draws(drawn_on);
   `);
+
+  // For databases created before actuals were captured.
+  addColumnIfMissing(db, 'investor_months', 'actual_expenses', 'REAL');
+  addColumnIfMissing(db, 'investor_months', 'actual_revenue', 'REAL');
 
   // Defaults, written once. Changing them later is a settings edit, not
   // a code change — the 60-day lead time in particular lives in exactly
@@ -1480,15 +1477,6 @@ export function initializeDatabase(db: Database.Database): void {
         ];
         for (const [on, label] of instalments) insertDraw.run(on, label, 10000);
 
-        // Founder wages as the known part of the monthly cost base.
-        // Subscriptions are deliberately left for Jordan to enter — the
-        // tracker only records historical one-offs, not a run rate.
-        const insertCost = db.prepare(
-          'INSERT INTO investor_costs (item, amount, category) VALUES (?, ?, ?)'
-        );
-        insertCost.run('Jordan wage', 5000, 'wages');
-        insertCost.run('George wage', 5000, 'wages');
-
         console.log('[schema] Imported expense tracker: 16 payments, 3 instalments');
       }
 
@@ -1536,6 +1524,44 @@ export function initializeDatabase(db: Database.Database): void {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[schema] wage date correction failed:', err);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Actuals for the three months already reconciled in Xero
+  // (P&L to 31 Aug 2026). Seeded so the expenses trend has history
+  // immediately rather than starting from one month.
+  // ─────────────────────────────────────────────────────────────────
+  const actualsSeeded = db
+    .prepare("SELECT value FROM settings WHERE key = 'investor_actuals_v1'")
+    .get() as { value: string } | undefined;
+
+  if (!actualsSeeded) {
+    try {
+      const actuals: Array<[string, number, number]> = [
+        ['2026-06', 20100.65, 1934.00],
+        ['2026-07', 23926.93, 2083.63],
+        ['2026-08', 17130.58, 1828.00],
+      ];
+      const upsert = db.prepare(`
+        INSERT INTO investor_months (month, actual_expenses, actual_revenue)
+        VALUES (@month, @expenses, @revenue)
+        ON CONFLICT(month) DO UPDATE SET
+          actual_expenses = COALESCE(investor_months.actual_expenses, excluded.actual_expenses),
+          actual_revenue  = COALESCE(investor_months.actual_revenue,  excluded.actual_revenue)
+        WHERE investor_months.status != 'final'
+      `);
+      for (const [month, expenses, revenue] of actuals) {
+        upsert.run({ month, expenses, revenue });
+      }
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('investor_actuals_v1', ?)"
+      ).run(new Date().toISOString());
+      // eslint-disable-next-line no-console
+      console.log('[schema] Seeded reconciled actuals for Jun-Aug 2026');
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[schema] actuals seed failed:', err);
     }
   }
 

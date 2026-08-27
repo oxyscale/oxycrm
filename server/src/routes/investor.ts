@@ -99,7 +99,6 @@ function todayIso(): string {
 type Settings = {
   revenueLeadDays: number;
   monthlyCostBase: number;
-  superRate: number;
   forecastMrr6: number;
   forecastMrr12: number;
   forecastNote: string;
@@ -127,7 +126,6 @@ function readSettings(): Settings {
   return {
     revenueLeadDays: num('revenue_lead_days', 60),
     monthlyCostBase: num('monthly_cost_base', 0),
-    superRate: num('super_rate', 12),
     forecastMrr6: num('forecast_mrr_6', 0),
     forecastMrr12: num('forecast_mrr_12', 0),
     forecastNote: map.get('forecast_note') ?? '',
@@ -304,11 +302,10 @@ type Runway =
  * the arithmetic reports infinite runway, which renders as a healthy
  * business when the truth is that nobody has entered the costs yet.
  */
-function safeRunway(cash: number, costBase: number, mrr: number): Runway {
-  if (!(costBase > 0)) return { state: 'unknown' };
-  const burn = costBase - mrr;
-  if (burn <= 0) return { state: 'covered' };
-  return { state: 'months', months: Math.round((cash / burn) * 10) / 10 };
+function safeRunway(cash: number, netBurn: number | null): Runway {
+  if (netBurn === null) return { state: 'unknown' };
+  if (netBurn <= 0) return { state: 'covered' };
+  return { state: 'months', months: Math.round((cash / netBurn) * 10) / 10 };
 }
 
 function buildReport(month: string) {
@@ -452,32 +449,59 @@ function buildReport(month: string) {
     },
   };
 
-  // ── running costs ──
-  // The cost base is the sum of the recorded lines. The old single
-  // setting is only a fallback for anyone who set it before costs were
-  // itemised; once there are lines, they are the truth.
-  const costLines = db.prepare(
-    'SELECT id, item, amount, category FROM investor_costs ORDER BY amount DESC, id ASC'
-  ).all() as { id: number; item: string; amount: number; category: string }[];
-  const costLinesTotal = costLines.reduce((s, c) => s + c.amount, 0);
-  // Superannuation is a legal on-cost of wages, not a line someone
-  // remembers to add, so it is derived from the wage lines. Deriving it
-  // also means it follows automatically when a wage changes.
-  const wagesTotal = costLines
-    .filter((c) => c.category === 'wages')
-    .reduce((s, c) => s + c.amount, 0);
-  const superAmount = Math.round(wagesTotal * (settings.superRate / 100) * 100) / 100;
-  const costBase = costLines.length
-    ? costLinesTotal + superAmount
-    : settings.monthlyCostBase;
+  // ── actuals, reconciled from Xero ──
+  // Three months of what actually went out and came in. Superannuation
+  // and wages are already inside the expense figure, so nothing is added
+  // on top — doing so would count super twice.
+  const actualMonths: string[] = [];
+  for (let i = 2; i >= 0; i--) actualMonths.push(shiftMonth(month, -i));
+
+  const actualRows = db.prepare(`
+    SELECT month, actual_expenses AS expenses, actual_revenue AS revenue
+      FROM investor_months
+     WHERE month IN (${actualMonths.map(() => '?').join(',')})
+  `).all(...actualMonths) as
+    { month: string; expenses: number | null; revenue: number | null }[];
+  const actualMap = new Map(actualRows.map((r) => [r.month, r]));
+
+  const trend = actualMonths.map((m) => {
+    const row = actualMap.get(m);
+    const expenses = row?.expenses ?? null;
+    const revenue = row?.revenue ?? null;
+    return {
+      month: m,
+      monthLabel: monthLabel(m),
+      expenses,
+      revenue,
+      // Rounded to cents: subtracting floats leaves noise like
+      // 15302.580000000002, which then leaks into comparisons.
+      netBurn: expenses === null
+        ? null
+        : Math.round((expenses - (revenue ?? 0)) * 100) / 100,
+    };
+  });
+
+  // Average across the months that have been reconciled. A single heavy
+  // month (a superannuation catch-up, say) should not set the runway on
+  // its own, and an unreconciled month must not count as zero burn.
+  const burns = trend.map((t) => t.netBurn).filter((n): n is number => n !== null);
+  const avgNetBurn = burns.length
+    ? Math.round((burns.reduce((s, n) => s + n, 0) / burns.length) * 100) / 100
+    : null;
+  const thisMonthActual = actualMap.get(month) ?? null;
 
   // ── position ──
   const bankBalance = inputs?.bank_balance ?? 0;
   // Remaining wage pot is committed incoming cash, so it counts toward
   // runway — but it is deliberately reported separately from the bank.
   const cashAvailable = bankBalance + investment.wages.remaining;
-  const runway = safeRunway(cashAvailable, costBase, liveMrr);
-  const forecastRunway = safeRunway(cashAvailable, costBase, committedMrr);
+  const runway = safeRunway(cashAvailable, avgNetBurn);
+  // Forecast assumes the not-yet-live retainers land, reducing the burn
+  // by that amount each month.
+  const forecastRunway = safeRunway(
+    cashAvailable,
+    avgNetBurn === null ? null : avgNetBurn - notYetLiveMrr,
+  );
 
   const plannedSpend = db.prepare(
     'SELECT id, item, estimated_cost AS estimatedCost, timing, purpose, status FROM investor_planned_spend ORDER BY id ASC'
@@ -534,16 +558,13 @@ function buildReport(month: string) {
       committedIncoming: investment.wages.remaining,
       runway,
       forecastRunway,
-      costBase,
-      costLines,
+      avgNetBurn,
     },
-    costs: {
-      base: costBase,
-      lines: costLines,
-      linesTotal: costLinesTotal,
-      wagesTotal,
-      superRate: settings.superRate,
-      superAmount,
+    actuals: {
+      trend,
+      avgNetBurn,
+      expenses: thisMonthActual?.expenses ?? null,
+      revenue: thisMonthActual?.revenue ?? null,
     },
     plannedSpend,
     risks,
@@ -552,6 +573,8 @@ function buildReport(month: string) {
       liveMrrOverride: inputs?.live_mrr_override ?? null,
       crmLiveMrr,
       potWagesDrawn: wagesDrawn,
+      actualExpenses: thisMonthActual?.expenses ?? null,
+      actualRevenue: thisMonthActual?.revenue ?? null,
     },
   };
 }
@@ -679,6 +702,8 @@ const inputsSchema = z.object({
   bankBalance: z.number().nullable().optional(),
   liveMrrOverride: z.number().nullable().optional(),
   potWagesDrawn: z.number().min(0).optional(),
+  actualExpenses: z.number().min(0).nullable().optional(),
+  actualRevenue: z.number().min(0).nullable().optional(),
 });
 
 /** PATCH /api/investor/report/:month/inputs */
@@ -717,6 +742,12 @@ router.patch('/report/:month/inputs', (req, res, next) => {
     }
     if (body.potWagesDrawn !== undefined) {
       sets.push('pot_wages_drawn = @potWagesDrawn'); params.potWagesDrawn = body.potWagesDrawn;
+    }
+    if (body.actualExpenses !== undefined) {
+      sets.push('actual_expenses = @actualExpenses'); params.actualExpenses = body.actualExpenses;
+    }
+    if (body.actualRevenue !== undefined) {
+      sets.push('actual_revenue = @actualRevenue'); params.actualRevenue = body.actualRevenue;
     }
     if (sets.length) {
       sets.push("updated_at = datetime('now')");
@@ -805,99 +836,6 @@ router.delete('/ringfence/:id', (req, res, next) => {
     const r = getDb().prepare('DELETE FROM investor_ringfence_payments WHERE id = ?')
       .run(parseInt(req.params.id, 10));
     if (r.changes === 0) throw new ApiError(404, 'Payment not found');
-    res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ── running costs ─────────────────────────────────────────────────
-
-const COST_CATEGORIES = ['software', 'wages', 'contractors', 'other'] as const;
-
-const costSchema = z.object({
-  item: z.string().min(1).max(200),
-  amount: z.number().min(0),
-  category: z.enum(COST_CATEGORIES).optional(),
-});
-
-router.get('/costs', (_req, res, next) => {
-  try {
-    res.json(getDb().prepare(
-      'SELECT id, item, amount, category FROM investor_costs ORDER BY amount DESC, id ASC'
-    ).all());
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/costs', (req, res, next) => {
-  try {
-    const b = costSchema.parse(req.body);
-    const r = getDb().prepare(
-      'INSERT INTO investor_costs (item, amount, category) VALUES (?, ?, ?)'
-    ).run(b.item.trim(), b.amount, b.category ?? 'other');
-    res.status(201).json({ id: r.lastInsertRowid });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.patch('/costs/:id', (req, res, next) => {
-  try {
-    const b = costSchema.partial().parse(req.body);
-    const id = parseInt(req.params.id, 10);
-    const sets: string[] = [];
-    const params: Record<string, unknown> = { id };
-    for (const k of ['item', 'amount', 'category'] as const) {
-      if (b[k] !== undefined) { sets.push(`${k} = @${k}`); params[k] = b[k]; }
-    }
-    if (!sets.length) throw new ApiError(400, 'No fields to update');
-    sets.push("updated_at = datetime('now')");
-    const r = getDb().prepare(`UPDATE investor_costs SET ${sets.join(', ')} WHERE id = @id`).run(params);
-    if (r.changes === 0) throw new ApiError(404, 'Cost not found');
-    res.json({ success: true });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.delete('/costs/:id', (req, res, next) => {
-  try {
-    const r = getDb().prepare('DELETE FROM investor_costs WHERE id = ?')
-      .run(parseInt(req.params.id, 10));
-    if (r.changes === 0) throw new ApiError(404, 'Cost not found');
-    res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ── founder wage instalments ──────────────────────────────────────
-
-const wageDrawSchema = z.object({
-  drawnOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  item: z.string().max(200).optional(),
-  amount: z.number(),
-});
-
-router.post('/wage-draws', (req, res, next) => {
-  try {
-    const b = wageDrawSchema.parse(req.body);
-    const r = getDb().prepare(
-      'INSERT INTO investor_wage_draws (drawn_on, item, amount) VALUES (?, ?, ?)'
-    ).run(b.drawnOn, (b.item || 'Monthly instalment').trim(), b.amount);
-    res.status(201).json({ id: r.lastInsertRowid });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.delete('/wage-draws/:id', (req, res, next) => {
-  try {
-    const r = getDb().prepare('DELETE FROM investor_wage_draws WHERE id = ?')
-      .run(parseInt(req.params.id, 10));
-    if (r.changes === 0) throw new ApiError(404, 'Instalment not found');
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -1031,7 +969,6 @@ router.get('/settings', (_req, res, next) => {
 const settingsSchema = z.object({
   revenueLeadDays: z.number().int().min(0).max(365).optional(),
   monthlyCostBase: z.number().min(0).optional(),
-  superRate: z.number().min(0).max(100).optional(),
   forecastMrr6: z.number().min(0).optional(),
   forecastMrr12: z.number().min(0).optional(),
   forecastNote: z.string().max(600).optional(),
@@ -1050,7 +987,6 @@ router.patch('/settings', (req, res, next) => {
     const map: Record<string, string> = {
       revenueLeadDays: 'revenue_lead_days',
       monthlyCostBase: 'monthly_cost_base',
-      superRate: 'super_rate',
       forecastMrr6: 'forecast_mrr_6',
       forecastMrr12: 'forecast_mrr_12',
       forecastNote: 'forecast_note',

@@ -44,10 +44,14 @@ function runwayValue(r: api.InvestorRunway): string {
  * read as a healthy business rather than as missing information.
  */
 function runwayNote(
-  r: api.InvestorRunway, forecast: api.InvestorRunway, costBase: number,
+  r: api.InvestorRunway, forecast: api.InvestorRunway, avgBurn: number | null,
 ): string {
-  if (r.state === 'unknown') return 'Add your monthly running costs to calculate runway';
-  if (r.state === 'covered') return `Revenue covers the ${aud(costBase)} monthly cost base`;
+  if (r.state === 'unknown') return "Add the month's expenses to calculate runway";
+  if (r.state === 'covered') return 'Revenue now covers what the business spends';
+  if (avgBurn !== null && r.state === 'months') {
+    if (forecast.state === 'covered') return 'Signed revenue will cover the burn';
+    if (forecast.state === 'months') return `${forecast.months} months once signed clients go live`;
+  }
   if (forecast.state === 'covered') return 'Signed revenue will cover the cost base';
   if (forecast.state === 'months') return `${forecast.months} months once signed clients go live`;
   return '';
@@ -234,9 +238,6 @@ function StackedBars({
 // ── tiles ────────────────────────────────────────────────────────
 
 
-const COST_LABEL: Record<string, string> = {
-  software: 'Software', wages: 'Wages', contractors: 'Contractors', other: 'Other',
-};
 
 const SOURCE_COLOURS = [
   '#0a9cd4', '#f59e0b', '#10b981', '#8b5cf6',
@@ -537,7 +538,7 @@ export default function InvestorReportPage() {
                   ? <Delta current={t.runway.months}
                       previous={pt?.runway?.state === 'months' ? pt.runway.months : undefined} />
                   : undefined}
-                note={runwayNote(t.runway, t.forecastRunway, report.costs.base)} />
+                note={runwayNote(t.runway, t.forecastRunway, report.actuals.avgNetBurn)} />
               <Lead label="Monthly revenue" value={aud(t.liveMrr)}
                 delta={<Delta current={t.liveMrr} previous={pt?.liveMrr} money />}
                 note={t.notYetLiveMrr > 0
@@ -634,49 +635,69 @@ export default function InvestorReportPage() {
             )}
           </Band>
 
-          {/* 04 — Running costs. Stephen asked how we know the runway is
-              real; this is the number it is calculated from. */}
+          {/* 04 — What we actually spent, straight from the books. */}
           <Band n="04" title="What it costs to run"
-            aside={report.costs.base > 0 ? `${aud(report.costs.base)} a month` : undefined}>
-            {report.costs.lines.length === 0 ? (
+            aside={report.actuals.avgNetBurn !== null
+              ? `${aud(report.actuals.avgNetBurn)} average monthly burn`
+              : undefined}>
+            {report.actuals.trend.every((t) => t.expenses === null) ? (
               <p className="text-ink-dim text-sm">
-                No running costs recorded yet, so runway cannot be calculated.
-                Add them on the monthly input screen.
+                No reconciled figures yet, so runway cannot be calculated.
+                Add the month's total expenses on the input screen.
               </p>
             ) : (
               <>
                 <table className="w-full text-sm tabular-nums">
+                  <thead>
+                    <tr className="border-b border-hair">
+                      <th className="text-left pb-2"><Micro>Month</Micro></th>
+                      <th className="text-right pb-2"><Micro>Money in</Micro></th>
+                      <th className="text-right pb-2 pl-6"><Micro>Money out</Micro></th>
+                      <th className="text-right pb-2 pl-6"><Micro>Net</Micro></th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    {report.costs.lines.map((c) => (
-                      <tr key={c.id} className="border-b border-hair-soft last:border-0">
-                        <td className="py-2 text-ink-muted">{c.item}</td>
-                        <td className="py-2 text-ink-dim text-xs">{COST_LABEL[c.category] || c.category}</td>
-                        <td className="py-2 text-right text-ink">{aud(c.amount)}</td>
-                      </tr>
-                    ))}
-                    {report.costs.superAmount > 0 && (
-                      <tr className="border-b border-hair-soft">
-                        <td className="py-2 text-ink-muted">
-                          Superannuation
-                          <span className="text-ink-dim text-xs ml-2">
-                            {report.costs.superRate}% of {aud(report.costs.wagesTotal)} wages
-                          </span>
+                    {report.actuals.trend.map((m, i) => {
+                      const current = i === report.actuals.trend.length - 1;
+                      return (
+                        <tr key={m.month} className="border-b border-hair-soft last:border-0">
+                          <td className={`py-2 ${current ? 'text-ink font-medium' : 'text-ink-muted'}`}>
+                            {m.monthLabel}
+                          </td>
+                          <td className={`py-2 text-right ${current ? 'text-ink' : 'text-ink-muted'}`}>
+                            {m.revenue === null ? <span className="text-ink-faint">·</span> : aud(m.revenue)}
+                          </td>
+                          <td className={`py-2 pl-6 text-right ${current ? 'text-ink' : 'text-ink-muted'}`}>
+                            {m.expenses === null ? <span className="text-ink-faint">·</span> : aud(m.expenses)}
+                          </td>
+                          <td className="py-2 pl-6 text-right">
+                            {m.netBurn === null
+                              ? <span className="text-ink-faint">·</span>
+                              : <span className={m.netBurn > 0 ? 'text-risk' : 'text-[#0f9d70]'}>
+                                  {m.netBurn > 0 ? '-' : '+'}{aud(Math.abs(m.netBurn))}
+                                </span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {report.actuals.avgNetBurn !== null && (
+                      <tr className="border-t border-hair">
+                        <td className="pt-2" colSpan={3}>
+                          <Micro>Average burn each month</Micro>
                         </td>
-                        <td className="py-2 text-ink-dim text-xs">Derived</td>
-                        <td className="py-2 text-right text-ink">{aud(report.costs.superAmount)}</td>
+                        <td className="pt-2 pl-6 text-right text-ink font-medium">
+                          {aud(report.actuals.avgNetBurn)}
+                        </td>
                       </tr>
                     )}
-                    <tr className="border-t border-hair">
-                      <td className="pt-2" colSpan={2}><Micro>Total each month</Micro></td>
-                      <td className="pt-2 text-right text-ink font-medium">{aud(report.costs.base)}</td>
-                    </tr>
                   </tbody>
                 </table>
                 <p className="text-ink-dim text-xs mt-4 leading-relaxed max-w-[62ch]">
-                  Runway is {aud(t.bankBalance)} in the bank plus{' '}
-                  {aud(report.position.committedIncoming)} still to come from the wages pot,
-                  divided by {aud(report.costs.base)} of costs less{' '}
-                  {aud(t.liveMrr)} of revenue each month.
+                  Reconciled from the accounts each month, so wages and
+                  superannuation are already inside these figures. Runway is{' '}
+                  {aud(t.bankBalance)} in the bank plus{' '}
+                  {aud(report.position.committedIncoming)} still to come from the
+                  wages pot, divided by the average monthly burn above.
                 </p>
               </>
             )}
@@ -1049,7 +1070,6 @@ function SettingsPanel({
   onSaved: (s: InvestorSettings) => void;
 }) {
   const [leadDays, setLeadDays] = useState(String(settings.revenueLeadDays));
-  const [superRate, setSuperRate] = useState(String(settings.superRate));
   const [mrr6, setMrr6] = useState(String(settings.forecastMrr6));
   const [mrr12, setMrr12] = useState(String(settings.forecastMrr12));
   const [note, setNote] = useState(settings.forecastNote);
@@ -1063,7 +1083,6 @@ function SettingsPanel({
       const emails = list.split('\n').map((s) => s.trim()).filter(Boolean);
       const saved = await api.updateInvestorSettings({
         revenueLeadDays: Number(leadDays),
-        superRate: Number(superRate) || 0,
         forecastMrr6: Number(mrr6) || 0,
         forecastMrr12: Number(mrr12) || 0,
         forecastNote: note,
@@ -1086,15 +1105,9 @@ function SettingsPanel({
         <input type="number" value={leadDays} onChange={(e) => setLeadDays(e.target.value)}
           className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
       </Field>
-      <div className="mt-4">
-        <Field label="Superannuation rate (%)"
-          hint="Added automatically on top of any cost line marked as wages.">
-          <input type="number" value={superRate} onChange={(e) => setSuperRate(e.target.value)}
-            className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)]" />
-        </Field>
-      </div>
       <p className="text-ink-dim text-xs mt-3">
-        Monthly running costs are entered as lines on the input screen, not here.
+        Monthly expenses are reconciled from the accounts on the input screen,
+        not modelled here.
       </p>
       <div className="grid grid-cols-2 gap-4 mt-4">
         <Field label="Target monthly revenue in 6 months">
@@ -1155,9 +1168,12 @@ function InputsPanel({
 }) {
   const [bank, setBank] = useState(report.inputs.bankBalance?.toString() ?? '');
   const [mrrOverride, setMrrOverride] = useState(report.inputs.liveMrrOverride?.toString() ?? '');
-  const [costItem, setCostItem] = useState('');
-  const [costAmount, setCostAmount] = useState('');
-  const [costCat, setCostCat] = useState('software');
+  const [actualExpenses, setActualExpenses] = useState(
+    report.inputs.actualExpenses?.toString() ?? '',
+  );
+  const [actualRevenue, setActualRevenue] = useState(
+    report.inputs.actualRevenue?.toString() ?? '',
+  );
 
   const [drawDate, setDrawDate] = useState(report.periodEnd);
   const [drawAmount, setDrawAmount] = useState('');
@@ -1192,6 +1208,8 @@ function InputsPanel({
       await api.saveInvestorInputs(report.month, {
         bankBalance: bank === '' ? null : Number(bank),
         liveMrrOverride: mrrOverride === '' ? null : Number(mrrOverride),
+        actualExpenses: actualExpenses === '' ? null : Number(actualExpenses),
+        actualRevenue: actualRevenue === '' ? null : Number(actualRevenue),
       });
       setSaved(true);
       onChanged();
@@ -1212,17 +1230,6 @@ function InputsPanel({
     }
   };
 
-  const addCost = async () => {
-    if (!costItem.trim() || !costAmount) return;
-    try {
-      await api.addInvestorCost({
-        item: costItem.trim(), amount: Number(costAmount), category: costCat,
-      });
-      setCostItem(''); setCostAmount(''); onChanged();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Could not add that cost.');
-    }
-  };
 
   const addDraw = async () => {
     if (!drawAmount) return;
@@ -1274,6 +1281,18 @@ function InputsPanel({
             <input type="number" value={mrrOverride} onChange={(e) => setMrrOverride(e.target.value)}
               placeholder={String(report.inputs.crmLiveMrr)} className={input} />
           </Field>
+          <Field label="Total expenses this month"
+            hint="Straight off the Xero P&L. Wages and super are already inside it, so nothing gets added on top.">
+            <input type="number" step="0.01" value={actualExpenses}
+              onChange={(e) => setActualExpenses(e.target.value)}
+              placeholder="0.00" className={input} />
+          </Field>
+          <Field label="Revenue received this month"
+            hint="Total trading income for the month.">
+            <input type="number" step="0.01" value={actualRevenue}
+              onChange={(e) => setActualRevenue(e.target.value)}
+              placeholder="0.00" className={input} />
+          </Field>
         </div>
         <div className="flex items-center gap-3 mt-4">
           <PillButton variant="primary" size="md" trailing="none"
@@ -1312,58 +1331,6 @@ function InputsPanel({
                 if (!window.confirm(`Remove the ${aud(p.amount)} payment for "${p.item}"?`)) return;
                 try { await api.deleteRingfencePayment(p.id); onChanged(); }
                 catch { onError('Could not remove that payment.'); }
-              }}
-              className="text-ink-faint hover:text-risk p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Trash2 size={12} />
-            </button>
-          </div>
-        ))}
-      </FormSection>
-
-      <FormSection title="What it costs to run each month"
-        right={report.costs.base > 0 ? `${aud(report.costs.base)} a month` : 'Not set'}>
-        <p className="text-ink-dim text-xs mb-3 leading-relaxed">
-          Set these once. They carry forward every month, so there is nothing to
-          retally — just change a line when a cost actually changes. Runway cannot
-          be worked out until something is here.
-          {report.costs.superAmount > 0 && (
-            <> Superannuation of {aud(report.costs.superAmount)} is added
-            automatically at {report.costs.superRate}% of anything marked as
-            wages — don't enter it as a line.</>
-          )}
-        </p>
-        <div className="grid grid-cols-[1fr_8rem_9rem_auto] gap-2 items-end mb-3">
-          <Field label="What">
-            <input value={costItem} onChange={(e) => setCostItem(e.target.value)}
-              placeholder="e.g. Jordan wage" className={input} />
-          </Field>
-          <Field label="Per month">
-            <input type="number" value={costAmount} onChange={(e) => setCostAmount(e.target.value)}
-              placeholder="0" className={input} />
-          </Field>
-          <Field label="Type">
-            <select value={costCat} onChange={(e) => setCostCat(e.target.value)} className={input}>
-              <option value="wages">Wages</option>
-              <option value="software">Software</option>
-              <option value="contractors">Contractors</option>
-              <option value="other">Other</option>
-            </select>
-          </Field>
-          <button onClick={addCost} disabled={!costItem.trim() || !costAmount}
-            className="bg-ink text-white rounded-lg p-2.5 hover:bg-[#1a1d1f] transition-all disabled:opacity-40 mb-[1px]">
-            <Plus size={16} />
-          </button>
-        </div>
-        {report.costs.lines.map((c) => (
-          <div key={c.id} className="flex items-center gap-3 py-1.5 border-b border-hair-soft last:border-0 text-sm group">
-            <span className="text-ink flex-1">{c.item}</span>
-            <span className="text-ink-dim text-xs">{COST_LABEL[c.category] || c.category}</span>
-            <span className="text-ink tabular-nums">{aud(c.amount)}</span>
-            <button
-              onClick={async () => {
-                if (!window.confirm(`Remove "${c.item}" from monthly costs?`)) return;
-                try { await api.deleteInvestorCost(c.id); onChanged(); }
-                catch { onError('Could not remove that cost.'); }
               }}
               className="text-ink-faint hover:text-risk p-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <Trash2 size={12} />

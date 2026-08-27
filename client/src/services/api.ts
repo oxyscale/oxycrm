@@ -1208,12 +1208,6 @@ export type InvestorRunway =
   | { state: 'covered' }
   | { state: 'unknown' };
 
-export interface InvestorCost {
-  id: number;
-  item: string;
-  amount: number;
-  category: string;
-}
 
 export interface InvestorPipelineRow {
   leadId: number;
@@ -1309,16 +1303,17 @@ export interface InvestorReport {
     bankBalance: number; liveMrr: number; committedMrr: number;
     committedIncoming: number;
     runway: InvestorRunway; forecastRunway: InvestorRunway;
-    costBase: number;
-    costLines: InvestorCost[];
+    avgNetBurn: number | null;
   };
-  costs: {
-    base: number;
-    lines: InvestorCost[];
-    linesTotal: number;
-    wagesTotal: number;
-    superRate: number;
-    superAmount: number;
+  /** Reconciled from Xero: what actually went out and came in. */
+  actuals: {
+    trend: Array<{
+      month: string; monthLabel: string;
+      expenses: number | null; revenue: number | null; netBurn: number | null;
+    }>;
+    avgNetBurn: number | null;
+    expenses: number | null;
+    revenue: number | null;
   };
   plannedSpend: Array<{
     id: number; item: string; estimatedCost: number;
@@ -1330,6 +1325,8 @@ export interface InvestorReport {
     liveMrrOverride: number | null;
     crmLiveMrr: number;
     potWagesDrawn: number;
+    actualExpenses: number | null;
+    actualRevenue: number | null;
   };
 }
 
@@ -1356,7 +1353,6 @@ export interface InvestorReportResponse {
 export interface InvestorSettings {
   revenueLeadDays: number;
   monthlyCostBase: number;
-  superRate: number;
   forecastMrr6: number;
   forecastMrr12: number;
   forecastNote: string;
@@ -1377,7 +1373,11 @@ export async function getInvestorMonths(): Promise<
 
 export async function saveInvestorInputs(
   month: string,
-  data: { bankBalance?: number | null; liveMrrOverride?: number | null; potWagesDrawn?: number },
+  data: {
+    bankBalance?: number | null; liveMrrOverride?: number | null;
+    potWagesDrawn?: number;
+    actualExpenses?: number | null; actualRevenue?: number | null;
+  },
 ): Promise<InvestorReport> {
   return request(`/investor/report/${month}/inputs`, { method: 'PATCH', body: JSON.stringify(data) });
 }
@@ -1435,22 +1435,8 @@ export async function deleteInvestorRisk(id: number): Promise<void> {
   await request(`/investor/risks/${id}`, { method: 'DELETE' });
 }
 
-export async function addInvestorCost(
-  data: { item: string; amount: number; category?: string },
-): Promise<{ id: number }> {
-  return request('/investor/costs', { method: 'POST', body: JSON.stringify(data) });
-}
 
-export async function updateInvestorCost(
-  id: number,
-  data: Partial<{ item: string; amount: number; category: string }>,
-): Promise<{ success: true }> {
-  return request(`/investor/costs/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
-}
 
-export async function deleteInvestorCost(id: number): Promise<void> {
-  await request(`/investor/costs/${id}`, { method: 'DELETE' });
-}
 
 export async function addWageDraw(
   data: { drawnOn: string; item?: string; amount: number },
