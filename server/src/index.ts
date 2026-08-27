@@ -185,8 +185,22 @@ app.use((req, _res, next) => {
 
 // Health check — unauthenticated. Useful for Railway's health probe
 // and for confirming the server is alive without needing to log in.
+// Which build is actually serving, and how long it has been up.
+// Without this a server-only deploy is unverifiable from outside — the
+// client bundle hash does not move, so "it deployed" is a guess.
+// Railway injects the commit SHA; locally there is none, which is
+// itself the useful answer.
+const BUILD_SHA = (process.env.RAILWAY_GIT_COMMIT_SHA || 'local').slice(0, 7);
+const BOOTED_AT = new Date();
+
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    build: BUILD_SHA,
+    bootedAt: BOOTED_AT.toISOString(),
+    uptimeSeconds: Math.round((Date.now() - BOOTED_AT.getTime()) / 1000),
+  });
 });
 
 // Rate limiters. Keyed by IP via trust proxy. Defaults are
