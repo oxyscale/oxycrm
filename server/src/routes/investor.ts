@@ -19,6 +19,7 @@
 // ============================================================
 
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { ApiError } from '../middleware/errorHandler.js';
@@ -27,6 +28,52 @@ import { requireAuth } from '../middleware/auth.js';
 import { sendEmail } from '../services/email.js';
 
 const logger = pino({ name: 'investor-routes' });
+
+/**
+ * Public router for shared report links. Mounted BEFORE the auth
+ * middleware, so it must do its own checking: a valid, unexpired,
+ * unrevoked token and nothing else. It serves only the frozen payload
+ * for that one month — never live data, never any other month.
+ */
+export const publicRouter = Router();
+
+publicRouter.get('/shared/:token', (req, res, next) => {
+  try {
+    const token = String(req.params.token || '');
+    // Constant length, hex only. Anything else is not a token we minted.
+    if (!/^[a-f0-9]{64}$/.test(token)) {
+      throw new ApiError(404, 'This link is not valid.');
+    }
+    const db = getDb();
+    const row = db.prepare(`
+      SELECT month, payload, expires_at, revoked_at FROM investor_share_links
+       WHERE token = ?
+    `).get(token) as
+      { month: string; payload: string; expires_at: string; revoked_at: string | null } | undefined;
+
+    if (!row) throw new ApiError(404, 'This link is not valid.');
+    if (row.revoked_at) throw new ApiError(410, 'This link has been revoked.');
+    if (row.expires_at <= new Date().toISOString()) {
+      throw new ApiError(410, 'This link has expired.');
+    }
+
+    db.prepare(`
+      UPDATE investor_share_links
+         SET view_count = view_count + 1, last_viewed_at = datetime('now')
+       WHERE token = ?
+    `).run(token);
+
+    const stored = JSON.parse(row.payload) as { html: string; monthLabel: string };
+    res.json({
+      html: stored.html,
+      month: row.month,
+      monthLabel: stored.monthLabel,
+      expiresAt: row.expires_at,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 const router = Router();
 router.use(requireAuth);
@@ -1120,10 +1167,81 @@ router.patch('/settings', (req, res, next) => {
   }
 });
 
+// ── share links ───────────────────────────────────────────────────
+
+const SHARE_DAYS = 30;
+
+const shareSchema = z.object({
+  // The rendered document, captured from the page. Storing the HTML
+  // rather than the data means the shared page cannot drift from what
+  // was previewed, for the same reason the email carries it.
+  html: z.string().min(1).max(2_000_000),
+});
+
+/** POST /api/investor/report/:month/share — mint a link. */
+router.post('/report/:month/share', (req, res, next) => {
+  try {
+    const month = req.params.month;
+    assertMonth(month);
+    const body = shareSchema.parse(req.body);
+    const db = getDb();
+
+    // Frozen at mint time, so the page a shareholder opens next week is
+    // the one that was sent.
+    const report = { html: body.html, monthLabel: monthLabel(month) };
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + SHARE_DAYS * 86400000).toISOString();
+
+    db.prepare(`
+      INSERT INTO investor_share_links (token, month, payload, expires_at)
+      VALUES (?, ?, ?, ?)
+    `).run(token, month, JSON.stringify(report), expires);
+
+    logger.info({ month, expires }, 'Share link created');
+    res.status(201).json({ token, expiresAt: expires, expiresInDays: SHARE_DAYS });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/investor/report/:month/share — links for this month. */
+router.get('/report/:month/share', (req, res, next) => {
+  try {
+    const month = req.params.month;
+    assertMonth(month);
+    const rows = getDb().prepare(`
+      SELECT token, created_at AS createdAt, expires_at AS expiresAt,
+             revoked_at AS revokedAt, view_count AS viewCount,
+             last_viewed_at AS lastViewedAt
+        FROM investor_share_links WHERE month = ?
+       ORDER BY created_at DESC
+    `).all(month);
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/investor/share/:token — revoke immediately. */
+router.delete('/share/:token', (req, res, next) => {
+  try {
+    const r = getDb().prepare(`
+      UPDATE investor_share_links SET revoked_at = datetime('now')
+       WHERE token = ? AND revoked_at IS NULL
+    `).run(String(req.params.token));
+    if (r.changes === 0) throw new ApiError(404, 'Link not found or already revoked.');
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── email ────────────────────────────────────────────────────────
 
 const emailSchema = z.object({
   html: z.string().min(1),
+  text: z.string().max(20_000).optional(),
   subject: z.string().min(1).max(200).optional(),
   to: z.array(z.string().email()).optional(),
 });
@@ -1146,8 +1264,8 @@ router.post('/report/:month/email', async (req, res, next) => {
     }
 
     const subject = body.subject || `OxyScale business health — ${monthLabel(month)}`;
-    const text = `OxyScale business health update for ${monthLabel(month)}.\n\n`
-      + 'This report is best viewed as HTML.';
+    const text = body.text
+      || `OxyScale business health update for ${monthLabel(month)}.`;
 
     await sendEmail({
       to: recipients.join(', '),

@@ -434,18 +434,47 @@ export default function BusinessHealthPage() {
     setBusy(true);
     setError(null);
     try {
-      // The covering note sits above the report, and the report itself is
-      // exactly what is on screen — so the email cannot drift from the
-      // preview.
-      const intro = note.trim()
-        ? `<div style="font-family:Geist,Helvetica,Arial,sans-serif;color:#0b0d0e;font-size:15px;line-height:1.6;max-width:640px;margin:0 auto 28px">
-             ${note.trim().split('\n').filter(Boolean).map((l) => `<p style="margin:0 0 12px">${l}</p>`).join('')}
-           </div>`
+      // Freeze the document behind a link rather than pasting it into
+      // the email. What they open is what was previewed, and it stops
+      // being reachable after thirty days.
+      const link = await api.createShareLink(report.month, printRef.current.innerHTML);
+      const url = `${window.location.origin}/health/shared/${link.token}`;
+
+      const paragraphs = note.trim()
+        ? note.trim().split('\n').filter(Boolean)
+            .map((l) => `<p style="margin:0 0 14px">${l}</p>`).join('')
         : '';
-      const html = `<div style="font-family:Geist,Helvetica,Arial,sans-serif;color:#0b0d0e">${intro}${printRef.current.innerHTML}</div>`;
-      const res = await api.emailInvestorReport(report.month, { html, subject, to });
+
+      const html = `
+<div style="background:#faf9f5;padding:32px 16px;font-family:Geist,Helvetica,Arial,sans-serif">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid rgba(11,13,14,0.05);border-radius:16px;padding:36px 34px">
+    <p style="margin:0 0 26px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:10px;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:#8a95a0">
+      Oxy<span style="color:#0a9cd4">Scale</span> &middot; Business health
+    </p>
+    <h1 style="margin:0 0 22px;font-size:30px;font-weight:500;letter-spacing:-0.03em;color:#0b0d0e;line-height:1.1">
+      ${report.monthLabel}
+    </h1>
+    <div style="font-size:15px;line-height:1.65;color:#55606a">${paragraphs}</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:30px 0 8px">
+      <tr><td style="border-radius:999px;background:#0b0d0e">
+        <a href="${url}" style="display:inline-block;padding:14px 30px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:999px">
+          View OxyScale Business Health
+        </a>
+      </td></tr>
+    </table>
+    <p style="margin:20px 0 0;font-size:12px;line-height:1.6;color:#8a95a0">
+      Opens in your browser, with a Download PDF button on the page.
+      This link expires in ${link.expiresInDays} days.
+    </p>
+  </div>
+</div>`;
+
+      const text = `${note.trim()}\n\nView the ${report.monthLabel} report: ${url}\n\n`
+        + `This link expires in ${link.expiresInDays} days.`;
+
+      const res = await api.emailInvestorReport(report.month, { html, subject, to, text });
       setShowCompose(false);
-      setNotice(`Sent to ${res.sentTo.join(', ')}.`);
+      setNotice(`Sent to ${res.sentTo.join(', ')}. Link expires in ${link.expiresInDays} days.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not send the report.');
     } finally { setBusy(false); }
@@ -1365,9 +1394,9 @@ function ComposePanel({
       </div>
 
       <div className="flex items-center justify-between gap-3 mt-5">
-        <p className="text-ink-dim text-xs">
-          The report goes in the body of the email, exactly as shown on this
-          page. Use Print for a PDF.
+        <p className="text-ink-dim text-xs max-w-[26rem] leading-relaxed">
+          They get a short note and a button. It opens this report in their
+          browser with a Download PDF button, and stops working after 30 days.
         </p>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={onCancel}

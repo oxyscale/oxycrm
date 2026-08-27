@@ -1389,6 +1389,23 @@ export function initializeDatabase(db: Database.Database): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Share links for the monthly report. The report JSON is frozen
+    -- into the row at mint time, so a link never changes after it is
+    -- sent, whatever happens in the CRM afterwards.
+    CREATE TABLE IF NOT EXISTS investor_share_links (
+      token      TEXT PRIMARY KEY,
+      month      TEXT NOT NULL,
+      payload    TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT NOT NULL,
+      revoked_at TEXT,
+      last_viewed_at TEXT,
+      view_count INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_share_links_month
+      ON investor_share_links(month);
+
     CREATE INDEX IF NOT EXISTS idx_ringfence_paid_on
       ON investor_ringfence_payments(paid_on);
     CREATE INDEX IF NOT EXISTS idx_wage_draws_on

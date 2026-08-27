@@ -31,7 +31,7 @@ import googleRouter from './routes/google.js';
 import webhooksRouter from './routes/webhooks.js';
 import notesRouter from './routes/notes.js';
 import projectsRouter from './routes/projects.js';
-import investorRouter from './routes/investor.js';
+import investorRouter, { publicRouter as investorPublicRouter } from './routes/investor.js';
 import activitiesRouter from './routes/activities.js';
 import pipelineRouter from './routes/pipeline.js';
 import settingsRouter from './routes/settings.js';
@@ -232,10 +232,20 @@ const PUBLIC_API_PATHS = new Set<string>([
   '/webhooks/resend',
 ]);
 
+// Prefixes that carry their own credential in the URL, so a session
+// cookie is neither present nor required. The shared-report route
+// validates its token, expiry and revocation itself before returning
+// anything, and serves only the frozen payload for one month.
+const PUBLIC_API_PREFIXES = ['/investor/shared/'];
+
 app.use('/api', (req, res, next) => {
   if (PUBLIC_API_PATHS.has(req.path)) return next();
+  if (PUBLIC_API_PREFIXES.some((prefix) => req.path.startsWith(prefix))) return next();
   return requireAuth(req, res, next);
 });
+
+// Mounted before the routers below so the prefix check above governs it.
+app.use('/api/investor', investorPublicRouter);
 
 app.use('/api/leads', leadsRouter);
 app.use('/api/calls', callsRouter);

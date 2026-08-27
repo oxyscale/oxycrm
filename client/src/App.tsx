@@ -16,6 +16,7 @@ import SettingsPage from './pages/SettingsPage';
 import EmailBankPage from './pages/EmailBankPage';
 import ReportsPage from './pages/ReportsPage';
 import BusinessHealthPage from './pages/BusinessHealthPage';
+import SharedHealthPage from './pages/SharedHealthPage';
 import PrintReportPage from './pages/PrintReportPage';
 import TasksPage from './pages/TasksPage';
 
@@ -40,6 +41,10 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* Public. The token in the URL is the credential; the server
+          validates it, its expiry and any revocation before returning
+          anything. Deliberately outside RequireAuth. */}
+      <Route path="/health/shared/:token" element={<SharedHealthPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route

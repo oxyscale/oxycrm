@@ -1484,9 +1484,19 @@ export async function updateInvestorSettings(
   return request('/investor/settings', { method: 'PATCH', body: JSON.stringify(data) });
 }
 
+export async function createShareLink(
+  month: string,
+  html: string,
+): Promise<{ token: string; expiresAt: string; expiresInDays: number }> {
+  return request(`/investor/report/${month}/share`, {
+    method: 'POST',
+    body: JSON.stringify({ html }),
+  });
+}
+
 export async function emailInvestorReport(
   month: string,
-  data: { html: string; subject?: string; to?: string[] },
+  data: { html: string; text?: string; subject?: string; to?: string[] },
 ): Promise<{ success: true; sentTo: string[] }> {
   return request(`/investor/report/${month}/email`, { method: 'POST', body: JSON.stringify(data) });
 }
