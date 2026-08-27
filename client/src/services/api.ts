@@ -1253,6 +1253,7 @@ export interface InvestorReport {
   settings: { revenueLeadDays: number };
   forecast: {
     mrr6: number; mrr12: number; note: string;
+    avgClientValue: number;
     liveMrr: number; committedMrr: number;
   };
   tiles: {
@@ -1356,6 +1357,7 @@ export interface InvestorSettings {
   forecastMrr6: number;
   forecastMrr12: number;
   forecastNote: string;
+  avgClientValue: number;
   potRingfenceTotal: number;
   potWagesTotal: number;
   distributionList: string[];

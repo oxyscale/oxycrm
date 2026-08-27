@@ -57,6 +57,13 @@ function runwayNote(
   return '';
 }
 
+/** A dollar figure expressed as a client count. */
+function clientsFor(amount: number, avg: number): string {
+  if (!(avg > 0)) return '—';
+  const n = Math.round(amount / avg);
+  return `${n} ${n === 1 ? 'client' : 'clients'}`;
+}
+
 // ── month-on-month delta ─────────────────────────────────────────
 
 /**
@@ -843,7 +850,7 @@ export default function InvestorReportPage() {
             )}
           </Band>
 
-          {/* 06 — Forecast */}
+          {/* 07 — Forecast */}
           <Band n="07" title="Where we are heading">
             {report.forecast.mrr6 === 0 && report.forecast.mrr12 === 0 ? (
               <p className="text-ink-dim text-sm">
@@ -853,18 +860,20 @@ export default function InvestorReportPage() {
               <>
                 <div className="grid grid-cols-3 gap-10">
                   <Lead label="Today" value={aud(report.forecast.committedMrr)}
-                    note="Committed monthly revenue" />
-                  <Lead label="In 6 months" value={aud(report.forecast.mrr6)}
-                    note={report.forecast.mrr6 > report.forecast.committedMrr
-                      ? `${aud(report.forecast.mrr6 - report.forecast.committedMrr)} more to find`
-                      : 'Target already met'} />
-                  <Lead label="In 12 months" value={aud(report.forecast.mrr12)}
-                    note={report.forecast.mrr12 > report.forecast.committedMrr
-                      ? `${aud(report.forecast.mrr12 - report.forecast.committedMrr)} more to find`
-                      : 'Target already met'} />
+                    note={`${clientsFor(report.forecast.committedMrr, report.forecast.avgClientValue)} · committed monthly revenue`} />
+                  <Horizon label="In 6 months" target={report.forecast.mrr6}
+                    committed={report.forecast.committedMrr}
+                    avg={report.forecast.avgClientValue} />
+                  <Horizon label="In 12 months" target={report.forecast.mrr12}
+                    committed={report.forecast.committedMrr}
+                    avg={report.forecast.avgClientValue} />
                 </div>
+                <p className="text-ink-dim text-xs mt-6 leading-relaxed max-w-[62ch]">
+                  Client numbers assume an average of{' '}
+                  {aud(report.forecast.avgClientValue)} a month each.
+                </p>
                 {report.forecast.note && (
-                  <p className="text-ink-muted text-sm mt-6 leading-relaxed max-w-[52ch]">
+                  <p className="text-ink-muted text-sm mt-3 leading-relaxed max-w-[52ch]">
                     {report.forecast.note}
                   </p>
                 )}
@@ -994,6 +1003,43 @@ function Lead({
       </p>
       {delta && <div className="mt-2">{delta}</div>}
       {note && <p className="text-ink-muted text-xs mt-2 leading-relaxed max-w-[30ch]">{note}</p>}
+    </div>
+  );
+}
+
+/**
+ * A forecast horizon. States the target, how many clients that is, and
+ * the gap from where the business is today — a dollar figure alone
+ * doesn't tell you what to go and do. An unset target says so rather
+ * than rendering as $0, which would read as a target of nothing.
+ */
+function Horizon({
+  label, target, committed, avg,
+}: { label: string; target: number; committed: number; avg: number }) {
+  if (!(target > 0)) {
+    return (
+      <div>
+        <Micro>{label}</Micro>
+        <p className="mt-2 text-ink-faint text-[38px] font-medium leading-none tracking-[-0.035em]">
+          &mdash;
+        </p>
+        <p className="text-ink-dim text-xs mt-2">No target set</p>
+      </div>
+    );
+  }
+  const gap = target - committed;
+  return (
+    <div>
+      <Micro>{label}</Micro>
+      <p className="mt-2 text-ink text-[38px] font-medium leading-none tracking-[-0.035em] tabular-nums">
+        {aud(target)}
+      </p>
+      <p className="text-ink-muted text-xs mt-2 leading-relaxed max-w-[30ch]">
+        {clientsFor(target, avg)}
+        {gap > 0
+          ? ` · ${clientsFor(gap, avg)} more to sign`
+          : ' · already there'}
+      </p>
     </div>
   );
 }

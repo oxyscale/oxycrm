@@ -1402,13 +1402,18 @@ export function initializeDatabase(db: Database.Database): void {
     // because the statutory rate moves.
     ['super_rate', '12'],
     ['forecast_mrr_6', '0'],
-    ['forecast_mrr_12', '0'],
+    ['forecast_mrr_12', '50000'],
+    // What a typical client is worth per month. Turns a revenue target
+    // into a number of clients, which is the thing you can actually go
+    // and do something about.
+    ['avg_client_value', '2500'],
     ['forecast_note', ''],
     ['distribution_list', JSON.stringify([
-      'stephen.borg@example.com',
-      'joe.sette@example.com',
-      'jarrad.dowling@example.com',
+      'stephen@millerleith.com.au',
+      'joe@millerleith.com.au',
+      'jarrad@junctionadvisorygroup.com.au',
       'george@oxyscale.ai',
+      'jordan@oxyscale.ai',
     ])],
   ];
   const insertSetting = db.prepare(
@@ -1699,6 +1704,48 @@ export function initializeDatabase(db: Database.Database): void {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[schema] bank balance seed failed:', err);
+    }
+  }
+
+  // Real recipients and the agreed target, replacing the placeholders
+  // the section shipped with. Only overwrites the placeholder values, so
+  // anything edited in the app is left alone.
+  const investorSettingsV2 = db
+    .prepare("SELECT value FROM settings WHERE key = 'investor_settings_v2'")
+    .get() as { value: string } | undefined;
+
+  if (!investorSettingsV2) {
+    try {
+      const put = db.prepare(
+        'INSERT INTO investor_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+      );
+      const current = db
+        .prepare("SELECT value FROM investor_settings WHERE key = 'distribution_list'")
+        .get() as { value: string } | undefined;
+      if (!current || current.value.includes('example.com')) {
+        put.run('distribution_list', JSON.stringify([
+          'stephen@millerleith.com.au',
+          'joe@millerleith.com.au',
+          'jarrad@junctionadvisorygroup.com.au',
+          'george@oxyscale.ai',
+          'jordan@oxyscale.ai',
+        ]));
+      }
+      const target = db
+        .prepare("SELECT value FROM investor_settings WHERE key = 'forecast_mrr_12'")
+        .get() as { value: string } | undefined;
+      if (!target || Number(target.value) === 0) put.run('forecast_mrr_12', '50000');
+      const avg = db
+        .prepare("SELECT value FROM investor_settings WHERE key = 'avg_client_value'")
+        .get() as { value: string } | undefined;
+      if (!avg) put.run('avg_client_value', '2500');
+
+      db.prepare(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('investor_settings_v2', ?)"
+      ).run(new Date().toISOString());
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[schema] investor settings update failed:', err);
     }
   }
 

@@ -102,6 +102,7 @@ type Settings = {
   forecastMrr6: number;
   forecastMrr12: number;
   forecastNote: string;
+  avgClientValue: number;
   potRingfenceTotal: number;
   potWagesTotal: number;
   distributionList: string[];
@@ -129,6 +130,7 @@ function readSettings(): Settings {
     forecastMrr6: num('forecast_mrr_6', 0),
     forecastMrr12: num('forecast_mrr_12', 0),
     forecastNote: map.get('forecast_note') ?? '',
+    avgClientValue: num('avg_client_value', 2500),
     potRingfenceTotal: num('pot_ringfence_total', 30000),
     potWagesTotal: num('pot_wages_total', 90000),
     distributionList: list,
@@ -524,6 +526,10 @@ function buildReport(month: string) {
       mrr6: settings.forecastMrr6,
       mrr12: settings.forecastMrr12,
       note: settings.forecastNote,
+      // A dollar target is abstract; clients are countable. Derived from
+      // the average client value rather than entered separately, so the
+      // two can never disagree.
+      avgClientValue: settings.avgClientValue,
       // Months to the target at the current committed run rate, so the
       // ambition sits next to where the business actually is.
       liveMrr,
@@ -972,6 +978,7 @@ const settingsSchema = z.object({
   forecastMrr6: z.number().min(0).optional(),
   forecastMrr12: z.number().min(0).optional(),
   forecastNote: z.string().max(600).optional(),
+  avgClientValue: z.number().min(1).optional(),
   potRingfenceTotal: z.number().min(0).optional(),
   potWagesTotal: z.number().min(0).optional(),
   distributionList: z.array(z.string().email()).optional(),
@@ -990,6 +997,7 @@ router.patch('/settings', (req, res, next) => {
       forecastMrr6: 'forecast_mrr_6',
       forecastMrr12: 'forecast_mrr_12',
       forecastNote: 'forecast_note',
+      avgClientValue: 'avg_client_value',
       potRingfenceTotal: 'pot_ringfence_total',
       potWagesTotal: 'pot_wages_total',
     };
