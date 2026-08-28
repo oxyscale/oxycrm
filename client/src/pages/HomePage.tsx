@@ -34,7 +34,7 @@ import type { ImportResult, DuplicateLead, Activity, Lead } from '../types';
 // ── Pipeline stage display config ────────────────────────────
 const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
   new_lead: { label: 'New lead', color: '#0a9cd4' },
-  no_answer: { label: 'No answer', color: '#94a3b8' },
+  no_answer: { label: 'Fairies', color: '#94a3b8' },
   meeting_booked: { label: 'Meeting booked', color: '#f59e0b' },
   proposal: { label: 'Proposal sent', color: '#5ec5e6' },
   pulse: { label: 'Pulse', color: '#8b5cf6' },

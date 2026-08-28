@@ -38,7 +38,7 @@ interface TierBucket {
 const TIER_LABELS: Record<string, string> = {
   pulse: 'Pulse',
   new_lead: 'New lead',
-  no_answer: 'No answer',
+  no_answer: 'Fairies',
   proposal: 'Proposal sent',
   meeting_booked: 'Meeting booked',
   on_ice: 'Ice',

@@ -56,7 +56,7 @@ const CREATE_CAMPAIGN_VALUE = '__create_campaign__';
 
 const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
   { value: 'new_lead', label: 'New lead' },
-  { value: 'no_answer', label: 'No answer' },
+  { value: 'no_answer', label: 'Fairies' },
   { value: 'meeting_booked', label: 'Meeting booked' },
   { value: 'proposal', label: 'Proposal sent' },
   { value: 'pulse', label: 'Pulse' },
@@ -99,6 +99,9 @@ function formatDuration(seconds: number | null) {
 }
 
 function dispositionLabel(disposition: string) {
+  // Call outcomes, not pipeline stages. 'no_answer' here means nobody
+  // picked up on that call — it shares a name with the Fairies stage
+  // but is a different thing, and renaming it would mislabel history.
   const labels: Record<string, string> = {
     interested: 'Interested',
     not_interested: 'Not Interested',

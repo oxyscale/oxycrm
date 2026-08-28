@@ -89,9 +89,9 @@ function mapLeadRow(row: LeadRow & { current_retainer?: number | null }): Lead {
 // Validation schemas
 // ============================================================
 
-// Board order, left to right. No Answer is a calling outcome that sits
-// beside New lead; Ice parks a deal that has gone quiet after the
-// pitch. Neither is a closed outcome — both can be revived.
+// Board order, left to right. Fairies holds the ones who never pick
+// up (stored as no_answer); Ice parks a deal that has gone quiet
+// after the pitch. Neither is a closed outcome — both can be revived.
 const PIPELINE_STAGES: [PipelineStage, ...PipelineStage[]] = [
   'new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', 'on_ice', 'won', 'lost',
 ];
@@ -113,7 +113,7 @@ const updateTemperatureSchema = z.object({
 
 const stageLabels: Record<PipelineStage, string> = {
   new_lead: 'New lead',
-  no_answer: 'No answer',
+  no_answer: 'Fairies',
   meeting_booked: 'Meeting booked',
   proposal: 'Proposal sent',
   pulse: 'Pulse',

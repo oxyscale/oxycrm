@@ -31,7 +31,7 @@ interface StageColumn {
 
 const STAGES: StageColumn[] = [
   { key: 'new_lead', label: 'New lead', color: 'bg-sky-ink', bgTint: 'bg-[rgba(10,156,212,0.06)]' },
-  { key: 'no_answer', label: 'No answer', color: 'bg-[#94a3b8]', bgTint: 'bg-[rgba(148,163,184,0.07)]' },
+  { key: 'no_answer', label: 'Fairies', color: 'bg-[#94a3b8]', bgTint: 'bg-[rgba(148,163,184,0.07)]' },
   { key: 'meeting_booked', label: 'Meeting booked', color: 'bg-amber-400', bgTint: 'bg-[rgba(245,158,11,0.06)]' },
   { key: 'proposal', label: 'Proposal sent', color: 'bg-sky', bgTint: 'bg-[rgba(94,197,230,0.08)]' },
   { key: 'pulse', label: 'Pulse', color: 'bg-violet-500', bgTint: 'bg-[rgba(139,92,246,0.06)]' },
