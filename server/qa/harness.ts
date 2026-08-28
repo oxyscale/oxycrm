@@ -54,6 +54,7 @@ export async function startHarness(): Promise<Ctx> {
   app.use('/api/notes', require('../src/routes/notes').default);
   app.use('/api/activities', require('../src/routes/activities').default);
   app.use('/api/settings', require('../src/routes/settings').default);
+  app.use('/api/reports', require('../src/routes/reports').default);
   app.use(createErrorHandler(pino({ level: 'silent' })));
 
   const server = app.listen(0);

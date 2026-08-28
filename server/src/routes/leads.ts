@@ -287,7 +287,7 @@ const createLeadSchema = z.object({
   campaignContent: z.string().nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
-  pipelineStage: z.enum(['new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost']).nullable().optional(),
+  pipelineStage: z.enum(['new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', 'on_ice', 'won', 'lost']).nullable().optional(),
 });
 
 const updateLeadSchema = z.object({
@@ -304,7 +304,7 @@ const updateLeadSchema = z.object({
   consolidatedSummary: z.string().nullable().optional(),
   companyInfo: z.string().nullable().optional(),
   // null = no tier assigned; lead lives in Leads only, hidden from kanban.
-  pipelineStage: z.enum(['new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost']).nullable().optional(),
+  pipelineStage: z.enum(['new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', 'on_ice', 'won', 'lost']).nullable().optional(),
   temperature: z.enum(['hot', 'warm', 'cold']).nullable().optional(),
   followUpDate: z.string().nullable().optional(),
   dealValue: z.number().min(0).optional(),
@@ -1252,7 +1252,7 @@ router.post('/undo-import', upload.single('file'), (req, res, next) => {
     // schema migration converts them to NULL at boot, but new INSERTs
     // can still pick up the column default before the explicit NULL
     // assignment lands everywhere.
-    const REAL_TIER_STAGES = new Set(['new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost']);
+    const REAL_TIER_STAGES = new Set(['new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', 'on_ice', 'won', 'lost']);
 
     function protectionReason(lead: typeof allLeads[number]): string | null {
       // Lead is in any REAL pipeline tier = intentional placement by Jordan.
@@ -2590,10 +2590,6 @@ router.post('/:id/disposition', (req, res, next) => {
       throw new ApiError(400, 'wrong_number deletes the lead — a follow-up date cannot be set');
     }
 
-    // Consecutive-no-answer threshold before a never-answered lead is retired to the "five_strikes" pipeline stage.
-    // Leads that have EVER had an answered call (interested / not_interested disposition) are immune to this rule
-    // and stay in the cycler indefinitely — a long-term relationship missing a few calls must not be retired.
-    const threshold = parseInt(process.env.UNANSWERED_CALL_THRESHOLD || '5', 10);
     const now = new Date().toISOString();
 
     // Run disposition logic in a transaction to keep data consistent
@@ -2645,53 +2641,25 @@ router.post('/:id/disposition', (req, res, next) => {
       db.prepare('UPDATE leads SET last_called_at = ?, updated_at = ? WHERE id = ?')
         .run(now, now, id);
 
-      // Pipeline simplification (May 2026): the disposition flow no longer
-      // moves leads between stages — the user owns tier placement manually.
-      // The disposition still records the call, updates status, increments
-      // unanswered counters, and (for wrong_number) deletes the lead.
-      // Strike-system retirement now sends leads to 'lost' instead of the
-      // retired 'five_strikes' stage.
-      const answeredRow = db.prepare(`
-        SELECT COUNT(*) as c FROM call_logs
-        WHERE lead_id = ? AND disposition IN ('interested', 'not_interested')
-      `).get(id) as { c: number };
-      const hasEverAnswered = answeredRow.c > 0;
-
+      // A disposition never moves a lead between stages. Placement is
+      // yours: the count of unanswered calls is recorded so you can see
+      // it, and what to do about it is a judgement made from the notes,
+      // not a rule the app applies on your behalf.
       switch (payload.disposition) {
         case 'no_answer': {
-          const newCount = leadRow.unanswered_calls + 1;
-          if (!hasEverAnswered && newCount >= threshold) {
-            db.prepare(
-              `UPDATE leads
-               SET unanswered_calls = ?, status = ?, pipeline_stage = ?, updated_at = ?
-               WHERE id = ?`
-            ).run(newCount, 'called', 'lost', now, id);
-            logger.info({ leadId: id, unansweredCalls: newCount, threshold }, 'Lead moved to lost after unanswered threshold');
-          } else {
-            const maxPos = (db.prepare('SELECT COALESCE(MAX(queue_position), 0) as max_pos FROM leads').get() as { max_pos: number }).max_pos;
-            db.prepare('UPDATE leads SET unanswered_calls = ?, status = ?, queue_position = ?, updated_at = ? WHERE id = ?')
-              .run(newCount, 'not_called', maxPos + 1, now, id);
-          }
+          const maxPos = (db.prepare('SELECT COALESCE(MAX(queue_position), 0) as max_pos FROM leads').get() as { max_pos: number }).max_pos;
+          db.prepare('UPDATE leads SET unanswered_calls = ?, status = ?, queue_position = ?, updated_at = ? WHERE id = ?')
+            .run(leadRow.unanswered_calls + 1, 'not_called', maxPos + 1, now, id);
           break;
         }
 
         case 'voicemail': {
-          const newCount = leadRow.unanswered_calls + 1;
-          if (!hasEverAnswered && newCount >= threshold) {
-            db.prepare(
-              `UPDATE leads
-               SET unanswered_calls = ?, voicemail_left = 1, voicemail_date = ?, status = ?, pipeline_stage = ?, updated_at = ?
-               WHERE id = ?`
-            ).run(newCount, now, 'called', 'lost', now, id);
-            logger.info({ leadId: id, unansweredCalls: newCount, threshold }, 'Lead moved to lost after voicemail threshold');
-          } else {
-            const maxPos = (db.prepare('SELECT COALESCE(MAX(queue_position), 0) as max_pos FROM leads').get() as { max_pos: number }).max_pos;
-            db.prepare(
-              `UPDATE leads
-               SET unanswered_calls = ?, voicemail_left = 1, voicemail_date = ?, status = ?, queue_position = ?, updated_at = ?
-               WHERE id = ?`
-            ).run(newCount, now, 'not_called', maxPos + 1, now, id);
-          }
+          const maxPos = (db.prepare('SELECT COALESCE(MAX(queue_position), 0) as max_pos FROM leads').get() as { max_pos: number }).max_pos;
+          db.prepare(
+            `UPDATE leads
+             SET unanswered_calls = ?, voicemail_left = 1, voicemail_date = ?, status = ?, queue_position = ?, updated_at = ?
+             WHERE id = ?`
+          ).run(leadRow.unanswered_calls + 1, now, 'not_called', maxPos + 1, now, id);
           break;
         }
 
@@ -3233,11 +3201,12 @@ interface ScanLead {
  * Activity score — higher = more "worked." Drives suspect vs target
  * assignment (target stays, suspect folds into it).
  *
- * Only counts REAL tier placements (new_lead, meeting_booked, proposal, pulse, won, lost) as
+ * Only counts REAL tier placements (new_lead, no_answer, meeting_booked,
+ * proposal, pulse, on_ice, won, lost) as
  * activity. Legacy 'new_lead' or 'follow_up' values are equivalent to
  * NULL — they don't represent intentional placement.
  */
-const REAL_TIER_STAGES_SCORE = new Set(['new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost']);
+const REAL_TIER_STAGES_SCORE = new Set(['new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', 'on_ice', 'won', 'lost']);
 function activityScore(lead: ScanLead): number {
   return (
     lead.notes_count

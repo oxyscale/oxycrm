@@ -12,7 +12,15 @@
 // New lead       = freshly imported, not yet triaged. CSV imports land here.
 // Proposal sent  = a quote is out, awaiting their decision
 // Meeting booked = they've agreed to meet off the back of it
-export type PipelineStage = 'new_lead' | 'meeting_booked' | 'proposal' | 'pulse' | 'won' | 'lost';
+export type PipelineStage =
+  | 'new_lead'
+  | 'no_answer'
+  | 'meeting_booked'
+  | 'proposal'
+  | 'pulse'
+  | 'on_ice'
+  | 'won'
+  | 'lost';
 
 // Temperature
 export type Temperature = 'hot' | 'warm' | 'cold';

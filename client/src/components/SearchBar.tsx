@@ -169,6 +169,8 @@ export default function SearchBar() {
     if (!stage) return 'No tier';
     const labels: Record<string, string> = {
       new_lead: 'New Lead',
+      no_answer: 'No Answer',
+      on_ice: 'On Ice',
       follow_up: 'Follow Up',
       call_booked: 'Call Booked',
       negotiation: 'Negotiation',

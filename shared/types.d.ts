@@ -1,4 +1,12 @@
-export type PipelineStage = 'new_lead' | 'meeting_booked' | 'proposal' | 'pulse' | 'won' | 'lost';
+export type PipelineStage =
+  | 'new_lead'
+  | 'no_answer'
+  | 'meeting_booked'
+  | 'proposal'
+  | 'pulse'
+  | 'on_ice'
+  | 'won'
+  | 'lost';
 export type Temperature = 'hot' | 'warm' | 'cold';
 export interface Lead {
     id: number;

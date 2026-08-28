@@ -56,9 +56,11 @@ const CREATE_CAMPAIGN_VALUE = '__create_campaign__';
 
 const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
   { value: 'new_lead', label: 'New lead' },
+  { value: 'no_answer', label: 'No answer' },
   { value: 'meeting_booked', label: 'Meeting booked' },
   { value: 'proposal', label: 'Proposal sent' },
   { value: 'pulse', label: 'Pulse' },
+  { value: 'on_ice', label: 'On ice' },
   { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
 ];

@@ -74,7 +74,7 @@ const REQUIRED_VARS = [
   'RESEND_API_KEY',
   'EMAIL_FROM_ADDRESS',
 ];
-const OPTIONAL_VARS = ['EMAIL_FROM_NAME', 'CLIENT_URL', 'DATA_DIR', 'PORT', 'LOG_LEVEL', 'UNANSWERED_CALL_THRESHOLD'];
+const OPTIONAL_VARS = ['EMAIL_FROM_NAME', 'CLIENT_URL', 'DATA_DIR', 'PORT', 'LOG_LEVEL'];
 
 if (process.env.NODE_ENV === 'production') {
   const missing = REQUIRED_VARS.filter((v) => !process.env[v]);

@@ -33,7 +33,7 @@ const sendEmailSchema = z.object({
   body: z.string().min(1, 'Email body is required'),
   // Optional — used for logging only. Pipeline simplification (May 2026)
   // means email send no longer auto-moves leads between tiers.
-  pipelineStage: z.enum(['new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost']).optional(),
+  pipelineStage: z.enum(['new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', 'on_ice', 'won', 'lost']).optional(),
   attachments: z.array(z.string()).optional(),
 });
 

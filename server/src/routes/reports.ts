@@ -38,8 +38,10 @@ interface TierBucket {
 const TIER_LABELS: Record<string, string> = {
   pulse: 'Pulse',
   new_lead: 'New lead',
+  no_answer: 'No answer',
   proposal: 'Proposal sent',
   meeting_booked: 'Meeting booked',
+  on_ice: 'On ice',
   won: 'Won',
   lost: 'Lost',
 };
@@ -67,13 +69,13 @@ router.get('/', (req, res, next) => {
              COUNT(*) AS count,
              COALESCE(SUM(COALESCE(r.monthly_amount, leads.deal_value)), 0) AS total_value
       FROM leads LEFT JOIN current_retainers r ON r.lead_id = leads.id
-      WHERE pipeline_stage IN ('new_lead','meeting_booked','proposal','pulse','won','lost')
+      WHERE pipeline_stage IN ('new_lead','no_answer','meeting_booked','proposal','pulse','on_ice','won','lost')
         ${catFilter}
       GROUP BY pipeline_stage
     `).all(catParam) as { tier: string; count: number; total_value: number }[];
 
     // Build the full set of tiers (even ones with 0) so the UI shows every column.
-    const byTier: TierBucket[] = (['new_lead', 'meeting_booked', 'proposal', 'pulse', 'won', 'lost'] as const).map(
+    const byTier: TierBucket[] = (['new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', 'on_ice', 'won', 'lost'] as const).map(
       (t) => {
         const row = tierRows.find((r) => r.tier === t);
         return {
@@ -238,6 +240,8 @@ router.get('/', (req, res, next) => {
       proposal: 0.60,       // quote is out, awaiting a decision
       pulse: 0.10,          // warm interest, nothing concrete yet
       new_lead: 0.05,       // imported, not yet triaged
+      // no_answer and on_ice carry no weight on purpose. They are
+      // parked, not progressing, so they must not inflate a forecast.
     };
     const weightedPipelineValue = byTier
       .filter((b) => b.tier in TIER_WEIGHTS)

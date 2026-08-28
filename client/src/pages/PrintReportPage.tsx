@@ -34,7 +34,8 @@ function formatLongDate(yyyymmdd: string): string {
 }
 
 function tierLabel(tier: string): string {
-  return ({ new_lead: 'New lead', meeting_booked: 'Meeting booked', proposal: 'Proposal sent', pulse: 'Pulse', won: 'Won', lost: 'Lost' })[tier] || tier;
+  return ({ new_lead: 'New lead', no_answer: 'No answer', meeting_booked: 'Meeting booked',
+    proposal: 'Proposal sent', pulse: 'Pulse', on_ice: 'On ice', won: 'Won', lost: 'Lost' })[tier] || tier;
 }
 
 // ── Component ──────────────────────────────────────────────────

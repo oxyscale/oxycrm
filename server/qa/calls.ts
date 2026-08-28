@@ -23,15 +23,22 @@ import { startHarness, check, eq, setSection, report } from './harness';
   eq('the attempt is counted', row(a.id).unanswered_calls, 1);
   eq('lead survives a no-answer', !!row(a.id), true);
 
-  // ── the threshold ──────────────────────────────────────────────
-  setSection('Unanswered threshold');
-  const t = await mk('Terry Threshold', '0400100002');
-  for (let i = 0; i < 5; i++) await dispose(t.id, 'no_answer');
+  // ── no automatic retirement ────────────────────────────────────
+  setSection('Nothing is retired automatically');
+  const t = await mk('Terry Persistent', '0400100002');
+  await api('PATCH', `/pipeline/${t.id}/stage`, { stage: 'no_answer' });
+  for (let i = 0; i < 8; i++) await dispose(t.id, 'no_answer');
   const after = row(t.id);
-  eq('five attempts are all counted', after.unanswered_calls, 5);
-  check('hitting the threshold takes them out of the queue',
-    after.status !== 'not_called' || after.pipeline_stage === 'lost',
-    `status=${after.status} stage=${after.pipeline_stage} queue=${after.queue_position}`);
+  eq('every attempt is counted', after.unanswered_calls, 8);
+  eq('but the lead is never moved for you', after.pipeline_stage, 'no_answer');
+  check('and never marked lost behind your back', after.pipeline_stage !== 'lost',
+    `stage=${after.pipeline_stage}`);
+
+  const v2 = await mk('Vee Mail', '0400100007');
+  await api('PATCH', `/pipeline/${v2.id}/stage`, { stage: 'no_answer' });
+  for (let i = 0; i < 8; i++) await dispose(v2.id, 'voicemail');
+  eq('voicemails do not retire a lead either', row(v2.id).pipeline_stage, 'no_answer');
+  eq('and they are still counted', row(v2.id).unanswered_calls, 8);
 
   // ── voicemail ──────────────────────────────────────────────────
   setSection('Voicemail');

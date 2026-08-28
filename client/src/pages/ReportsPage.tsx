@@ -559,6 +559,8 @@ function EmptyRow({ text }: { text: string }) {
 const TIER_LABELS: Record<string, string> = {
   pulse: 'Pulse',
   new_lead: 'New lead',
+  no_answer: 'No answer',
+  on_ice: 'On ice',
   proposal: 'Proposal sent',
   meeting_booked: 'Meeting booked',
   won: 'Won',

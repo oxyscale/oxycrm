@@ -478,7 +478,7 @@ export async function completeTask(taskId: number): Promise<LeadTask> {
 // ── Reports ───────────────────────────────────────────────────
 
 export interface ReportTierBucket {
-  tier: 'new_lead' | 'meeting_booked' | 'proposal' | 'pulse' | 'won' | 'lost';
+  tier: 'new_lead' | 'no_answer' | 'meeting_booked' | 'proposal' | 'pulse' | 'on_ice' | 'won' | 'lost';
   label: string;
   count: number;
   totalValue: number;
