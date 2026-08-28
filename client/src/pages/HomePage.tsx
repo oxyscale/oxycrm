@@ -38,7 +38,7 @@ const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
   meeting_booked: { label: 'Meeting booked', color: '#f59e0b' },
   proposal: { label: 'Proposal sent', color: '#5ec5e6' },
   pulse: { label: 'Pulse', color: '#8b5cf6' },
-  on_ice: { label: 'On ice', color: '#7dd3fc' },
+  on_ice: { label: 'Ice', color: '#7dd3fc' },
   won: { label: 'Won', color: '#10b981' },
   lost: { label: 'Lost', color: '#ef4444' },
 };

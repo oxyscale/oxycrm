@@ -90,7 +90,7 @@ function mapLeadRow(row: LeadRow & { current_retainer?: number | null }): Lead {
 // ============================================================
 
 // Board order, left to right. No Answer is a calling outcome that sits
-// beside New lead; On Ice parks a deal that has gone quiet after the
+// beside New lead; Ice parks a deal that has gone quiet after the
 // pitch. Neither is a closed outcome — both can be revived.
 const PIPELINE_STAGES: [PipelineStage, ...PipelineStage[]] = [
   'new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', 'on_ice', 'won', 'lost',
@@ -117,7 +117,7 @@ const stageLabels: Record<PipelineStage, string> = {
   meeting_booked: 'Meeting booked',
   proposal: 'Proposal sent',
   pulse: 'Pulse',
-  on_ice: 'On ice',
+  on_ice: 'Ice',
   won: 'Won',
   lost: 'Lost',
 };

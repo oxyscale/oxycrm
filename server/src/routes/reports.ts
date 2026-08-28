@@ -41,7 +41,7 @@ const TIER_LABELS: Record<string, string> = {
   no_answer: 'No answer',
   proposal: 'Proposal sent',
   meeting_booked: 'Meeting booked',
-  on_ice: 'On ice',
+  on_ice: 'Ice',
   won: 'Won',
   lost: 'Lost',
 };

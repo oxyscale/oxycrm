@@ -60,7 +60,7 @@ const PIPELINE_STAGES: { value: PipelineStage; label: string }[] = [
   { value: 'meeting_booked', label: 'Meeting booked' },
   { value: 'proposal', label: 'Proposal sent' },
   { value: 'pulse', label: 'Pulse' },
-  { value: 'on_ice', label: 'On ice' },
+  { value: 'on_ice', label: 'Ice' },
   { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
 ];
