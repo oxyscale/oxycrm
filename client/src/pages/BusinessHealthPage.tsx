@@ -1055,8 +1055,26 @@ export default function BusinessHealthPage() {
           {/* 07 — Pipeline */}
           <Band n="07" title="Balls in the air"
             aside={`${report.pipeline.openCount} opportunities · ${aud(report.pipeline.openPipelineMrr)} a month`}>
+            {/* Bird's-eye first: how many sit in each stage of the
+                board, including the parked ones. Named deals follow, but
+                only where the names are worth reading. */}
+            <div className="grid grid-cols-6 gap-4 mb-8 pb-6 border-b border-hair">
+              {report.pipeline.stageCounts.map((s) => (
+                <div key={s.stage}>
+                  <p className="font-mono text-[9px] font-semibold tracking-[0.16em] uppercase text-ink-dim leading-tight">
+                    {s.label}
+                  </p>
+                  <p className={`text-[28px] leading-none mt-2 tabular-nums ${
+                    s.count === 0 ? 'text-ink-faint' : 'text-ink'
+                  }`}>
+                    {s.count}
+                  </p>
+                </div>
+              ))}
+            </div>
+
             {report.pipeline.byStage.length === 0 ? (
-              <p className="text-ink-dim text-sm">Nothing open right now.</p>
+              <p className="text-ink-dim text-sm">Nothing booked, quoted or warm right now.</p>
             ) : report.pipeline.byStage.map((g) => (
               <div key={g.stage} className="mb-6 last:mb-0 break-inside-avoid">
                 <div className="flex items-baseline justify-between border-b border-hair pb-1.5 mb-1">
@@ -1070,7 +1088,9 @@ export default function BusinessHealthPage() {
                     <div className="flex items-baseline justify-between gap-6">
                       <div className="min-w-0">
                         <span className="text-ink text-sm font-medium">{r.company}</span>
-                        <span className="text-ink-dim text-xs ml-2">{r.contact}</span>
+                        {r.contact && r.contact.trim() !== r.company.trim() && (
+                          <span className="text-ink-dim text-xs ml-2">{r.contact}</span>
+                        )}
                       </div>
                       <span className="text-ink text-sm tabular-nums whitespace-nowrap">
                         {r.retainer ? `${aud(r.retainer)}/mo` : '—'}

@@ -66,6 +66,32 @@ const ORDER = ['new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', '
   const iceBucket = (reports.byTier ?? []).find((t: any) => t.tier === 'on_ice');
   eq('with the leads that are actually in them', iceBucket?.count, 2);
 
+  setSection("Balls in the air: counts everywhere, names where they matter");
+  for (const [i, st] of ['new_lead', 'meeting_booked', 'proposal', 'pulse'].entries()) {
+    const x = await mk(`Stage ${i}`, `04005000${i}`);
+    await api('PATCH', `/pipeline/${x.id}/stage`, { stage: st });
+  }
+  const r2 = (await api('GET', `/investor/report/${month}`)).body.report;
+  const counts = r2.pipeline.stageCounts;
+  eq('every board stage is counted', counts.map((c: any) => c.stage),
+     ['new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', 'on_ice']);
+  check('parked stages are counted too',
+    (counts.find((c: any) => c.stage === 'on_ice')?.count ?? 0) >= 2,
+    JSON.stringify(counts));
+  check('the labels are the ones on the board',
+    counts.find((c: any) => c.stage === 'no_answer')?.label === 'Fairies'
+    && counts.find((c: any) => c.stage === 'on_ice')?.label === 'Ice',
+    JSON.stringify(counts.map((c: any) => c.label)));
+  check('closed outcomes are not in the bird\'s-eye',
+    !counts.some((c: any) => c.stage === 'won' || c.stage === 'lost'), '');
+
+  const detailed = r2.pipeline.byStage.map((g: any) => g.stage);
+  check('deals are named only for meeting booked, proposal and pulse',
+    detailed.every((d: string) => ['meeting_booked', 'proposal', 'pulse'].includes(d)),
+    `detail for: ${detailed.join(', ')}`);
+  check('new leads are never listed one by one',
+    !detailed.includes('new_lead'), `detail for: ${detailed.join(', ')}`);
+
   close();
   process.exit(report() === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

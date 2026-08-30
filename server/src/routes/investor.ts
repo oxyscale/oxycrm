@@ -91,6 +91,22 @@ const FUNNEL_STAGES: Array<{ stage: string; label: string }> = [
 
 const OPEN_STAGES = ['new_lead', 'pulse', 'meeting_booked', 'proposal'];
 
+// The whole board, in order, for the bird's-eye count. Won and Lost are
+// closed outcomes and reported elsewhere, so they are not "in flight".
+const BOARD_STAGES: Array<{ stage: string; label: string }> = [
+  { stage: 'new_lead', label: 'New leads' },
+  { stage: 'no_answer', label: 'Fairies' },
+  { stage: 'meeting_booked', label: 'Meeting booked' },
+  { stage: 'proposal', label: 'Proposal sent' },
+  { stage: 'pulse', label: 'Pulse' },
+  { stage: 'on_ice', label: 'Ice' },
+];
+
+// Stages worth naming the deals in. Everywhere else a count is the
+// useful thing — a list of every new lead is noise on a report meant to
+// be read in a minute.
+const DETAIL_STAGES = ['meeting_booked', 'proposal', 'pulse'];
+
 // Titles written by older stage-change activities, before the stage was
 // recorded in metadata. Kept so historical months still report a funnel.
 const LEGACY_TITLE_TO_STAGE: Record<string, string> = {
@@ -497,8 +513,20 @@ function buildReport(month: string) {
     next_action: string | null; next_action_due: string | null;
   }>;
 
-  const byStage = FUNNEL_STAGES
-    .filter((f) => OPEN_STAGES.includes(f.stage))
+  // Bird's-eye: how many sit in each stage of the board, counted
+  // straight from the leads table so it covers parked stages too.
+  const stageCountRows = db.prepare(`
+    SELECT pipeline_stage AS stage, COUNT(*) AS n
+      FROM leads WHERE pipeline_stage IS NOT NULL
+     GROUP BY pipeline_stage
+  `).all() as Array<{ stage: string; n: number }>;
+  const stageCounts = BOARD_STAGES.map(({ stage, label }) => ({
+    stage, label,
+    count: stageCountRows.find((r) => r.stage === stage)?.n ?? 0,
+  }));
+
+  const byStage = BOARD_STAGES
+    .filter((f) => DETAIL_STAGES.includes(f.stage))
     .map(({ stage, label }) => {
       const rows = openRows.filter((r) => r.stage === stage).map((r) => ({
         leadId: r.id,
@@ -716,6 +744,7 @@ function buildReport(month: string) {
     leadSources: leadSourcesByMonth(month, 6),
     pipeline: {
       openCount: openRows.length,
+      stageCounts,
       openPipelineMrr,
       openPipelineOneOff,
       byStage,

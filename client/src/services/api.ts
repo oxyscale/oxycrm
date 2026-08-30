@@ -1158,6 +1158,7 @@ export interface InvestorReport {
   };
   pipeline: {
     openCount: number;
+    stageCounts: Array<{ stage: string; label: string; count: number }>;
     openPipelineMrr: number;
     openPipelineOneOff: number;
     byStage: InvestorStageGroup[];
