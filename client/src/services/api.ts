@@ -1120,6 +1120,7 @@ export interface InvestorReport {
     monthsRemaining: number | null;
     note: string;
     avgClientValue: number;
+    signedClients: { total: number; live: number; inBuild: number };
     liveMrr: number; committedMrr: number;
   };
   tiles: {

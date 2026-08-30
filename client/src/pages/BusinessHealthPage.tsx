@@ -59,10 +59,29 @@ function runwayNote(
 }
 
 /** A dollar figure expressed as a client count. */
+/**
+ * How many clients a target implies, at the average rate. Only ever used
+ * for a figure that does not exist yet — a target has no clients to
+ * count, so it has to be inferred.
+ */
 function clientsFor(amount: number, avg: number): string {
   if (!(avg > 0)) return '—';
   const n = Math.round(amount / avg);
   return `${n} ${n === 1 ? 'client' : 'clients'}`;
+}
+
+/**
+ * How many clients there actually are: everyone in build plus everyone
+ * billing. Counted on the server, never inferred from revenue — the two
+ * used to be worked out different ways and disagreed on the same page.
+ */
+function signedLabel(s: { total: number; live: number; inBuild: number }): string {
+  const noun = s.total === 1 ? 'client' : 'clients';
+  if (s.inBuild > 0 && s.live > 0) {
+    return `${s.total} ${noun} · ${s.live} billing, ${s.inBuild} in build`;
+  }
+  if (s.inBuild > 0) return `${s.total} ${noun} in build`;
+  return `${s.total} ${noun} billing`;
 }
 
 // ── month-on-month delta ─────────────────────────────────────────
@@ -727,7 +746,7 @@ export default function BusinessHealthPage() {
               <>
                 <div className="grid grid-cols-3 gap-10">
                   <Lead label="Today" value={aud(report.forecast.committedMrr)}
-                    note={`${clientsFor(report.forecast.committedMrr, report.forecast.avgClientValue)} · committed monthly revenue`} />
+                    note={`${signedLabel(report.forecast.signedClients)} · committed monthly revenue`} />
                   <Lead
                     label={report.forecast.targetMonthLabel
                       ? `By ${report.forecast.targetMonthLabel}`

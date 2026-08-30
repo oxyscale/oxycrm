@@ -430,6 +430,15 @@ function buildReport(month: string) {
   const clients = signedClients(settings.revenueLeadDays);
   const active = clients.filter((c) => !c.churned);
   const churnedCount = clients.length - active.length;
+  // Signed clients, counted rather than inferred. Anyone in build plus
+  // anyone billing. The page used to estimate this by dividing revenue
+  // by the average client value, which produced a number that quietly
+  // disagreed with the real one on the same screen.
+  const signedClientCounts = {
+    total: active.length,
+    live: active.filter((c) => c.isLive).length,
+    inBuild: active.filter((c) => !c.isLive).length,
+  };
   const crmLiveMrr = active.filter((c) => c.isLive).reduce((s, c) => s + c.retainer, 0);
   // Signed and agreed but not yet billing. Uses the agreed rate, since a
   // retainer starting on go-live has no current row yet.
@@ -654,6 +663,8 @@ function buildReport(month: string) {
       // the average client value rather than entered separately, so the
       // two can never disagree.
       avgClientValue: settings.avgClientValue,
+      // The real count behind committedMrr.
+      signedClients: signedClientCounts,
       // Months to the target at the current committed run rate, so the
       // ambition sits next to where the business actually is.
       liveMrr,

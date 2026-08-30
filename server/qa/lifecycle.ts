@@ -102,6 +102,21 @@ const shift = (days: number) => {
   eq('ending a side project keeps them a client', (await leadRow(l3.id))?.lifecycle, 'client');
   eq('and keeps them billing', await reportMrr(), 1200);  // Twoco is in build, Testco churned
 
+  // ── the counts on the page must agree ──────────────────────────
+  setSection('Client counts agree with each other');
+  const r = (await api('GET', `/investor/report/${today().slice(0, 7)}`)).body.report;
+  const sc = r.forecast.signedClients;
+  eq('signed clients splits into billing plus in build', sc.live + sc.inBuild, sc.total);
+  check('the count is a real count, not revenue divided by an average',
+    sc.total === 2, `total=${sc.total} live=${sc.live} inBuild=${sc.inBuild}`);
+  check('a client with no retainer is still counted',
+    sc.total >= r.tiles.signedThisMonth.count
+    || r.tiles.signedThisMonth.count === 0,
+    `signed=${sc.total} thisMonth=${r.tiles.signedThisMonth.count}`);
+  check('churned clients are excluded from the count',
+    sc.total < (await api('GET', '/leads')).body.filter((l: any) => l.pipelineStage === 'won').length + 1,
+    `total=${sc.total}`);
+
   ctx.close();
   process.exit(report() === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });
