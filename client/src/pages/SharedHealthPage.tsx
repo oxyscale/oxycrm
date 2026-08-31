@@ -78,7 +78,7 @@ export default function SharedHealthPage() {
     <div className="min-h-screen bg-cream">
       {/* Everything in here is hidden by the print stylesheet. */}
       <div className="no-print sticky top-0 z-10 bg-cream/95 backdrop-blur border-b border-hair-soft">
-        <div className="max-w-[900px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
+        <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 sm:gap-4">
           <div className="min-w-0">
             <p className="font-mono text-[10px] font-semibold tracking-[0.22em] uppercase text-ink-dim">
               Oxy<span className="text-sky-ink">Scale</span> · Business health
@@ -95,7 +95,7 @@ export default function SharedHealthPage() {
         </div>
       </div>
 
-      <div className="print-page-padding px-6 py-8">
+      <div className="print-page-padding px-3 py-5 sm:px-6 sm:py-8">
         {/*
           Same wrapper the app uses, so the document reads identically here
           and prints identically from here. The print stylesheet keys off
@@ -104,7 +104,7 @@ export default function SharedHealthPage() {
           the one produced inside the app.
         */}
         <div
-          className="print-document bg-paper border border-hair-soft rounded-2xl px-12 py-10 max-w-[900px] mx-auto"
+          className="print-document bg-paper border border-hair-soft rounded-2xl px-5 py-7 sm:px-12 sm:py-10 max-w-[900px] mx-auto"
           dangerouslySetInnerHTML={{ __html: data.html }}
         />
       </div>

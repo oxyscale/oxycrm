@@ -94,6 +94,16 @@ body {
     padding: 0 !important;
   }
 
+  /* The report stacks to one column on a phone. Print is always a wide
+     page, so restore the intended layout — otherwise a PDF saved from a
+     phone comes out as one tall column. */
+  .print-document .grid.sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .print-document .grid.sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .print-document .grid.sm\:grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
+
+  /* Nothing scrolls on paper. */
+  .print-document [class*="overflow-x"] { overflow: visible !important; }
+
   /* A section is never split across a page break — if it will not
      fit, it moves whole to the next page. */
   .print-section {

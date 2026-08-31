@@ -653,7 +653,7 @@ export default function BusinessHealthPage() {
       ) : (
         // The document. Reads as a printed sheet: numbered sections,
         // hairline rules, no stacked card chrome.
-        <div ref={printRef} className="print-document bg-paper border border-hair-soft rounded-2xl px-12 py-10 max-w-[900px] mx-auto">
+        <div ref={printRef} className="print-document bg-paper border border-hair-soft rounded-2xl px-5 py-7 sm:px-12 sm:py-10 max-w-[900px] mx-auto">
 
           {/* Masthead */}
           <header className="pb-8 border-b border-hair-strong">
@@ -682,7 +682,7 @@ export default function BusinessHealthPage() {
 
           {/* 01 — Health */}
           <Band n="01" title="The health of the business" lead>
-            <div className="grid grid-cols-3 gap-10">
+            <div className="grid grid-cols-1 gap-7 sm:grid-cols-3 sm:gap-10">
               <Lead label="In the bank" value={aud(t.bankBalance)}
                 delta={<Delta current={t.bankBalance} previous={pt?.bankBalance} money />}
                 note={t.currentLiabilities > 0
@@ -706,7 +706,7 @@ export default function BusinessHealthPage() {
 
           {/* 02 — Growth */}
           <Band n="02" title="Growth this month">
-            <div className="grid grid-cols-3 gap-10">
+            <div className="grid grid-cols-1 gap-7 sm:grid-cols-3 sm:gap-10">
               <Lead label="Clients signed" value={String(t.signedThisMonth.count)}
                 delta={<Delta current={t.signedThisMonth.count} previous={pt?.signedThisMonth.count} />}
                 note={`${aud(t.signedThisMonth.mrr)} a month, plus ${aud(t.signedThisMonth.oneOff)} in build fees`} />
@@ -744,7 +744,7 @@ export default function BusinessHealthPage() {
                 </div>
               )}
               <>
-                <div className="grid grid-cols-3 gap-10">
+                <div className="grid grid-cols-1 gap-7 sm:grid-cols-3 sm:gap-10">
                   <Lead label="Today" value={aud(report.forecast.committedMrr)}
                     note={`${signedLabel(report.forecast.signedClients)} · committed monthly revenue`} />
                   <Lead
@@ -804,7 +804,7 @@ export default function BusinessHealthPage() {
                         ? " The grey line is last month's projection — the gap between the lines is what onboarding added."
                         : ' A second line appears once a previous month has been finalised, showing how the forecast has moved since.'}
                     </p>
-                    <div className="overflow-x-auto">
+                    <SlideAcross>
                       <LineChart
                         showValues
                         points={report.projection.map((pt, i) => {
@@ -825,7 +825,7 @@ export default function BusinessHealthPage() {
                             : []),
                         ]}
                       />
-                    </div>
+                    </SlideAcross>
                   </div>
                 )}
                 {report.forecast.note && (
@@ -840,7 +840,7 @@ export default function BusinessHealthPage() {
 
           {/* 04 — Investment */}
           <Band n="04" title="Where the investment sits">
-            <div className="grid grid-cols-2 gap-12">
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-12">
               <Pot
                 name="Build fund"
                 total={report.investment.ringfence.total}
@@ -860,7 +860,8 @@ export default function BusinessHealthPage() {
             {report.investment.wages.draws.length > 0 && (
               <div className="mt-8">
                 <Micro>Wage instalments received</Micro>
-                <table className="w-full text-sm mt-2 tabular-nums">
+                <SlideAcross>
+                <table className="w-full min-w-[26rem] text-sm mt-2 tabular-nums">
                   <tbody>
                     {report.investment.wages.draws.map((w) => (
                       <tr key={w.id} className="border-b border-hair-soft last:border-0">
@@ -871,13 +872,15 @@ export default function BusinessHealthPage() {
                     ))}
                   </tbody>
                 </table>
+                </SlideAcross>
               </div>
             )}
 
             {report.investment.ringfence.payments.length > 0 && (
               <div className="mt-8">
                 <Micro>What the build fund has gone on</Micro>
-                <table className="w-full text-sm mt-2 tabular-nums">
+                <SlideAcross>
+                <table className="w-full min-w-[26rem] text-sm mt-2 tabular-nums">
                   <tbody>
                     {report.investment.ringfence.payments.map((p) => (
                       <tr key={p.id} className="border-b border-hair-soft last:border-0">
@@ -888,13 +891,14 @@ export default function BusinessHealthPage() {
                     ))}
                   </tbody>
                 </table>
+                </SlideAcross>
               </div>
             )}
 
             {series.length >= 2 && (
               <div className="mt-8">
                 <Micro>Both pots, month by month</Micro>
-                <div className="mt-2 overflow-x-auto">
+                <div className="mt-2"><SlideAcross>
                   <LineChart
                     points={series.map((h) => ({
                       label: shortLabel(h.month),
@@ -906,7 +910,7 @@ export default function BusinessHealthPage() {
                       { key: 'ringfenceRemaining', label: 'Build fund left', colour: '#f59e0b' },
                     ]}
                   />
-                </div>
+                </SlideAcross></div>
               </div>
             )}
           </Band>
@@ -923,7 +927,8 @@ export default function BusinessHealthPage() {
               </p>
             ) : (
               <>
-                <table className="w-full text-sm tabular-nums">
+                <SlideAcross>
+                <table className="w-full min-w-[26rem] text-sm tabular-nums">
                   <thead>
                     <tr className="border-b border-hair">
                       <th className="text-left pb-2"><Micro>Month</Micro></th>
@@ -968,6 +973,7 @@ export default function BusinessHealthPage() {
                     )}
                   </tbody>
                 </table>
+                </SlideAcross>
                 <p className="text-ink-dim text-xs mt-4 leading-relaxed max-w-[62ch]">
                   Reconciled from the accounts each month, so wages and
                   superannuation are already inside these figures. Runway is{' '}
@@ -986,7 +992,8 @@ export default function BusinessHealthPage() {
               <p className="text-ink-dim text-sm">No leads created in this window.</p>
             ) : (
               <>
-                <table className="w-full text-sm tabular-nums">
+                <SlideAcross>
+                <table className="w-full min-w-[34rem] text-sm tabular-nums">
                   <thead>
                     <tr className="border-b border-hair">
                       <th className="text-left pb-2"><Micro>Source</Micro></th>
@@ -1042,7 +1049,8 @@ export default function BusinessHealthPage() {
                     </tr>
                   </tbody>
                 </table>
-                <div className="mt-6 overflow-x-auto">
+                </SlideAcross>
+                <div className="mt-6"><SlideAcross>
                   <StackedBars
                     points={report.leadSources.monthLabels.map((label, i) => {
                       const row: Record<string, unknown> = { label: label.slice(0, 3) };
@@ -1054,7 +1062,7 @@ export default function BusinessHealthPage() {
                       colour: SOURCE_COLOURS[si % SOURCE_COLOURS.length],
                     }))}
                   />
-                </div>
+                </SlideAcross></div>
               </>
             )}
           </Band>
@@ -1065,10 +1073,10 @@ export default function BusinessHealthPage() {
             {/* Bird's-eye first: how many sit in each stage of the
                 board, including the parked ones. Named deals follow, but
                 only where the names are worth reading. */}
-            <div className="grid grid-cols-6 gap-4 mb-8 pb-6 border-b border-hair">
+            <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-6 sm:gap-4 mb-8 pb-6 border-b border-hair">
               {report.pipeline.stageCounts.map((s) => (
                 <div key={s.stage}>
-                  <p className="font-mono text-[9px] font-semibold tracking-[0.16em] uppercase text-ink-dim leading-tight">
+                  <p className="font-mono text-[9px] font-semibold tracking-[0.16em] uppercase text-ink-dim leading-tight sm:min-h-0 min-h-[2.2em]">
                     {s.label}
                   </p>
                   <p className={`text-[28px] leading-none mt-2 tabular-nums ${
@@ -1148,7 +1156,8 @@ export default function BusinessHealthPage() {
             {report.plannedSpend.length === 0 ? (
               <p className="text-ink-dim text-sm">Nothing planned this month.</p>
             ) : (
-              <table className="w-full text-sm tabular-nums">
+              <SlideAcross>
+              <table className="w-full min-w-[26rem] text-sm tabular-nums">
                 <thead>
                   <tr className="border-b border-hair">
                     <th className="text-left pb-2"><Micro>Item</Micro></th>
@@ -1176,6 +1185,7 @@ export default function BusinessHealthPage() {
                   ))}
                 </tbody>
               </table>
+              </SlideAcross>
             )}
           </Band>
 
@@ -1221,6 +1231,32 @@ export default function BusinessHealthPage() {
  * rather than a card — the page should read as one sheet, not a stack
  * of boxes.
  */
+/**
+ * Horizontal scroller for content that cannot shrink — a wide table, a
+ * chart drawn at a fixed width.
+ *
+ * Deliberately CSS-only. The report is captured as static HTML when a
+ * share link is minted, and that copy has no React behind it, so
+ * anything measured at runtime would be frozen at whatever it happened
+ * to be when the link was made — a hint captured on a phone would then
+ * show on a desktop for the next thirty days. A breakpoint travels with
+ * the markup and stays correct wherever it is opened.
+ *
+ * Everything wrapped here is wider than a phone by construction: the
+ * charts are 640px and the tables carry an explicit minimum width.
+ * Hidden from `sm` up, and never printed.
+ */
+function SlideAcross({ children }: { children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="overflow-x-auto">{children}</div>
+      <p className="no-print sm:hidden mt-2 font-mono text-[10px] font-semibold tracking-[0.16em] uppercase text-ink-dim">
+        Slide across &rarr;
+      </p>
+    </div>
+  );
+}
+
 function Band({
   n, title, aside, lead = false, children,
 }: {
@@ -1233,7 +1269,7 @@ function Band({
     <section className={`print-section break-inside-avoid ${
       lead ? 'pt-8' : 'pt-9 mt-9 border-t border-hair'
     }`}>
-      <div className="flex items-baseline justify-between gap-6 mb-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 mb-6">
         <h2 className="flex items-baseline gap-3">
           <span className="font-mono text-[10px] font-semibold tracking-[0.22em] text-sky-ink">{n}</span>
           <span className="text-ink text-[19px] font-medium tracking-[-0.02em]">{title}</span>
@@ -1259,7 +1295,7 @@ function Lead({
   return (
     <div>
       <Micro>{label}</Micro>
-      <p className="mt-2 text-ink text-[38px] font-medium leading-none tracking-[-0.035em] tabular-nums">
+      <p className="mt-2 text-ink text-[30px] sm:text-[38px] font-medium leading-none tracking-[-0.035em] tabular-nums">
         {value}
         {unit && <span className="text-ink-dim text-base font-normal tracking-normal ml-1.5">{unit}</span>}
       </p>
