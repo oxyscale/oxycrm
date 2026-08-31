@@ -492,7 +492,7 @@ function buildReport(month: string) {
       l.id, l.pipeline_stage AS stage,
       COALESCE(NULLIF(TRIM(l.company), ''), l.name) AS company,
       l.name AS contact,
-      COALESCE(r.monthly_amount, l.deal_value, 0) AS retainer,
+      COALESCE(r.monthly_amount, 0) AS retainer,
       (SELECT COALESCE(SUM(p.build_fee), 0) FROM projects p WHERE p.lead_id = l.id) AS one_off,
       (SELECT n.content FROM notes n WHERE n.lead_id = l.id
         ORDER BY n.created_at DESC LIMIT 1) AS latest_note,

@@ -92,6 +92,23 @@ const ORDER = ['new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', '
   check('new leads are never listed one by one',
     !detailed.includes('new_lead'), `detail for: ${detailed.join(', ')}`);
 
+  setSection('Pipeline money is retainers only');
+  // A lead carrying an estimated deal value but no agreed retainer must
+  // contribute nothing to a figure printed as "a month".
+  const guess = await mk('Guessy Value', '0400600001');
+  await api('PATCH', `/pipeline/${guess.id}/stage`, { stage: 'proposal' });
+  db.prepare('UPDATE leads SET deal_value = 90000 WHERE id = ?').run(guess.id);
+  const before = (await api('GET', `/investor/report/${month}`)).body.report.pipeline.openPipelineMrr;
+
+  const real = await mk('Real Retainer', '0400600002');
+  await api('PATCH', `/pipeline/${real.id}/stage`, { stage: 'proposal' });
+  await api('POST', `/leads/${real.id}/retainers`, { monthlyAmount: 1500 });
+  const after = (await api('GET', `/investor/report/${month}`)).body.report.pipeline.openPipelineMrr;
+
+  check('a 90k deal value adds nothing to monthly pipeline',
+    before === 0 || before < 90000, `openPipelineMrr=${before}`);
+  eq('only the agreed retainer moves it', after - before, 1500);
+
   close();
   process.exit(report() === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

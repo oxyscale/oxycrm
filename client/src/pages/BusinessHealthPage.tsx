@@ -995,6 +995,7 @@ export default function BusinessHealthPage() {
                           <Micro dim={i !== report.leadSources.monthLabels.length - 1}>{l.slice(0, 3)}</Micro>
                         </th>
                       ))}
+                      <th className="text-right pb-2 pl-4"><Micro>Total</Micro></th>
                       <th className="text-right pb-2 pl-3"><Micro>+/-</Micro></th>
                     </tr>
                   </thead>
@@ -1015,6 +1016,9 @@ export default function BusinessHealthPage() {
                             {c || <span className="text-ink-faint">·</span>}
                           </td>
                         ))}
+                        <td className="py-2 pl-4 text-right text-ink font-medium">
+                          {s.total}
+                        </td>
                         <td className="py-2 pl-3 text-right font-mono text-xs">
                           {s.change === 0
                             ? <span className="text-ink-faint">·</span>
@@ -1031,6 +1035,9 @@ export default function BusinessHealthPage() {
                           i === report.leadSources.totals.length - 1 ? 'text-ink' : 'text-ink-muted'
                         }`}>{c}</td>
                       ))}
+                      <td className="pt-2 pl-4 text-right text-ink font-medium">
+                        {report.leadSources.sources.reduce((sum, s) => sum + s.total, 0)}
+                      </td>
                       <td />
                     </tr>
                   </tbody>
