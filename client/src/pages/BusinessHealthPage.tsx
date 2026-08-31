@@ -1409,12 +1409,17 @@ function ComposePanel({
 
   return (
     <div className="no-print bg-paper border border-hair-soft rounded-xl p-5 mb-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-start justify-between gap-4 mb-1">
         <h3 className="text-ink text-sm font-medium">Send {report.monthLabel}</h3>
-        <button onClick={onCancel} className="text-ink-dim hover:text-ink p-1">
+        <button onClick={onCancel} className="text-ink-dim hover:text-ink p-1 -mt-1">
           <X size={16} />
         </button>
       </div>
+      <p className="text-ink-dim text-xs leading-relaxed mb-4 max-w-[44rem]">
+        They get your note and a <span className="text-ink-muted">View OxyScale Business Health</span>{' '}
+        button. It opens this report in their browser, with a Download PDF button on the page.
+        A fresh link is created when you hit send and stops working 30 days later.
+      </p>
 
       {!locked && (
         <div className="flex items-start gap-2.5 mb-4 rounded-lg border border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.06)] px-3 py-2.5">
@@ -1433,7 +1438,7 @@ function ComposePanel({
       </Field>
 
       <div className="mt-4">
-        <Field label="Covering note" hint="Sits above the report. Leave blank to send the report on its own.">
+        <Field label="Covering note" hint="Sits above the button in the email. Leave blank to send just the button.">
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={7}
             className="w-full bg-cream border border-hair-soft rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-[rgba(10,156,212,0.3)] resize-none leading-relaxed" />
         </Field>
@@ -1469,8 +1474,8 @@ function ComposePanel({
 
       <div className="flex items-center justify-between gap-3 mt-5">
         <p className="text-ink-dim text-xs max-w-[26rem] leading-relaxed">
-          They get a short note and a button. It opens this report in their
-          browser with a Download PDF button, and stops working after 30 days.
+          A test send to yourself creates its own separate link, so it will not
+          affect the one the others receive.
         </p>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={onCancel}
