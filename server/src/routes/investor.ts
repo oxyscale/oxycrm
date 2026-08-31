@@ -1341,12 +1341,22 @@ router.post('/report/:month/email', async (req, res, next) => {
     const text = body.text
       || `OxyScale business health update for ${monthLabel(month)}.`;
 
-    await sendEmail({
-      to: recipients.join(', '),
-      subject,
-      htmlBody: body.html,
-      textBody: text,
-    });
+    try {
+      await sendEmail({
+        to: recipients.join(', '),
+        subject,
+        htmlBody: body.html,
+        textBody: text,
+      });
+    } catch (sendErr) {
+      // A rejection from the email provider is not an internal fault and
+      // must not be reported as one. "Internal server error" gives no
+      // clue whether the link, the report or the send is the problem;
+      // the provider's own words usually say exactly what is wrong.
+      const detail = sendErr instanceof Error ? sendErr.message : 'Unknown error';
+      logger.error({ err: sendErr, month, recipients }, 'Investor report send failed');
+      throw new ApiError(502, `The email could not be sent. ${detail}`);
+    }
 
     logger.info({ month, recipients: recipients.length }, 'Investor report emailed');
     res.json({ success: true, sentTo: recipients });

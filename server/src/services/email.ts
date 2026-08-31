@@ -57,9 +57,20 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
 
   const from = `${fromName} <${fromAddress}>`;
 
-  // Parse comma-separated email strings into arrays
+  // Parse comma-separated email strings into arrays.
+  //
+  // `to` was missed here while cc and bcc were handled, which held up
+  // for as long as every send went to one person: joining a single
+  // address with commas gives back that address. The first send to a
+  // list handed Resend one string containing five addresses, which is
+  // not a valid recipient, and it refused the lot.
+  const toList = to.split(',').map((e) => e.trim()).filter(Boolean);
   const ccList = cc ? cc.split(',').map((e) => e.trim()).filter(Boolean) : undefined;
   const bccList = bcc ? bcc.split(',').map((e) => e.trim()).filter(Boolean) : undefined;
+
+  if (toList.length === 0) {
+    throw new Error('No recipient address supplied');
+  }
 
   // If Resend isn't configured: in production, hard-fail so a missing
   // key never silently masquerades as a successful send. In dev,
@@ -73,7 +84,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
     return { messageId: `dev-stub-${Date.now()}` };
   }
 
-  logger.info({ to, cc: ccList, bcc: bccList, subject, from }, 'Sending email via Resend');
+  logger.info({ to: toList, cc: ccList, bcc: bccList, subject, from }, 'Sending email via Resend');
 
   try {
     const resend = getResend();
@@ -84,7 +95,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
 
     const response = await resend.emails.send({
       from,
-      to,
+      to: toList,
       cc: ccList,
       bcc: bccList,
       subject,
