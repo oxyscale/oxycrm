@@ -173,17 +173,22 @@ router.get('/', (req, res, next) => {
     for (const stage of PIPELINE_STAGES) {
       stages[stage] = [];
     }
+    // Leads with no stage are not on the kanban by design — they live in
+    // /leads until they are placed. They are returned under their own key
+    // so the printed pipeline can account for them: a page that shows
+    // only what has been triaged is not the whole pipeline.
+    const unplacedLeads: Lead[] = [];
     for (const row of leadRows) {
       const lead = mapLeadRow(row);
-      // Skip leads with no pipeline stage — they're hidden from the kanban
-      // by design (live in /leads only).
       if (lead.pipelineStage && stages[lead.pipelineStage]) {
         stages[lead.pipelineStage].push(lead);
+      } else if (!lead.pipelineStage) {
+        unplacedLeads.push(lead);
       }
     }
 
     logger.info({ filters: { temperature, category }, totalLeads: leadRows.length }, 'Fetched pipeline');
-    res.json({ stages, counts });
+    res.json({ stages, counts, unplaced: unplacedLeads });
   } catch (err) {
     next(err);
   }

@@ -49,6 +49,7 @@ export default function PipelinePage() {
 
   // Data state
   const [pipeline, setPipeline] = useState<Record<string, Lead[]>>({});
+  const [unplaced, setUnplaced] = useState<Lead[]>([]);
   const [stats, setStats] = useState<{
     byStage: Record<string, number>;
     conversionRate: number;
@@ -139,7 +140,8 @@ export default function PipelinePage() {
         api.getPipelineStats(filterCategory),
         api.getCategories(),
       ]);
-      setPipeline(pipelineData);
+      setPipeline(pipelineData.stages);
+      setUnplaced(pipelineData.unplaced);
       setStats(statsData);
       setCategories(cats);
     } catch (err) {
@@ -421,6 +423,7 @@ export default function PipelinePage() {
             <h1 className="print-title">Your pipeline</h1>
             <p className="print-sub">
               {boardLeads} {boardLeads === 1 ? 'lead' : 'leads'} on the board
+              {unplaced.length > 0 && ` · ${unplaced.length} not yet placed in a tier`}
               {activePipelineValue > 0 && ` · ${formatAUD(activePipelineValue)} a month in agreed retainers`}
               {filterCategory !== 'all' && ` · ${filterCategory}`}
               {' · '}
@@ -428,8 +431,15 @@ export default function PipelinePage() {
             </p>
           </div>
 
-          {STAGES.map((stage) => {
-            const leads = pipeline[stage.key] || [];
+          {[
+            ...STAGES.map((s) => ({ key: s.key as string, label: s.label, leads: pipeline[s.key] || [] })),
+            // Everything that has not been triaged yet. Last, because it
+            // is the backlog rather than the pipeline, but present —
+            // a page showing only what has been sorted is not the whole
+            // picture.
+            { key: '__unplaced', label: 'Not placed in a tier', leads: unplaced },
+          ].map((stage) => {
+            const leads = stage.leads;
             if (leads.length === 0) return null;
             const columnValue = leads.reduce((sum, l) => sum + monthlyValue(l), 0);
             return (
