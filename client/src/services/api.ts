@@ -774,6 +774,14 @@ export async function deleteProject(id: number): Promise<void> {
 
 // ── Activities ───────────────────────────────────────────────
 
+/**
+ * Removes one entry from a lead's timeline. Only the entry: any note,
+ * email or call it describes stays in its own tab.
+ */
+export async function deleteActivity(id: number): Promise<{ success: true }> {
+  return request(`/activities/${id}`, { method: 'DELETE' });
+}
+
 export async function getActivitiesForLead(leadId: number, params?: { limit?: number; offset?: number }): Promise<{ activities: Activity[]; total: number }> {
   const searchParams = new URLSearchParams();
   if (params?.limit) searchParams.set('limit', String(params.limit));

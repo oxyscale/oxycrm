@@ -13,6 +13,7 @@ afterwards. Nothing is mocked, and nothing touches a real database.
 | `merge` | folding duplicates without dropping history, and no orphaned rows |
 | `report` | Business Health totals, locking a month, share links |
 | `projects` | build fees, revenue start dates, deleting a project safely |
+| `activities` | removing a timeline entry without taking the note, call or lead with it |
 | `stages` | pipeline stages exist, accept leads, and parked ones stay out of pipeline value |
 
 ## Adding to them

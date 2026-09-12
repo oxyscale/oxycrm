@@ -302,6 +302,7 @@ export default function LeadProfilePage() {
   const [activityTotal, setActivityTotal] = useState(0);
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [expandedActivityIds, setExpandedActivityIds] = useState<Set<number>>(new Set());
+  const [deletingActivityId, setDeletingActivityId] = useState<number | null>(null);
 
   // Calls tab
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
@@ -431,6 +432,31 @@ export default function LeadProfilePage() {
       setError(err instanceof Error ? err.message : 'Failed to load lead');
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Removes a timeline entry. Used for entries that describe something
+   * later undone — a conversion whose project has since been deleted,
+   * a stage move made by mistake — where leaving the line on the record
+   * makes the history read wrong.
+   */
+  const removeActivity = async (id: number, title: string) => {
+    const ok = window.confirm(
+      `Remove "${title}" from the timeline?\n\n`
+      + 'This deletes the timeline entry only. Any note, email or call it '
+      + 'refers to stays on the record under its own tab.',
+    );
+    if (!ok) return;
+    setDeletingActivityId(id);
+    try {
+      await api.deleteActivity(id);
+      setActivities((prev) => prev.filter((a) => a.id !== id));
+      setActivityTotal((prev) => Math.max(0, prev - 1));
+    } catch {
+      window.alert('Could not remove that entry. Please try again.');
+    } finally {
+      setDeletingActivityId(null);
     }
   };
 
@@ -1353,8 +1379,20 @@ export default function LeadProfilePage() {
                             );
                           })()}
                         </div>
-                        <span className="text-ink-dim text-xs flex-shrink-0 mt-0.5">
-                          {formatDate(act.createdAt)}
+                        <span className="flex items-center gap-2 flex-shrink-0 mt-0.5">
+                          <span className="text-ink-dim text-xs">
+                            {formatDate(act.createdAt)}
+                          </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); removeActivity(act.id, act.title); }}
+                            disabled={deletingActivityId === act.id}
+                            title="Remove from the timeline"
+                            className="text-ink-faint hover:text-risk transition-colors p-0.5 disabled:opacity-40"
+                          >
+                            {deletingActivityId === act.id
+                              ? <Loader2 size={12} className="animate-spin" />
+                              : <Trash2 size={12} />}
+                          </button>
                         </span>
                       </div>
                     </div>

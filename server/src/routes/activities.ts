@@ -118,4 +118,36 @@ router.get('/recent', (req, res, next) => {
   }
 });
 
+/**
+ * DELETE /api/activities/:id
+ *
+ * Removes a single timeline entry.
+ *
+ * The timeline is a record of what happened, so this is not something to
+ * reach for often. It exists because some entries describe things that
+ * were later undone — a project conversion whose project has since been
+ * deleted, a stage move made by mistake — and leaving those on the
+ * record makes the history misleading rather than complete.
+ *
+ * Only the timeline entry goes. Notes, emails and call logs live in
+ * their own tables and are untouched; they keep their own tabs.
+ */
+router.delete('/:id', (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) throw new ApiError(400, 'Invalid activity ID');
+
+    const db = getDb();
+    const row = db.prepare('SELECT id, lead_id, title FROM activities WHERE id = ?')
+      .get(id) as { id: number; lead_id: number; title: string } | undefined;
+    if (!row) throw new ApiError(404, 'Timeline entry not found');
+
+    db.prepare('DELETE FROM activities WHERE id = ?').run(id);
+    logger.info({ activityId: id, leadId: row.lead_id, title: row.title }, 'Timeline entry deleted');
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
