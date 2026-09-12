@@ -266,6 +266,19 @@ export default function PipelinePage() {
   // retainer is the real figure; deal_value is only ever the estimate we
   // put on them beforehand, and the conversion flow never updates it —
   // so a paying client read as $0 here until the retainer was wired in.
+  /**
+   * Whether the company adds anything to the name. Many records carry
+   * the company as the contact too, sometimes with a person appended —
+   * "Acme Styling (Brianna)" against "Acme Styling" — and printing both
+   * says the same thing twice.
+   */
+  const companyAddsNothing = (name: string, company: string) => {
+    const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const n = norm(name);
+    const c = norm(company);
+    return !c || n === c || n.startsWith(c) || c.startsWith(n);
+  };
+
   // An agreed retainer only. An estimated deal value is not a monthly
   // rate and no longer stands in for one — a lead with nothing agreed
   // shows nothing, here and on the report alike.
@@ -423,10 +436,11 @@ export default function PipelinePage() {
               <section key={stage.key} className="print-stage">
                 <div className="print-stage-head">
                   <h2>{stage.label}</h2>
-                  <span>
-                    {leads.length}
-                    {columnValue > 0 && ` · ${formatAUD(columnValue)}/mo`}
-                  </span>
+                  <span className="print-rule" />
+                  <span className="print-count">{leads.length}</span>
+                  {columnValue > 0 && (
+                    <span className="print-stage-val">{formatAUD(columnValue)}/mo</span>
+                  )}
                 </div>
                 <table className="print-stage-table">
                   <tbody>
@@ -434,13 +448,19 @@ export default function PipelinePage() {
                       <tr key={lead.id}>
                         <td className="w-name">
                           <span className="nm">{lead.name}</span>
-                          {lead.company && lead.company !== lead.name && (
+                          {lead.company && !companyAddsNothing(lead.name, lead.company) && (
                             <span className="co">{lead.company}</span>
                           )}
                         </td>
-                        <td className="w-cat">{lead.category || ''}</td>
-                        <td className="w-val">
-                          {monthlyValue(lead) > 0 ? `${formatAUD(monthlyValue(lead))}/mo` : ''}
+                        {/* Category and rate sit together on the right, so a
+                            lead with neither leaves a clean edge rather than a
+                            hole in the middle of the page. */}
+                        <td className="w-meta">
+                          {lead.leadSource && <span className="src">{lead.leadSource}</span>}
+                          {lead.category && <span className="cat">{lead.category}</span>}
+                          {monthlyValue(lead) > 0 && (
+                            <span className="val">{formatAUD(monthlyValue(lead))}/mo</span>
+                          )}
                         </td>
                       </tr>
                     ))}
