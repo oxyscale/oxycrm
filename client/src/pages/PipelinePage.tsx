@@ -439,7 +439,6 @@ export default function PipelinePage() {
                           )}
                         </td>
                         <td className="w-cat">{lead.category || ''}</td>
-                        <td className="w-phone">{lead.phone || ''}</td>
                         <td className="w-val">
                           {monthlyValue(lead) > 0 ? `${formatAUD(monthlyValue(lead))}/mo` : ''}
                         </td>

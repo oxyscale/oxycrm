@@ -88,9 +88,10 @@ body {
     border-bottom: 1px solid rgba(11, 13, 14, 0.06);
     vertical-align: baseline;
   }
-  .print-stage-table .w-name { width: 46%; }
-  .print-stage-table .w-cat { width: 22%; color: #55606a; font-size: 8.5pt; }
-  .print-stage-table .w-phone { width: 18%; color: #55606a; font-size: 8.5pt; white-space: nowrap; }
+  /* No phone numbers: the export is meant to be shared, and a printed
+     sheet of everyone's mobiles is not. */
+  .print-stage-table .w-name { width: 62%; }
+  .print-stage-table .w-cat { width: 24%; color: #55606a; font-size: 8.5pt; }
   .print-stage-table .w-val { width: 14%; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .print-stage-table .nm { font-weight: 500; }
   .print-stage-table .co { color: #55606a; font-size: 8.5pt; margin-left: 6pt; }

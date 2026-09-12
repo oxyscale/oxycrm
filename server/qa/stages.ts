@@ -80,7 +80,7 @@ const ORDER = ['new_lead', 'no_answer', 'meeting_booked', 'proposal', 'pulse', '
     JSON.stringify(counts));
   check('the labels are the ones on the board',
     counts.find((c: any) => c.stage === 'no_answer')?.label === 'Fairies'
-    && counts.find((c: any) => c.stage === 'on_ice')?.label === 'Ice',
+    && counts.find((c: any) => c.stage === 'on_ice')?.label === 'On ice',
     JSON.stringify(counts.map((c: any) => c.label)));
   check('closed outcomes are not in the bird\'s-eye',
     !counts.some((c: any) => c.stage === 'won' || c.stage === 'lost'), '');
