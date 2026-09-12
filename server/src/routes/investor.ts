@@ -95,7 +95,7 @@ const OPEN_STAGES = ['new_lead', 'pulse', 'meeting_booked', 'proposal'];
 // closed outcomes and reported elsewhere, so they are not "in flight".
 const BOARD_STAGES: Array<{ stage: string; label: string }> = [
   { stage: 'new_lead', label: 'New leads' },
-  { stage: 'no_answer', label: 'Fairies' },
+  { stage: 'no_answer', label: 'Follow up' },
   { stage: 'meeting_booked', label: 'Meeting booked' },
   { stage: 'proposal', label: 'Proposal sent' },
   { stage: 'pulse', label: 'Pulse' },
