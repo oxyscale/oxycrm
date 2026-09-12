@@ -257,6 +257,9 @@ export default function PipelinePage() {
   // Counts what's actually on the board. The unplaced figure is shown
   // separately, so calling this "Total Leads" implied it was everything.
   const boardLeads = Object.values(pipeline).reduce((sum, leads) => sum + leads.length, 0);
+  /** Stages the export actually prints — Won and Lost are closed. */
+  const EXPORT_STAGES = STAGES.filter((s) => s.key !== 'won' && s.key !== 'lost');
+  const exportLeads = EXPORT_STAGES.reduce((sum, s) => sum + (pipeline[s.key]?.length ?? 0), 0);
 
   // Leads with no pipeline stage (NULL) don't appear in the kanban.
   // Surface the count from /api/pipeline/stats so Jordan knows where they went.
@@ -409,7 +412,7 @@ export default function PipelinePage() {
             <p className="print-eyebrow">OxyScale &middot; Pipeline</p>
             <h1 className="print-title">Your pipeline</h1>
             <p className="print-sub">
-              {boardLeads} {boardLeads === 1 ? 'lead' : 'leads'} on the board
+              {exportLeads} {exportLeads === 1 ? 'lead' : 'leads'} in play
               {/* The count, not the list. The backlog is worth knowing
                   about; 176 untriaged names are not worth four pages. */}
               {unplacedCount > 0 && ` · ${unplacedCount} not yet placed in a tier`}
@@ -419,7 +422,10 @@ export default function PipelinePage() {
             </p>
           </div>
 
-          {STAGES.map((stage) => {
+          {/* Won and Lost are closed outcomes, not pipeline. They stay on
+              the board, where the history is useful, but a document about
+              what is in play should not open with forty-four dead leads. */}
+          {EXPORT_STAGES.map((stage) => {
             const leads = pipeline[stage.key] || [];
             if (leads.length === 0) return null;
             return (
