@@ -49,7 +49,6 @@ export default function PipelinePage() {
 
   // Data state
   const [pipeline, setPipeline] = useState<Record<string, Lead[]>>({});
-  const [unplaced, setUnplaced] = useState<Lead[]>([]);
   const [stats, setStats] = useState<{
     byStage: Record<string, number>;
     conversionRate: number;
@@ -141,7 +140,6 @@ export default function PipelinePage() {
         api.getCategories(),
       ]);
       setPipeline(pipelineData.stages);
-      setUnplaced(pipelineData.unplaced);
       setStats(statsData);
       setCategories(cats);
     } catch (err) {
@@ -412,22 +410,17 @@ export default function PipelinePage() {
             <h1 className="print-title">Your pipeline</h1>
             <p className="print-sub">
               {boardLeads} {boardLeads === 1 ? 'lead' : 'leads'} on the board
-              {unplaced.length > 0 && ` · ${unplaced.length} not yet placed in a tier`}
+              {/* The count, not the list. The backlog is worth knowing
+                  about; 176 untriaged names are not worth four pages. */}
+              {unplacedCount > 0 && ` · ${unplacedCount} not yet placed in a tier`}
               {filterCategory !== 'all' && ` · ${filterCategory}`}
               {' · '}
               {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
           </div>
 
-          {[
-            ...STAGES.map((s) => ({ key: s.key as string, label: s.label, leads: pipeline[s.key] || [] })),
-            // Everything that has not been triaged yet. Last, because it
-            // is the backlog rather than the pipeline, but present —
-            // a page showing only what has been sorted is not the whole
-            // picture.
-            { key: '__unplaced', label: 'Not placed in a tier', leads: unplaced },
-          ].map((stage) => {
-            const leads = stage.leads;
+          {STAGES.map((stage) => {
+            const leads = pipeline[stage.key] || [];
             if (leads.length === 0) return null;
             return (
               <section key={stage.key} className="print-stage">

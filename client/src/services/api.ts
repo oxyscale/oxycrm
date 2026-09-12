@@ -798,7 +798,7 @@ export async function getRecentActivities(): Promise<(Activity & { leadName: str
 
 export async function getPipeline(
   filters?: { temperature?: string; category?: string },
-): Promise<{ stages: Record<string, Lead[]>; unplaced: Lead[] }> {
+): Promise<{ stages: Record<string, Lead[]> }> {
   const params = new URLSearchParams();
   if (filters?.temperature) params.set('temperature', filters.temperature);
   if (filters?.category) params.set('category', filters.category);
@@ -806,10 +806,8 @@ export async function getPipeline(
   const data = await request<{
     stages: Record<string, Lead[]>;
     counts: Record<string, number>;
-    /** Leads with no tier — not on the board, but part of the pipeline. */
-    unplaced?: Lead[];
   }>(`/pipeline${query ? `?${query}` : ''}`);
-  return { stages: data.stages, unplaced: data.unplaced ?? [] };
+  return { stages: data.stages };
 }
 
 // stage = null removes the lead from the kanban (still visible in /leads)
