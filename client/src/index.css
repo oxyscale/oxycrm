@@ -52,11 +52,82 @@ body {
 @media print {
   .print-only { display: block !important; }
 
+  @page {
+    size: A4;
+    margin: 16mm 14mm 18mm;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+    /* Without this most browsers drop background colours and the
+       report prints as grey text on white. */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Unwrap the shell so content can flow across pages. */
+  .app-shell,
+  .app-main,
+  #root {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .app-sidebar,
+  .no-print {
+    display: none !important;
+  }
+
+  /* The document fills the page rather than sitting in a card. */
+  .print-document {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  .print-page-padding {
+    padding: 0 !important;
+  }
+
+  /* A section is never split across a page break — if it will not
+     fit, it moves whole to the next page. */
+  .print-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* A heading never sits alone at the foot of a page. */
+  h1, h2, h3,
+  .print-keep-with-next {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Long tables may split, but never mid-row, and headers repeat. */
+  table { break-inside: auto; }
+  thead { display: table-header-group; }
+  tr, img, svg { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Links are noise on paper. */
+  a { text-decoration: none !important; color: inherit !important; }
+
+  /* Slightly tighter for paper without losing the hierarchy. */
+  .print-document { font-size: 11.5pt; }
+
   /* ── Pipeline export ────────────────────────────────────────── */
   .print-masthead {
     border-bottom: 1.5pt solid #0b0d0e;
     padding-bottom: 8pt;
-    margin-bottom: 18pt;
+    margin-bottom: 16pt;
   }
   .print-eyebrow {
     font-family: ui-monospace, SFMono-Regular, monospace;
@@ -71,63 +142,55 @@ body {
     font-size: 8.5pt; color: #55606a; margin: 0; letter-spacing: 0.01em;
   }
 
-  /* A stage never splits across pages if it can be helped. */
-  /* Space above each stage does the separating, so the rules can stay
-     light. A stage heading is the structural anchor of the page and has
-     to outrank its rows clearly, not by half a point. */
-  .print-stage { break-inside: avoid; page-break-inside: avoid; margin-bottom: 6pt; }
-  .print-stage + .print-stage { margin-top: 16pt; }
+  /* A long stage MUST be allowed to split: a section of 176 leads
+     cannot fit on one page, and asking the browser to keep it whole
+     only makes it break somewhere worse. The row is the thing that must
+     never split, and the repeating header is what keeps a continuation
+     page readable. */
+  .print-stage { break-inside: auto; page-break-inside: auto; }
+  .print-stage + .print-stage { margin-top: 15pt; }
 
-  /* Name, a rule that takes up the slack, then the figures. Tying the
-     count to the heading with a rule stops it floating at the far edge
-     looking like it belongs to nothing. */
-  .print-stage-head {
-    display: flex; align-items: baseline; gap: 9pt; margin-bottom: 3pt;
+  .print-stage-table { width: 100%; border-collapse: collapse; }
+  .print-stage-table thead { display: table-header-group; }
+  .print-stage-table th {
+    padding: 0 0 3pt; text-align: left; font-weight: 400;
+    break-after: avoid; page-break-after: avoid;
   }
-  .print-stage-head h2 {
-    font-size: 12pt; font-weight: 600; color: #0b0d0e; margin: 0;
+  .print-stage-head {
+    display: flex; align-items: baseline; gap: 9pt;
+  }
+  .print-stage-name {
+    font-size: 12pt; font-weight: 600; color: #0b0d0e;
     letter-spacing: -0.015em; white-space: nowrap;
   }
   .print-rule {
     flex: 1; height: 0; border-bottom: 0.6pt solid rgba(11, 13, 14, 0.32);
     transform: translateY(-3pt);
   }
-  .print-count, .print-stage-val {
+  .print-count {
     font-family: ui-monospace, SFMono-Regular, monospace;
     font-size: 8.5pt; color: #55606a; white-space: nowrap;
     font-variant-numeric: tabular-nums; letter-spacing: 0.04em;
   }
-  .print-stage-val { color: #0b0d0e; font-weight: 600; }
 
-  .print-stage-table { width: 100%; border-collapse: collapse; }
+  /* No name is ever cut in half by a page break. */
   .print-stage-table tr { break-inside: avoid; page-break-inside: avoid; }
   .print-stage-table td {
     padding: 3.4pt 0;
     border-bottom: 0.4pt solid rgba(11, 13, 14, 0.07);
     vertical-align: baseline;
   }
-  .print-stage-table tr:last-child td { border-bottom: 0; }
 
   .print-stage-table .w-name { font-size: 9.5pt; color: #0b0d0e; }
   .print-stage-table .nm { font-weight: 500; }
   .print-stage-table .co { color: #6b757e; font-size: 8.5pt; margin-left: 7pt; }
 
-  /* Everything that is optional lives on the right, right-aligned, so a
-     lead with no category and no rate ends the row cleanly instead of
-     leaving a gap mid-page. */
   .print-stage-table .w-meta {
     text-align: right; white-space: nowrap; width: 1%;
     font-size: 8.5pt; color: #6b757e;
   }
-  /* Source first, then category, then the rate. Each is optional, so
-     they are separated by spacing rather than punctuation that would be
-     left dangling when one of them is missing. */
   .print-stage-table .src { color: #0b0d0e; }
   .print-stage-table .cat { color: #6b757e; margin-left: 10pt; }
-  .print-stage-table .val {
-    color: #0b0d0e; margin-left: 10pt;
-    font-variant-numeric: tabular-nums; font-weight: 500;
-  }
 
   /* The report stacks to one column on a phone. Print is always a wide
      page, so restore the intended layout — otherwise a PDF saved from a

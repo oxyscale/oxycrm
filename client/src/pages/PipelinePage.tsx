@@ -286,11 +286,6 @@ export default function PipelinePage() {
   // shows nothing, here and on the report alike.
   const monthlyValue = (lead: Lead) => lead.currentRetainer || 0;
 
-  // Sum across the active tiers (Won/Lost are closed)
-  const activePipelineValue = (['new_lead', 'meeting_booked', 'proposal', 'pulse'] as const).reduce((sum, key) => {
-    const list = pipeline[key] || [];
-    return sum + list.reduce((s, l) => s + monthlyValue(l), 0);
-  }, 0);
   const formatAUD = (n: number) => n
     ? `$${n.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`
     : '$0';
@@ -323,17 +318,11 @@ export default function PipelinePage() {
 
       {/* Stats bar */}
       {stats && (
-        <div className="no-print grid grid-cols-3 gap-4 mb-6 flex-shrink-0">
+        <div className="no-print grid grid-cols-2 gap-4 mb-6 flex-shrink-0">
           <StatCard
             eyebrow="On The Board"
             value={boardLeads}
             icon={<Users size={16} />}
-            elevated
-          />
-          <StatCard
-            eyebrow="Active Pipeline Value"
-            value={formatAUD(activePipelineValue)}
-            icon={<DollarSign size={16} />}
             elevated
           />
           <StatCard
@@ -424,7 +413,6 @@ export default function PipelinePage() {
             <p className="print-sub">
               {boardLeads} {boardLeads === 1 ? 'lead' : 'leads'} on the board
               {unplaced.length > 0 && ` · ${unplaced.length} not yet placed in a tier`}
-              {activePipelineValue > 0 && ` · ${formatAUD(activePipelineValue)} a month in agreed retainers`}
               {filterCategory !== 'all' && ` · ${filterCategory}`}
               {' · '}
               {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -441,18 +429,28 @@ export default function PipelinePage() {
           ].map((stage) => {
             const leads = stage.leads;
             if (leads.length === 0) return null;
-            const columnValue = leads.reduce((sum, l) => sum + monthlyValue(l), 0);
             return (
               <section key={stage.key} className="print-stage">
-                <div className="print-stage-head">
-                  <h2>{stage.label}</h2>
-                  <span className="print-rule" />
-                  <span className="print-count">{leads.length}</span>
-                  {columnValue > 0 && (
-                    <span className="print-stage-val">{formatAUD(columnValue)}/mo</span>
-                  )}
-                </div>
+                {/*
+                  The stage name lives in a <thead>, not above the table.
+                  A section of 176 leads cannot fit on one page, so the
+                  browser will split it — and as a table header this
+                  repeats at the top of every page the section runs onto,
+                  rather than leaving pages two and three as anonymous
+                  lists of names.
+                */}
                 <table className="print-stage-table">
+                  <thead>
+                    <tr>
+                      <th colSpan={2}>
+                        <span className="print-stage-head">
+                          <span className="print-stage-name">{stage.label}</span>
+                          <span className="print-rule" />
+                          <span className="print-count">{leads.length}</span>
+                        </span>
+                      </th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {leads.map((lead) => (
                       <tr key={lead.id}>
@@ -462,15 +460,12 @@ export default function PipelinePage() {
                             <span className="co">{lead.company}</span>
                           )}
                         </td>
-                        {/* Category and rate sit together on the right, so a
-                            lead with neither leaves a clean edge rather than a
-                            hole in the middle of the page. */}
+                        {/* Source and category sit together on the right,
+                            so a lead with neither ends its row at a clean
+                            edge rather than leaving a hole mid-page. */}
                         <td className="w-meta">
                           {lead.leadSource && <span className="src">{lead.leadSource}</span>}
                           {lead.category && <span className="cat">{lead.category}</span>}
-                          {monthlyValue(lead) > 0 && (
-                            <span className="val">{formatAUD(monthlyValue(lead))}/mo</span>
-                          )}
                         </td>
                       </tr>
                     ))}
