@@ -99,7 +99,7 @@ const BOARD_STAGES: Array<{ stage: string; label: string }> = [
   { stage: 'meeting_booked', label: 'Meeting booked' },
   { stage: 'proposal', label: 'Proposal sent' },
   { stage: 'pulse', label: 'Pulse' },
-  { stage: 'on_ice', label: 'Ice' },
+  { stage: 'on_ice', label: 'On ice' },
 ];
 
 // Stages worth naming the deals in. Everywhere else a count is the
