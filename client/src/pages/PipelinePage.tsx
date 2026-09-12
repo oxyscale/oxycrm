@@ -10,6 +10,7 @@ import {
   DollarSign,
   Users,
   Trophy,
+  Printer,
   ArrowRight,
 } from 'lucide-react';
 import * as api from '../services/api';
@@ -265,7 +266,10 @@ export default function PipelinePage() {
   // retainer is the real figure; deal_value is only ever the estimate we
   // put on them beforehand, and the conversion flow never updates it —
   // so a paying client read as $0 here until the retainer was wired in.
-  const monthlyValue = (lead: Lead) => lead.currentRetainer || lead.dealValue || 0;
+  // An agreed retainer only. An estimated deal value is not a monthly
+  // rate and no longer stands in for one — a lead with nothing agreed
+  // shows nothing, here and on the report alike.
+  const monthlyValue = (lead: Lead) => lead.currentRetainer || 0;
 
   // Sum across the active tiers (Won/Lost are closed)
   const activePipelineValue = (['new_lead', 'meeting_booked', 'proposal', 'pulse'] as const).reduce((sum, key) => {
@@ -281,19 +285,30 @@ export default function PipelinePage() {
   return (
     <div className="p-10 flex flex-col bg-cream min-h-full">
       {/* Header */}
-      <div className="mb-8 flex-shrink-0">
+      <div className="no-print mb-8 flex-shrink-0">
         <EyebrowLabel variant="pill" className="mb-5">
           OPERATIONS · PIPELINE
         </EyebrowLabel>
-        <SectionHeading size="section">Your pipeline.</SectionHeading>
-        <p className="text-ink-muted text-sm mt-3">
-          Track leads through your sales pipeline.
-        </p>
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <SectionHeading size="section">Your pipeline.</SectionHeading>
+            <p className="text-ink-muted text-sm mt-3">
+              Track leads through your sales pipeline.
+            </p>
+          </div>
+          <button
+            onClick={() => window.print()}
+            className="no-print flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-hair-soft text-ink-muted hover:text-ink text-sm transition-colors"
+            title="Export the pipeline as a PDF"
+          >
+            <Printer size={14} /> PDF
+          </button>
+        </div>
       </div>
 
       {/* Stats bar */}
       {stats && (
-        <div className="grid grid-cols-3 gap-4 mb-6 flex-shrink-0">
+        <div className="no-print grid grid-cols-3 gap-4 mb-6 flex-shrink-0">
           <StatCard
             eyebrow="On The Board"
             value={boardLeads}
@@ -316,7 +331,7 @@ export default function PipelinePage() {
       )}
 
       {/* Filters */}
-      <div className="flex items-center gap-3 mb-6 flex-shrink-0">
+      <div className="no-print flex items-center gap-3 mb-6 flex-shrink-0">
         <Filter size={14} className="text-ink-dim" />
         {categories.length > 0 && (
           <select
@@ -337,7 +352,7 @@ export default function PipelinePage() {
 
       {/* Hint when leads exist but aren't placed on the kanban */}
       {unplacedCount > 0 && (
-        <div className="bg-sky-wash border border-sky-hair rounded-xl px-4 py-3 mb-6 flex items-center justify-between gap-3 flex-shrink-0">
+        <div className="no-print bg-sky-wash border border-sky-hair rounded-xl px-4 py-3 mb-6 flex items-center justify-between gap-3 flex-shrink-0">
           <p className="text-ink text-sm">
             <span className="font-medium">{unplacedCount} lead{unplacedCount !== 1 ? 's' : ''}</span>
             {' '}not yet placed in a tier. Open them from Leads and set a tier to add them to the kanban.
@@ -377,11 +392,71 @@ export default function PipelinePage() {
           </div>
         </div>
       ) : (
+        <>
+        {/*
+          The printed pipeline. The board is a horizontal scroller with
+          fixed-width columns and browsers cannot paginate inside one, so
+          printing it directly produces a screen grab with most of the
+          pipeline missing off the right-hand edge. This is the same
+          content laid out for paper: every stage as a section, every
+          lead as a row, flowing down the page and breaking where it
+          should. Hidden on screen, the only thing shown in print.
+        */}
+        <div className="print-only print-document">
+          <div className="print-masthead">
+            <p className="print-eyebrow">OxyScale &middot; Pipeline</p>
+            <h1 className="print-title">Your pipeline</h1>
+            <p className="print-sub">
+              {boardLeads} {boardLeads === 1 ? 'lead' : 'leads'} on the board
+              {activePipelineValue > 0 && ` · ${formatAUD(activePipelineValue)} a month in agreed retainers`}
+              {filterCategory !== 'all' && ` · ${filterCategory}`}
+              {' · '}
+              {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+
+          {STAGES.map((stage) => {
+            const leads = pipeline[stage.key] || [];
+            if (leads.length === 0) return null;
+            const columnValue = leads.reduce((sum, l) => sum + monthlyValue(l), 0);
+            return (
+              <section key={stage.key} className="print-stage">
+                <div className="print-stage-head">
+                  <h2>{stage.label}</h2>
+                  <span>
+                    {leads.length}
+                    {columnValue > 0 && ` · ${formatAUD(columnValue)}/mo`}
+                  </span>
+                </div>
+                <table className="print-stage-table">
+                  <tbody>
+                    {leads.map((lead) => (
+                      <tr key={lead.id}>
+                        <td className="w-name">
+                          <span className="nm">{lead.name}</span>
+                          {lead.company && lead.company !== lead.name && (
+                            <span className="co">{lead.company}</span>
+                          )}
+                        </td>
+                        <td className="w-cat">{lead.category || ''}</td>
+                        <td className="w-phone">{lead.phone || ''}</td>
+                        <td className="w-val">
+                          {monthlyValue(lead) > 0 ? `${formatAUD(monthlyValue(lead))}/mo` : ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            );
+          })}
+        </div>
+
         <div
           ref={boardRef}
           onDragOver={handleDragOverBoard}
           onDrop={stopAutoScroll}
-          className="overflow-x-auto overflow-y-hidden pb-4"
+          className="no-print overflow-x-auto overflow-y-hidden pb-4"
         >
           <div className="flex gap-4 min-w-max items-start">
             {STAGES.map((stage) => {
@@ -573,6 +648,7 @@ export default function PipelinePage() {
             })}
           </div>
         </div>
+        </>
       )}
     </div>
   );
