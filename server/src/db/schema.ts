@@ -984,16 +984,22 @@ export function initializeDatabase(db: Database.Database): void {
   //
   // As a view, every query joins the same rule and they cannot drift.
   // ─────────────────────────────────────────────────────────────────
+  //
+  // 'localtime' rather than plain DATE('now'): the server runs in UTC,
+  // the business runs in Melbourne, and a rate dated today in Melbourne
+  // is still tomorrow to UTC for the first ten hours of the working day.
+  // The process sets TZ to Australia/Melbourne at start-up, so this
+  // follows the real date here and handles daylight saving on its own.
   db.exec(`
     DROP VIEW IF EXISTS current_retainers;
     CREATE VIEW current_retainers AS
       SELECT cr.lead_id, cr.monthly_amount, cr.effective_from
         FROM client_retainers cr
-       WHERE cr.effective_from <= DATE('now')
+       WHERE cr.effective_from <= DATE('now','localtime')
          AND cr.id = (
               SELECT x.id FROM client_retainers x
                WHERE x.lead_id = cr.lead_id
-                 AND x.effective_from <= DATE('now')
+                 AND x.effective_from <= DATE('now','localtime')
                ORDER BY x.effective_from DESC, x.id DESC
                LIMIT 1
          );

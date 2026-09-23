@@ -144,10 +144,10 @@ router.get('/', (req, res, next) => {
         COUNT(pt.id) AS task_count,
         SUM(CASE WHEN pt.completed = 1 THEN 1 ELSE 0 END) AS completed_count,
         (SELECT r.monthly_amount FROM client_retainers r
-          WHERE r.lead_id = p.lead_id AND r.effective_from <= DATE('now')
+          WHERE r.lead_id = p.lead_id AND r.effective_from <= DATE('now','localtime')
           ORDER BY r.effective_from DESC, r.id DESC LIMIT 1) AS current_retainer,
         (SELECT r.effective_from FROM client_retainers r
-          WHERE r.lead_id = p.lead_id AND r.effective_from <= DATE('now')
+          WHERE r.lead_id = p.lead_id AND r.effective_from <= DATE('now','localtime')
           ORDER BY r.effective_from DESC, r.id DESC LIMIT 1) AS retainer_since
       FROM projects p
       LEFT JOIN project_tasks pt ON pt.project_id = p.id
@@ -225,7 +225,7 @@ router.get('/:id', (req, res, next) => {
     // Retainer in effect today (future-dated changes excluded).
     const current = db.prepare(`
       SELECT monthly_amount, effective_from FROM client_retainers
-      WHERE lead_id = ? AND effective_from <= DATE('now')
+      WHERE lead_id = ? AND effective_from <= DATE('now','localtime')
       ORDER BY effective_from DESC, id DESC LIMIT 1
     `).get(projectRow.lead_id) as { monthly_amount: number; effective_from: string } | undefined;
     project.currentRetainer = current?.monthly_amount ?? 0;

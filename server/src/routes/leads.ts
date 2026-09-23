@@ -492,9 +492,9 @@ router.get('/', (req, res, next) => {
     // Retainers are per-client, independent of how many projects exist.
     const retainerRows = db.prepare(`
       SELECT lead_id, monthly_amount FROM client_retainers cr
-      WHERE effective_from <= DATE('now')
+      WHERE effective_from <= DATE('now','localtime')
         AND id = (SELECT id FROM client_retainers x
-                   WHERE x.lead_id = cr.lead_id AND x.effective_from <= DATE('now')
+                   WHERE x.lead_id = cr.lead_id AND x.effective_from <= DATE('now','localtime')
                    ORDER BY x.effective_from DESC, x.id DESC LIMIT 1)
     `).all() as { lead_id: number; monthly_amount: number }[];
     const retainerMap = new Map<number, number>();
@@ -684,7 +684,11 @@ router.post('/:id/retainers', (req, res, next) => {
     if (!lead) throw new ApiError(404, 'Lead not found');
 
     const payload = createRetainerSchema.parse(req.body);
-    const effectiveFrom = payload.effectiveFrom || new Date().toISOString().slice(0, 10);
+    // Melbourne, matching what the client sends and what the view reads.
+    // toISOString() would give the UTC date, which is yesterday for most
+    // of the Melbourne working day.
+    const effectiveFrom = payload.effectiveFrom
+      || new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Melbourne' }).format(new Date());
     const actor = req.user?.name || null;
 
     const insert = db.transaction(() => {
@@ -850,7 +854,7 @@ router.post('/:id/projects', (req, res, next) => {
     // Current retainer, so a delta can be applied on top of it.
     const currentRetainer = (db.prepare(`
       SELECT monthly_amount FROM client_retainers
-      WHERE lead_id = ? AND effective_from <= DATE('now')
+      WHERE lead_id = ? AND effective_from <= DATE('now','localtime')
       ORDER BY effective_from DESC, id DESC LIMIT 1
     `).get(id) as { monthly_amount: number } | undefined)?.monthly_amount ?? 0;
 

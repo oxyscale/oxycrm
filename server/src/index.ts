@@ -3,6 +3,19 @@
 // Express API server with SQLite + AI integration
 // ============================================================
 
+// The business runs on Melbourne time, and the server does not: Railway
+// runs in UTC, which is up to eleven hours behind. That gap decided
+// which retainer was in force. A rate entered at 9am in Melbourne was
+// stamped with the Melbourne date and then compared against SQLite's
+// DATE('now'), still on yesterday in UTC, so the new rate read as
+// future-dated and simply did not appear — every morning until UTC
+// caught up.
+//
+// Set before anything else so SQLite's 'localtime' means Melbourne, and
+// so the daylight-saving switch is handled by the timezone database
+// rather than a hard-coded offset.
+process.env.TZ = 'Australia/Melbourne';
+
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 

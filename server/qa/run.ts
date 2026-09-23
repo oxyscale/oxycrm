@@ -1,6 +1,6 @@
 /** Runs every QA suite in turn. `npm run qa`. */
 import { spawnSync } from 'child_process';
-const suites = ['lifecycle', 'calls', 'merge', 'report', 'projects', 'stages', 'activities'];
+const suites = ['lifecycle', 'calls', 'merge', 'report', 'projects', 'stages', 'activities', 'retainer-timezone'];
 let failed = 0;
 for (const s of suites) {
   console.log(`\n${'='.repeat(58)}\n  ${s}\n${'='.repeat(58)}`);
