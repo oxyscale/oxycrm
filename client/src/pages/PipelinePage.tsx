@@ -441,7 +441,7 @@ export default function PipelinePage() {
                 <table className="print-stage-table">
                   <thead>
                     <tr>
-                      <th colSpan={2}>
+                      <th colSpan={3}>
                         <span className="print-stage-head">
                           <span className="print-stage-name">{stage.label}</span>
                           <span className="print-rule" />
@@ -459,13 +459,13 @@ export default function PipelinePage() {
                             <span className="co">{lead.company}</span>
                           )}
                         </td>
-                        {/* Source and category sit together on the right,
-                            so a lead with neither ends its row at a clean
-                            edge rather than leaving a hole mid-page. */}
-                        <td className="w-meta">
-                          {lead.leadSource && <span className="src">{lead.leadSource}</span>}
-                          {lead.category && <span className="cat">{lead.category}</span>}
-                        </td>
+                        {/* Two fixed columns rather than one floating
+                            group. A lead with no source leaves an empty
+                            cell, which reads as a gap in a column; the
+                            same text shuffling left and right row by row
+                            reads as a mess. */}
+                        <td className="w-src">{lead.leadSource || ''}</td>
+                        <td className="w-cat">{lead.category || ''}</td>
                       </tr>
                     ))}
                   </tbody>

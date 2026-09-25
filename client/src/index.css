@@ -185,12 +185,14 @@ body {
   .print-stage-table .nm { font-weight: 500; }
   .print-stage-table .co { color: #6b757e; font-size: 8.5pt; margin-left: 7pt; }
 
-  .print-stage-table .w-meta {
-    text-align: right; white-space: nowrap; width: 1%;
-    font-size: 8.5pt; color: #6b757e;
+  /* Fixed columns so every source starts on the same rail and every
+     category on the next. Nothing shuffles between rows. */
+  .print-stage-table .w-src,
+  .print-stage-table .w-cat {
+    white-space: nowrap; font-size: 8.5pt; padding-left: 12pt;
   }
-  .print-stage-table .src { color: #0b0d0e; }
-  .print-stage-table .cat { color: #6b757e; margin-left: 10pt; }
+  .print-stage-table .w-src { width: 20%; color: #0b0d0e; }
+  .print-stage-table .w-cat { width: 20%; color: #8a95a0; }
 
   /* The report stacks to one column on a phone. Print is always a wide
      page, so restore the intended layout — otherwise a PDF saved from a
