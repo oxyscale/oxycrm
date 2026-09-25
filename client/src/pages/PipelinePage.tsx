@@ -294,7 +294,7 @@ export default function PipelinePage() {
   // ── Render ──────────────────────────────────────────────────
 
   return (
-    <div className="p-10 flex flex-col bg-cream min-h-full">
+    <div className="print-page-root p-10 flex flex-col bg-cream min-h-full">
       {/* Header */}
       <div className="no-print mb-8 flex-shrink-0">
         <EyebrowLabel variant="pill" className="mb-5">
@@ -440,14 +440,21 @@ export default function PipelinePage() {
                 */}
                 <table className="print-stage-table">
                   <thead>
-                    <tr>
+                    {/* Stage name and count on one rule, then the column
+                        headings. Both live in the <thead> so that if a
+                        stage is ever too long for a page and has to be
+                        split, the continuation page still says which
+                        stage it is and what the columns are. */}
+                    <tr className="print-stage-row">
                       <th colSpan={3}>
-                        <span className="print-stage-head">
-                          <span className="print-stage-name">{stage.label}</span>
-                          <span className="print-rule" />
-                          <span className="print-count">{leads.length}</span>
-                        </span>
+                        <span className="print-stage-name">{stage.label}</span>
+                        <span className="print-count">{leads.length}</span>
                       </th>
+                    </tr>
+                    <tr className="print-cols-row">
+                      <th className="w-name">Lead</th>
+                      <th className="w-src">Lead source</th>
+                      <th className="w-cat">Industry</th>
                     </tr>
                   </thead>
                   <tbody>

@@ -124,75 +124,94 @@ body {
   .print-document { font-size: 11.5pt; }
 
   /* ── Pipeline export ────────────────────────────────────────── */
+
+  /* The page root paints cream and pads 40px on screen. On paper that
+     was a grey box around a white box around the document. The @page
+     margin is the only margin. */
+  .print-page-root {
+    padding: 0 !important; background: #fff !important;
+    display: block !important; min-height: 0 !important;
+  }
+
   .print-masthead {
-    border-bottom: 1.5pt solid #0b0d0e;
-    padding-bottom: 8pt;
-    margin-bottom: 16pt;
+    border-bottom: 1.25pt solid #0b0d0e;
+    padding-bottom: 9pt;
+    margin-bottom: 20pt;
   }
   .print-eyebrow {
     font-family: ui-monospace, SFMono-Regular, monospace;
     font-size: 7pt; font-weight: 600; letter-spacing: 0.2em;
-    text-transform: uppercase; color: #8a95a0; margin: 0 0 7pt;
+    text-transform: uppercase; color: #55606a; margin: 0 0 7pt;
   }
   .print-title {
     font-size: 24pt; font-weight: 500; letter-spacing: -0.035em;
     color: #0b0d0e; margin: 0 0 6pt; line-height: 1;
   }
-  .print-sub {
-    font-size: 8.5pt; color: #55606a; margin: 0; letter-spacing: 0.01em;
+  .print-sub { font-size: 9pt; color: #3d4750; margin: 0; }
+
+  /* A stage moves whole to the next page rather than splitting. The
+     browser can only honour that when the stage fits on a page at all;
+     for one that cannot, the header rows repeat on the continuation so
+     the page still says what it is. */
+  .print-stage {
+    break-inside: avoid; page-break-inside: avoid;
+    margin-bottom: 0;
   }
+  .print-stage + .print-stage { margin-top: 20pt; }
 
-  /* A long stage MUST be allowed to split: a section of 176 leads
-     cannot fit on one page, and asking the browser to keep it whole
-     only makes it break somewhere worse. The row is the thing that must
-     never split, and the repeating header is what keeps a continuation
-     page readable. */
-  .print-stage { break-inside: auto; page-break-inside: auto; }
-  .print-stage + .print-stage { margin-top: 15pt; }
-
-  .print-stage-table { width: 100%; border-collapse: collapse; }
+  .print-stage-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .print-stage-table thead { display: table-header-group; }
-  .print-stage-table th {
-    padding: 0 0 3pt; text-align: left; font-weight: 400;
+  .print-stage-table th { text-align: left; font-weight: 400; }
+
+  /* One solid rule, drawn as the cell's own border, so it runs edge to
+     edge with nothing to cut it short. Name left, count right. */
+  .print-stage-row th {
+    padding: 0 0 4pt;
+    border-bottom: 1pt solid #0b0d0e;
     break-after: avoid; page-break-after: avoid;
   }
-  .print-stage-head {
-    display: flex; align-items: baseline; gap: 9pt;
-  }
+  .print-stage-row th > span { display: inline-block; }
   .print-stage-name {
-    font-size: 12pt; font-weight: 600; color: #0b0d0e;
-    letter-spacing: -0.015em; white-space: nowrap;
-  }
-  .print-rule {
-    flex: 1; height: 0; border-bottom: 0.6pt solid rgba(11, 13, 14, 0.32);
-    transform: translateY(-3pt);
+    font-size: 12pt; font-weight: 600; color: #0b0d0e; letter-spacing: -0.015em;
   }
   .print-count {
+    float: right;
     font-family: ui-monospace, SFMono-Regular, monospace;
-    font-size: 8.5pt; color: #55606a; white-space: nowrap;
-    font-variant-numeric: tabular-nums; letter-spacing: 0.04em;
+    font-size: 8.5pt; color: #3d4750; letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums; line-height: 16pt;
+  }
+
+  .print-cols-row th {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 6.5pt; font-weight: 600; letter-spacing: 0.16em;
+    text-transform: uppercase; color: #6b757e;
+    padding: 5pt 0 3pt;
+    border-bottom: 0.5pt solid rgba(11, 13, 14, 0.22);
+    break-after: avoid; page-break-after: avoid;
   }
 
   /* No name is ever cut in half by a page break. */
   .print-stage-table tr { break-inside: avoid; page-break-inside: avoid; }
   .print-stage-table td {
-    padding: 3.4pt 0;
-    border-bottom: 0.4pt solid rgba(11, 13, 14, 0.07);
+    padding: 4pt 0;
+    border-bottom: 0.5pt solid rgba(11, 13, 14, 0.12);
     vertical-align: baseline;
   }
+  .print-stage-table tbody tr:last-child td { border-bottom: 0; }
 
-  .print-stage-table .w-name { font-size: 9.5pt; color: #0b0d0e; }
-  .print-stage-table .nm { font-weight: 500; }
-  .print-stage-table .co { color: #6b757e; font-size: 8.5pt; margin-left: 7pt; }
-
-  /* Fixed columns so every source starts on the same rail and every
-     category on the next. Nothing shuffles between rows. */
-  .print-stage-table .w-src,
-  .print-stage-table .w-cat {
-    white-space: nowrap; font-size: 8.5pt; padding-left: 12pt;
+  /* Three fixed columns. Everything on a rail, nothing shuffling. */
+  .print-stage-table .w-name { width: 56%; }
+  .print-stage-table td.w-name { font-size: 9.5pt; color: #0b0d0e; }
+  .print-stage-table .w-src  { width: 24%; }
+  .print-stage-table .w-cat  { width: 20%; }
+  .print-stage-table td.w-src, .print-stage-table td.w-cat {
+    font-size: 8.5pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .print-stage-table .w-src { width: 20%; color: #0b0d0e; }
-  .print-stage-table .w-cat { width: 20%; color: #8a95a0; }
+  .print-stage-table td.w-src { color: #0b0d0e; }
+  .print-stage-table td.w-cat { color: #3d4750; }
+  .print-stage-table th.w-src, .print-stage-table th.w-cat { padding-left: 0; }
+  .print-stage-table .nm { font-weight: 500; }
+  .print-stage-table .co { color: #55606a; font-size: 8.5pt; margin-left: 7pt; }
 
   /* The report stacks to one column on a phone. Print is always a wide
      page, so restore the intended layout — otherwise a PDF saved from a
