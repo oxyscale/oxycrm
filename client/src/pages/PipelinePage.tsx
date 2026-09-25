@@ -439,6 +439,15 @@ export default function PipelinePage() {
                   lists of names.
                 */}
                 <table className="print-stage-table">
+                  {/* Fixed layout takes its column widths from the first
+                      row, and the first row is the spanning stage-name
+                      cell — so the widths on the cells were being
+                      ignored. A colgroup is honoured regardless. */}
+                  <colgroup>
+                    <col style={{ width: '60%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '20%' }} />
+                  </colgroup>
                   <thead>
                     {/* Stage name and count on one rule, then the column
                         headings. Both live in the <thead> so that if a

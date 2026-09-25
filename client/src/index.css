@@ -199,10 +199,12 @@ body {
   }
   .print-stage-table tbody tr:last-child td { border-bottom: 0; }
 
-  /* Three fixed columns. Everything on a rail, nothing shuffling. */
-  .print-stage-table .w-name { width: 56%; }
-  .print-stage-table td.w-name { font-size: 9.5pt; color: #0b0d0e; }
-  .print-stage-table .w-src  { width: 24%; }
+  /* Three fixed columns. Everything on a rail, nothing shuffling. The
+     name column takes the most room, with a gutter before the source so
+     a long company name can never run up against the next column. */
+  .print-stage-table .w-name { width: 60%; }
+  .print-stage-table td.w-name { font-size: 9.5pt; color: #0b0d0e; padding-right: 14pt; }
+  .print-stage-table .w-src  { width: 20%; }
   .print-stage-table .w-cat  { width: 20%; }
   .print-stage-table td.w-src, .print-stage-table td.w-cat {
     font-size: 8.5pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
